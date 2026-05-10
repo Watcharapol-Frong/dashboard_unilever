@@ -72,6 +72,12 @@ NEXT_PUBLIC_APP_URL=http://localhost:3000
 USE_MOCK_DATA=true                 # true = ใช้ mock, ลบ/false = ใช้ real DB
 ```
 
+> ⚠️ **สำคัญ:** ค่า JWT key ต้องไม่มี single quotes ครอบ — เขียนตรงๆ ไม่ใส่เครื่องหมาย `'...'`  
+> Next.js อ่าน single quotes เป็นส่วนหนึ่งของค่า ทำให้ Supabase client ได้รับ JWT ที่ invalid
+>
+> ✅ ถูก: `NEXT_PUBLIC_SUPABASE_ANON_KEY=eyJhbGci...`  
+> ❌ ผิด: `NEXT_PUBLIC_SUPABASE_ANON_KEY='eyJhbGci...'`
+
 ---
 
 ## 5. Silver Layer — Database Schema
@@ -258,8 +264,7 @@ csv-uploads/
 
 timestamp format: `20260510T143022` (auto-generated ตอน upload)
 
-**ต้องสร้าง bucket ใน Supabase Dashboard:**  
-Storage → New Bucket → ชื่อ `csv-uploads` → Private
+**สถานะ:** ✅ Bucket `csv-uploads` สร้างแล้วใน Supabase (2026-05-10)
 
 ---
 
@@ -363,8 +368,9 @@ supabase/
 - [x] Dashboard pages ทุกหน้า (Overview, Sales, Telesales, Products, Leads, Incentives, Upload, Settings) — ใช้ Mock data
 - [x] Charts: NivoBar (weekly aggregation), NivoLine, NivoPie, SankeyFunnel
 - [x] KpiCard (รองรับ icon, subtitle, comparison %), TargetGaugeBar, DataTable components
-- [x] Silver schema ใน Supabase: 8 tables + indexes + FK
-- [x] Storage bucket folder structure ออกแบบแล้ว
+- [x] Silver schema ใน Supabase: 8 tables + indexes + FK — **apply แล้ว (verified 2026-05-10)**
+- [x] Storage bucket `csv-uploads` สร้างแล้วใน Supabase (private)
+- [x] แก้ bug: single quotes ใน `.env.local` ทำให้ JWT invalid → ลบออกแล้ว
 - [x] `src/lib/upload/config.ts` — 8 file types พร้อม header fingerprint
 - [x] `src/lib/upload/etl.ts` — ETL transform ทุก file type
 - [x] `POST /api/upload/[type]` — full 7-step pipeline
