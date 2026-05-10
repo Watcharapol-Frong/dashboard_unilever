@@ -1,7 +1,7 @@
 import type { UploadFileType } from './config'
 
 // "Feb 2026" → "2026-02-01"
-function parseMonth(raw: string): string | null {
+function parseMonth(raw: string | undefined): string | null {
   const months: Record<string, string> = {
     Jan: '01', Feb: '02', Mar: '03', Apr: '04', May: '05', Jun: '06',
     Jul: '07', Aug: '08', Sep: '09', Oct: '10', Nov: '11', Dec: '12',
@@ -13,30 +13,32 @@ function parseMonth(raw: string): string | null {
   return `${m[2]}-${month}-01`
 }
 
-function toDate(raw: string): string | null {
+// All helpers accept string | undefined — extra CSV columns return undefined at runtime
+function toDate(raw: string | undefined): string | null {
   if (!raw?.trim()) return null
   const d = new Date(raw.trim())
   return isNaN(d.getTime()) ? null : d.toISOString().split('T')[0]
 }
 
-function toNum(raw: string): number {
+function toNum(raw: string | undefined): number {
   const n = parseFloat(String(raw ?? '').replace(/,/g, ''))
   return isNaN(n) ? 0 : n
 }
 
-function toBool(raw: string): boolean | null {
+function toBool(raw: string | undefined): boolean | null {
   const v = String(raw ?? '').trim().toUpperCase()
   if (v === 'TRUE' || v === '1' || v === 'YES') return true
   if (v === 'FALSE' || v === '0' || v === 'NO') return false
   return null
 }
 
-function str(raw: string): string | null {
+function str(raw: string | undefined): string | null {
   const v = String(raw ?? '').trim()
   return v === '' ? null : v
 }
 
-type Row = Record<string, string>
+// Row allows undefined values — columns not present in the file return undefined
+type Row = Record<string, string | undefined>
 type SilverRow = Record<string, unknown>
 
 const ETL_TRANSFORMS: Record<UploadFileType, (row: Row, batchId: string) => SilverRow> = {

@@ -80,14 +80,15 @@ interface UploadBatch {
 const fetcher = (url: string) => fetch(url).then(r => r.json())
 
 export default function UploadPage() {
-  const [fileType, setFileType]     = useState<UploadFileType>('online_sales')
-  const [step, setStep]             = useState<Step>('select')
-  const [file, setFile]             = useState<File | null>(null)
-  const [headers, setHeaders]       = useState<string[]>([])
-  const [preview, setPreview]       = useState<Record<string, string>[]>([])
-  const [validError, setValidError] = useState<string | null>(null)
-  const [result, setResult]         = useState<{ ok: boolean; row_count?: number; error_count?: number; errors?: string[]; error?: string } | null>(null)
-  const [dragOver, setDragOver]     = useState(false)
+  const [fileType, setFileType]         = useState<UploadFileType>('online_sales')
+  const [step, setStep]                 = useState<Step>('select')
+  const [file, setFile]                 = useState<File | null>(null)
+  const [headers, setHeaders]           = useState<string[]>([])
+  const [extraColumns, setExtraColumns] = useState<string[]>([])
+  const [preview, setPreview]           = useState<Record<string, string>[]>([])
+  const [validError, setValidError]     = useState<string | null>(null)
+  const [result, setResult]             = useState<{ ok: boolean; row_count?: number; error_count?: number; errors?: string[]; error?: string; extra_columns?: string[] } | null>(null)
+  const [dragOver, setDragOver]         = useState(false)
   const inputRef = useRef<HTMLInputElement>(null)
 
   const { data: batches, mutate } = useSWR<UploadBatch[]>('/api/upload/history', fetcher)
@@ -107,8 +108,9 @@ export default function UploadPage() {
         if (!data.length) { setValidError('ไฟล์ว่างเปล่า'); setStep('validate'); return }
         const hdrs = Object.keys(data[0])
         setHeaders(hdrs)
-        const { ok, error } = validateHeaders(hdrs, fileType)
+        const { ok, error, extraColumns: extras } = validateHeaders(hdrs, fileType)
         setValidError(ok ? null : (error ?? null))
+        setExtraColumns(ok ? extras : [])
         setPreview(data.slice(0, 5))
         setStep(ok ? 'preview' : 'validate')
       },
@@ -130,7 +132,7 @@ export default function UploadPage() {
 
   const reset = () => {
     setStep('select'); setFile(null); setHeaders([])
-    setPreview([]); setValidError(null); setResult(null)
+    setExtraColumns([]); setPreview([]); setValidError(null); setResult(null)
   }
 
   const onTypeChange = (t: UploadFileType) => {
@@ -171,17 +173,46 @@ export default function UploadPage() {
         <CardContent className="space-y-5">
 
           {/* Step 1: File Type */}
-          <div className="space-y-1.5">
+          <div className="space-y-2">
             <label className="text-sm font-medium">File Type</label>
-            <select
-              value={fileType}
-              onChange={e => onTypeChange(e.target.value as UploadFileType)}
-              className="w-full border rounded-lg px-3 py-2 text-sm bg-background focus:outline-none focus:ring-2 focus:ring-[#003DA6]"
-            >
-              {FILE_TYPES.map(([type, c]) => (
-                <option key={type} value={type}>{c.label}</option>
-              ))}
-            </select>
+            <div className="flex flex-wrap gap-2">
+              {(['online_sales', 'offline_sales', 'telesales'] as UploadFileType[]).map(type => {
+                const c = FILE_TYPE_CONFIGS[type]
+                const isActive = fileType === type
+                return (
+                  <button
+                    key={type}
+                    onClick={() => onTypeChange(type)}
+                    className={cn(
+                      "px-4 py-2 text-sm font-medium rounded-lg border transition-all",
+                      isActive 
+                        ? "bg-[#003DA6] text-white border-[#003DA6] shadow-sm" 
+                        : "bg-background text-muted-foreground border-gray-200 hover:border-[#003DA6] hover:text-foreground"
+                    )}
+                  >
+                    {c.label}
+                  </button>
+                )
+              })}
+
+              <select
+                value={['online_sales', 'offline_sales', 'telesales'].includes(fileType) ? "" : fileType}
+                onChange={e => {
+                  if (e.target.value) onTypeChange(e.target.value as UploadFileType)
+                }}
+                className={cn(
+                  "border rounded-lg px-3 py-2 text-sm font-medium focus:outline-none transition-all cursor-pointer",
+                  !['online_sales', 'offline_sales', 'telesales'].includes(fileType)
+                    ? "bg-[#003DA6] text-white border-[#003DA6] shadow-sm ring-2 ring-[#003DA6] ring-offset-1"
+                    : "bg-background text-muted-foreground border-gray-200 hover:border-[#003DA6] hover:text-foreground"
+                )}
+              >
+                <option value="" disabled className="text-muted-foreground bg-background">ประเภทอื่นๆ...</option>
+                {FILE_TYPES.filter(([type]) => !['online_sales', 'offline_sales', 'telesales'].includes(type as string)).map(([type, c]) => (
+                  <option key={type} value={type} className="text-foreground bg-background">{c.label}</option>
+                ))}
+              </select>
+            </div>
           </div>
 
           {/* Step 2: Drop zone */}
@@ -229,25 +260,47 @@ export default function UploadPage() {
           {/* Preview table */}
           {(step === 'preview' || step === 'uploading') && preview.length > 0 && (
             <div className="space-y-2">
-              <div className="flex items-center gap-2">
-                <CheckCircle className="h-4 w-4 text-green-500" />
+              <div className="flex items-center gap-2 flex-wrap">
+                <CheckCircle className="h-4 w-4 text-green-500 shrink-0" />
                 <p className="text-sm font-medium text-green-700">Header ถูกต้อง — ตัวอย่าง 5 แถวแรก</p>
+                {extraColumns.length > 0 && (
+                  <span className="text-xs text-amber-600 bg-amber-50 border border-amber-200 rounded-full px-2 py-0.5">
+                    {extraColumns.length} column นอก schema — เก็บใน Storage แต่ไม่ import ลง DB
+                  </span>
+                )}
               </div>
               <div className="rounded-lg border overflow-auto max-h-52">
                 <table className="text-xs w-full">
                   <thead className="bg-muted/60 sticky top-0">
                     <tr>
-                      {headers.map(h => (
-                        <th key={h} className="px-3 py-2 text-left font-medium text-muted-foreground whitespace-nowrap">{h}</th>
-                      ))}
+                      {headers.map(h => {
+                        const isExtra = extraColumns.includes(h)
+                        return (
+                          <th key={h} className={cn(
+                            'px-3 py-2 text-left font-medium whitespace-nowrap',
+                            isExtra ? 'text-gray-400 bg-gray-50/80' : 'text-muted-foreground',
+                          )}>
+                            {h}
+                            {isExtra && <span className="ml-1 text-[10px] font-normal">(ignore)</span>}
+                          </th>
+                        )
+                      })}
                     </tr>
                   </thead>
                   <tbody>
                     {preview.map((row, i) => (
                       <tr key={i} className="border-t">
-                        {headers.map(h => (
-                          <td key={h} className="px-3 py-1.5 whitespace-nowrap max-w-[200px] truncate">{row[h] ?? ''}</td>
-                        ))}
+                        {headers.map(h => {
+                          const isExtra = extraColumns.includes(h)
+                          return (
+                            <td key={h} className={cn(
+                              'px-3 py-1.5 whitespace-nowrap max-w-[200px] truncate',
+                              isExtra ? 'text-gray-400 bg-gray-50/50' : '',
+                            )}>
+                              {row[h] ?? ''}
+                            </td>
+                          )
+                        })}
                       </tr>
                     ))}
                   </tbody>

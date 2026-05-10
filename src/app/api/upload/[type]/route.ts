@@ -39,8 +39,10 @@ export async function POST(
   }
 
   // ── 2. Validate headers ───────────────────────────────────
+  // Extra columns beyond schemaHeaders are allowed — they get stored in Storage
+  // but are silently ignored during ETL (not imported to Silver table)
   const headers = Object.keys(rows[0])
-  const { ok, error: headerError } = validateHeaders(headers, type)
+  const { ok, error: headerError, extraColumns } = validateHeaders(headers, type)
   if (!ok) return NextResponse.json({ error: headerError }, { status: 422 })
 
   // ── 3. Upload raw CSV to Storage ──────────────────────────
@@ -95,10 +97,11 @@ export async function POST(
   if (dbError) return NextResponse.json({ error: dbError }, { status: 500 })
 
   return NextResponse.json({
-    ok:          true,
-    row_count:   transformed.length,
-    error_count: etlErrors.length,
-    errors:      etlErrors.slice(0, 20),
-    storage_path: storagePath,
+    ok:            true,
+    row_count:     transformed.length,
+    error_count:   etlErrors.length,
+    errors:        etlErrors.slice(0, 20),
+    storage_path:  storagePath,
+    extra_columns: extraColumns,   // columns in file but not in Silver schema (ignored in ETL)
   })
 }
