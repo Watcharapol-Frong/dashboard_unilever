@@ -41,10 +41,10 @@ function computeRanges(mode: FilterMode, custom: DateRange): { range: DateRange;
 const DateRangeContext = createContext<DateRangeContextValue | null>(null)
 
 export function DateRangeProvider({ children }: { children: React.ReactNode }) {
-  const [mode, setMode] = useState<FilterMode>('month')
+  const [mode, setMode] = useState<FilterMode>('custom')
   const [customRange, setCustomRange] = useState<DateRange>({
     from: DEFAULT_CUSTOM_FROM,
-    to: new Date(),
+    to: new Date('2026-04-26'),
   })
 
   const { range, prevRange } = useMemo(() => computeRanges(mode, customRange), [mode, customRange])

@@ -1,7 +1,7 @@
 import { Card, CardContent } from '@/components/ui/card'
 import { Skeleton } from '@/components/ui/skeleton'
 import { cn } from '@/lib/utils'
-import { TrendingUp, TrendingDown, Minus } from 'lucide-react'
+import { TrendingUp, TrendingDown, Minus, type LucideIcon } from 'lucide-react'
 
 interface KpiExtra {
   label: string
@@ -13,12 +13,15 @@ interface KpiCardProps {
   value: string
   comparison?: number       // ratio: 0.15 = +15%, -0.1 = -10%
   comparisonLabel?: string  // e.g. 'vs last month', 'vs last week'
+  subtitle?: string         // simple secondary line below value
+  icon?: LucideIcon
+  targetPct?: number        // ignored visually, accepted for compat
   extras?: KpiExtra[]
   loading?: boolean
   className?: string
 }
 
-export function KpiCard({ title, value, comparison, comparisonLabel, extras, loading, className }: KpiCardProps) {
+export function KpiCard({ title, value, comparison, comparisonLabel, subtitle, icon: Icon, extras, loading, className }: KpiCardProps) {
   if (loading) {
     return (
       <Card className={className}>
@@ -39,7 +42,10 @@ export function KpiCard({ title, value, comparison, comparisonLabel, extras, loa
     <Card className={cn('hover:shadow-md transition-shadow', className)}>
       <CardContent className="pt-4 pb-4">
         <div className="flex items-start justify-between mb-1">
-          <span className="text-xs font-medium text-muted-foreground leading-tight">{title}</span>
+          <div className="flex items-center gap-1.5">
+            {Icon && <Icon className="h-3.5 w-3.5 text-muted-foreground shrink-0" />}
+            <span className="text-xs font-medium text-muted-foreground leading-tight">{title}</span>
+          </div>
           {hasComparison && (
             <span className={cn(
               'flex items-center gap-0.5 text-xs font-semibold rounded-full px-1.5 py-0.5 shrink-0 ml-1',
@@ -53,6 +59,9 @@ export function KpiCard({ title, value, comparison, comparisonLabel, extras, loa
 
         <div className="text-2xl font-bold mt-1 tabular-nums">{value}</div>
 
+        {subtitle && (
+          <p className="text-xs text-muted-foreground mt-0.5">{subtitle}</p>
+        )}
         {comparisonLabel && hasComparison && (
           <p className="text-xs text-muted-foreground mt-0.5">{comparisonLabel}</p>
         )}

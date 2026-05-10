@@ -1,22 +1,27 @@
 import { createClient } from '@/lib/supabase/server'
 import { NextResponse } from 'next/server'
 import type { NextRequest } from 'next/server'
+import { querySalesOnline, querySalesOffline } from '@/lib/mock/data'
+
+const USE_MOCK = process.env.USE_MOCK_DATA === 'true'
 
 export async function GET(request: NextRequest) {
   const { searchParams } = new URL(request.url)
-  const from = searchParams.get('from')!
-  const to = searchParams.get('to')!
+  const from = searchParams.get('from') ?? new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString().split('T')[0]
+  const to   = searchParams.get('to')   ?? new Date().toISOString().split('T')[0]
 
-  const supabase = createClient()
+  const all = USE_MOCK
+    ? [...querySalesOnline(from, to), ...querySalesOffline(from, to)]
+    : await (async () => {
+        const supabase = createClient()
+        const [onlineRes, offlineRes] = await Promise.all([
+          supabase.from('sales_online').select('product_sku, product_brand, qty, sales_amount').gte('order_date', from).lte('order_date', to),
+          supabase.from('sales_offline').select('product_sku, product_brand, qty, sales_amount').gte('order_date', from).lte('order_date', to),
+        ])
+        return [...(onlineRes.data ?? []), ...(offlineRes.data ?? [])]
+      })()
 
-  const [onlineRes, offlineRes] = await Promise.all([
-    supabase.from('sales_online').select('product_sku, product_brand, qty, sales_amount').gte('order_date', from).lte('order_date', to),
-    supabase.from('sales_offline').select('product_sku, product_brand, qty, sales_amount').gte('order_date', from).lte('order_date', to),
-  ])
-
-  const all = [...(onlineRes.data ?? []), ...(offlineRes.data ?? [])]
   const skuMap = new Map<string, { product_sku: string; product_brand: string | null; qty: number; sales_amount: number }>()
-
   for (const r of all) {
     if (!skuMap.has(r.product_sku)) skuMap.set(r.product_sku, { product_sku: r.product_sku, product_brand: r.product_brand, qty: 0, sales_amount: 0 })
     const s = skuMap.get(r.product_sku)!

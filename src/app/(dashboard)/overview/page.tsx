@@ -50,12 +50,26 @@ export default function OverviewPage() {
     mode === 'month' ? 'vs last month' :
     mode === 'week'  ? 'vs last week'  : 'vs prev period'
 
-  // Bar chart data for Sales Trend
-  const barData = sales?.by_date?.map(d => ({
-    date: d.date.slice(5), // MM-DD
-    Online: d.online,
-    Offline: d.offline,
-  })) ?? []
+  // Aggregate daily sales → weekly for the bar chart
+  const barData = (() => {
+    const days = sales?.by_date ?? []
+    if (days.length <= 14) {
+      return days.map(d => ({ date: d.date.slice(5), Online: d.online, Offline: d.offline }))
+    }
+    // Group by ISO week (Mon–Sun)
+    const weekMap = new Map<string, { Online: number; Offline: number }>()
+    for (const d of days) {
+      const dt = new Date(d.date)
+      const day = dt.getDay() // 0=Sun
+      const diff = (day === 0 ? -6 : 1) - day // offset to Monday
+      const mon = new Date(dt)
+      mon.setDate(dt.getDate() + diff)
+      const key = `${String(mon.getMonth() + 1).padStart(2, '0')}/${String(mon.getDate()).padStart(2, '0')}`
+      const existing = weekMap.get(key) ?? { Online: 0, Offline: 0 }
+      weekMap.set(key, { Online: existing.Online + d.online, Offline: existing.Offline + d.offline })
+    }
+    return [...weekMap.entries()].map(([date, v]) => ({ date, ...v }))
+  })()
 
   // Call outcomes pie
   const callPie = kpi ? [
@@ -243,6 +257,7 @@ export default function OverviewPage() {
               height={280}
               colors={['#003DA6', '#EE2737']}
               valueFormat={v => formatTHB(v)}
+              tickRotation={-45}
             />
           ) : (
             <div className="h-64 flex items-center justify-center text-muted-foreground text-sm">

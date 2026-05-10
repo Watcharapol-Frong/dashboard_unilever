@@ -55,7 +55,7 @@ export default function ProductsPage() {
           <CardHeader><CardTitle className="text-base">Top 10 SKUs by Revenue</CardTitle></CardHeader>
           <CardContent>
             {barData.length > 0 ? (
-              <NivoBar data={barData} keys={['Revenue (THB)']} indexBy="sku" height={320} layout="horizontal" legend={false} />
+              <NivoBar data={barData} keys={['Revenue (THB)']} indexBy="sku" height={320} layout="horizontal" legend={false} valueFormat={v => formatTHB(v)} />
             ) : (
               <div className="h-72 flex items-center justify-center text-muted-foreground text-sm">{isLoading ? 'Loading...' : 'No data'}</div>
             )}
