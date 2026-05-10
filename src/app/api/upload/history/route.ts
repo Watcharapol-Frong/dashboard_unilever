@@ -1,8 +1,8 @@
-import { createClient } from '@/lib/supabase/server'
+import { createServiceClient } from "@/lib/supabase/server"
 import { NextResponse } from 'next/server'
 
 export async function GET() {
-  const supabase = createClient()
+  const supabase = createServiceClient()
   const { data } = await supabase
     .from('upload_batches')
     .select('*')

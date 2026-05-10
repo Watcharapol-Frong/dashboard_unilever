@@ -1,16 +1,16 @@
-import { createClient } from '@/lib/supabase/server'
+import { createServiceClient } from "@/lib/supabase/server"
 import { NextResponse } from 'next/server'
 import type { NextRequest } from 'next/server'
 
 export async function GET() {
-  const supabase = createClient()
+  const supabase = createServiceClient()
   const { data, error } = await supabase.from('targets').select('*').order('period_start', { ascending: false })
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
   return NextResponse.json(data ?? [])
 }
 
 export async function POST(request: NextRequest) {
-  const supabase = createClient()
+  const supabase = createServiceClient()
   const body = await request.json()
   const { id, ...rest } = body
 
@@ -26,7 +26,7 @@ export async function POST(request: NextRequest) {
 }
 
 export async function DELETE(request: NextRequest) {
-  const supabase = createClient()
+  const supabase = createServiceClient()
   const { searchParams } = new URL(request.url)
   const id = searchParams.get('id')
   if (!id) return NextResponse.json({ error: 'Missing id' }, { status: 400 })

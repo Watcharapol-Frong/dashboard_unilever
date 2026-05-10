@@ -1,4 +1,4 @@
-import { createClient } from '@/lib/supabase/server'
+import { createServiceClient } from "@/lib/supabase/server"
 import { NextResponse } from 'next/server'
 import type { NextRequest } from 'next/server'
 import { queryCalls, querySalesOnline, MOCK_LEADS } from '@/lib/mock/data'
@@ -87,7 +87,7 @@ export async function GET(request: NextRequest) {
     return NextResponse.json(buildTelesalesResponse(allCalls, leadCount, firstOrders))
   }
 
-  const supabase = createClient()
+  const supabase = createServiceClient()
   const { data: calls } = await supabase
     .from('telesales_calls')
     .select('customer_id, call_date, call_status, agent_name, agent_company')

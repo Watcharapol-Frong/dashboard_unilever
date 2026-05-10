@@ -1,4 +1,4 @@
-import { createClient } from '@/lib/supabase/server'
+import { createServiceClient } from "@/lib/supabase/server"
 import { NextResponse } from 'next/server'
 import type { NextRequest } from 'next/server'
 import {
@@ -84,7 +84,7 @@ export async function GET(request: NextRequest) {
 
   if (USE_MOCK) return NextResponse.json(computeOverview(from, to, prev_from, prev_to))
 
-  const supabase = createClient()
+  const supabase = createServiceClient()
   const days = Math.max(1, Math.round((new Date(to).getTime() - new Date(from).getTime()) / 86400000) + 1)
 
   const [onlineRes, offlineRes, callsRes, targetRes, newCustRes, onlineCustRes, offlineCustRes] = await Promise.all([

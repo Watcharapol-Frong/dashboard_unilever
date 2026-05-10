@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server'
 import type { NextRequest } from 'next/server'
 import Papa from 'papaparse'
-import { createClient } from '@/lib/supabase/server'
+import { createServiceClient } from "@/lib/supabase/server"
 import { FILE_TYPE_CONFIGS, generateStoragePath, validateHeaders } from '@/lib/upload/config'
 import { transformRows } from '@/lib/upload/etl'
 import type { UploadFileType } from '@/lib/upload/config'
@@ -22,7 +22,7 @@ export async function POST(
   if (!file) return NextResponse.json({ error: 'No file provided' }, { status: 400 })
 
   const text = await file.text()
-  const supabase = createClient()
+  const supabase = createServiceClient()
 
   // ── 1. Parse CSV ──────────────────────────────────────────
   const { data: rows, errors: parseErrors } = Papa.parse<Record<string, string>>(text, {

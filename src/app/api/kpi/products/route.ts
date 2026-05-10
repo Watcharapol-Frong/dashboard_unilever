@@ -1,4 +1,4 @@
-import { createClient } from '@/lib/supabase/server'
+import { createServiceClient } from "@/lib/supabase/server"
 import { NextResponse } from 'next/server'
 import type { NextRequest } from 'next/server'
 import { querySalesOnline, querySalesOffline } from '@/lib/mock/data'
@@ -13,7 +13,7 @@ export async function GET(request: NextRequest) {
   const all = USE_MOCK
     ? [...querySalesOnline(from, to), ...querySalesOffline(from, to)]
     : await (async () => {
-        const supabase = createClient()
+        const supabase = createServiceClient()
         const [onlineRes, offlineRes] = await Promise.all([
           supabase.from('sales_online').select('product_sku, product_brand, qty, sales_amount').gte('order_date', from).lte('order_date', to),
           supabase.from('sales_offline').select('product_sku, product_brand, qty, sales_amount').gte('order_date', from).lte('order_date', to),
