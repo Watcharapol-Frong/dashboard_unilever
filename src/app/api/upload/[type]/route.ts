@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server'
 import type { NextRequest } from 'next/server'
 import Papa from 'papaparse'
-import { createServiceClient } from "@/lib/supabase/server"
+import { createServiceClient, getSessionUserId, writeAuditLog } from '@/lib/supabase/server'
 import { FILE_TYPE_CONFIGS, generateStoragePath, validateHeaders } from '@/lib/upload/config'
 import { transformRows } from '@/lib/upload/etl'
 import type { UploadFileType } from '@/lib/upload/config'
@@ -16,6 +16,9 @@ export async function POST(
   const type = params.type as UploadFileType
   const cfg  = FILE_TYPE_CONFIGS[type]
   if (!cfg) return NextResponse.json({ error: 'Unknown file type' }, { status: 400 })
+
+  // TODO [AUTH]: getSessionUserId will return real user id after Auth is implemented
+  const userId = await getSessionUserId(request)
 
   const formData = await request.formData()
   const file = formData.get('file') as File | null
@@ -52,8 +55,10 @@ export async function POST(
     .upload(storagePath, new Blob([text], { type: 'text/csv' }), { upsert: false })
 
   if (storageError) {
+    console.error(`[upload/${type}] Step 3 Storage error:`, storageError)
     return NextResponse.json({ error: `Storage error: ${storageError.message}` }, { status: 500 })
   }
+  console.log(`[upload/${type}] Step 3 OK — storage: ${storagePath}`)
 
   // ── 4. Create upload_batch record ─────────────────────────
   const { data: batch, error: batchError } = await supabase
@@ -63,13 +68,16 @@ export async function POST(
       filename:     file.name,
       storage_path: storagePath,
       status:       'success',
+      uploaded_by:  userId,   // null until Auth — TODO [AUTH]: will be real user id
     })
     .select('id')
     .single()
 
   if (batchError || !batch) {
-    return NextResponse.json({ error: 'Failed to create batch record' }, { status: 500 })
+    console.error(`[upload/${type}] Step 4 batch insert error:`, batchError)
+    return NextResponse.json({ error: `Failed to create batch record: ${batchError?.message ?? 'no data returned'}` }, { status: 500 })
   }
+  console.log(`[upload/${type}] Step 4 OK — batch id: ${batch.id}`)
 
   // ── 5. ETL: transform rows ────────────────────────────────
   const { transformed, errors: etlErrors } = transformRows(rows, type, batch.id)
@@ -78,29 +86,67 @@ export async function POST(
   const conflictKey = cfg.conflictKey
   let dbError: string | null = null
 
-  for (let i = 0; i < transformed.length; i += CHUNK) {
-    const chunk = transformed.slice(i, i + CHUNK)
+  // Deduplicate within the batch by conflict key — keep last occurrence per key.
+  // Without this, PostgreSQL throws "ON CONFLICT DO UPDATE cannot affect row a second time"
+  // when the same conflict key appears more than once in a single upsert batch.
+  let upsertRows = transformed
+  if (conflictKey) {
+    const keys = conflictKey.split(',').map(k => k.trim())
+    const seen = new Map<string, Record<string, unknown>>()
+    for (const row of transformed) {
+      const composite = keys.map(k => String(row[k] ?? '')).join('|')
+      seen.set(composite, row)           // later row overwrites earlier duplicate
+    }
+    upsertRows = Array.from(seen.values())
+  }
+
+  console.log(`[upload/${type}] Step 6 upserting ${upsertRows.length} rows → table: ${cfg.table}`)
+  for (let i = 0; i < upsertRows.length; i += CHUNK) {
+    const chunk = upsertRows.slice(i, i + CHUNK)
     const { error } = await supabase
       .from(cfg.table)
       .upsert(chunk, { onConflict: conflictKey })
 
-    if (error) { dbError = error.message; break }
+    if (error) {
+      console.error(`[upload/${type}] Step 6 upsert error (chunk ${i}–${i + CHUNK}):`, error)
+      dbError = error.message
+      break
+    }
   }
+  if (!dbError) console.log(`[upload/${type}] Step 6 OK`)
 
   // ── 7. Update batch with final counts ────────────────────
+  const dedupCount = upsertRows.length
   await supabase.from('upload_batches').update({
-    row_count:   transformed.length,
+    row_count:   dedupCount,
     error_count: etlErrors.length,
     status:      dbError ? 'failed' : etlErrors.length > 0 ? 'partial' : 'success',
   }).eq('id', batch.id)
 
   if (dbError) return NextResponse.json({ error: dbError }, { status: 500 })
 
+  // ── 8. Write audit log ────────────────────────────────────
+  // TODO [AUTH]: userId will be real user id — audit log will be skipped until then
+  await writeAuditLog({
+    userId,
+    action:     'upload',
+    entityType: 'upload_batch',
+    entityId:   batch.id,
+    metadata: {
+      filename:      file.name,
+      table_name:    cfg.table,
+      row_count:     dedupCount,
+      error_count:   etlErrors.length,
+      extra_columns: extraColumns,
+      storage_path:  storagePath,
+    },
+  })
+
   return NextResponse.json({
     ok:            true,
-    row_count:     transformed.length,
+    row_count:     dedupCount,
     error_count:   etlErrors.length,
-    errors:        etlErrors.slice(0, 20),
+    errors:        etlErrors,
     storage_path:  storagePath,
     extra_columns: extraColumns,   // columns in file but not in Silver schema (ignored in ETL)
   })

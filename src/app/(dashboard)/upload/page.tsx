@@ -1,10 +1,12 @@
 'use client'
-import { useState, useRef, useCallback } from 'react'
+import { useState, useRef, useCallback, useEffect } from 'react'
 import Papa from 'papaparse'
 import useSWR from 'swr'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { CheckCircle, XCircle, AlertCircle, Upload, FileText, Clock, RefreshCw } from 'lucide-react'
+import { Skeleton } from '@/components/ui/skeleton'
 import { FILE_TYPE_CONFIGS, validateHeaders } from '@/lib/upload/config'
 import type { UploadFileType } from '@/lib/upload/config'
 import { cn, formatTHB, formatNumber } from '@/lib/utils'
@@ -12,27 +14,29 @@ import { cn, formatTHB, formatNumber } from '@/lib/utils'
 const FILE_TYPES = Object.entries(FILE_TYPE_CONFIGS) as [UploadFileType, typeof FILE_TYPE_CONFIGS[UploadFileType]][]
 
 // ── Data Status types ──────────────────────────────────────
+interface SalesStatus { total_rows: number; total_sales: number; earliest_date: string | null; latest_date: string | null; last_uploaded: string | null }
 interface DataStatus {
-  order_sales: { total_rows: number; online_rows: number; offline_rows: number; total_sales: number; online_sales: number; offline_sales: number; earliest_date: string | null; latest_date: string | null; last_uploaded: string | null }
-  leads:       { total_rows: number; last_uploaded: string | null }
-  products:    { total_rows: number; total_brands: number; last_uploaded: string | null }
-  telesales:   { total_rows: number; total_agents: number; earliest_date: string | null; latest_date: string | null; last_uploaded: string | null }
-  targets:     { total_rows: number; earliest_month: string | null; latest_month: string | null; total_target: number; last_uploaded: string | null }
-  costs:       { total_rows: number; earliest_month: string | null; latest_month: string | null; last_uploaded: string | null }
-  incentives:  { total_tiers: number; tiers: number[]; last_uploaded: string | null }
+  online_sales:  SalesStatus
+  offline_sales: SalesStatus
+  leads:         { total_rows: number; last_uploaded: string | null }
+  products:      { total_rows: number; total_brands: number; last_uploaded: string | null }
+  telesales:     { total_rows: number; total_agents: number; earliest_date: string | null; latest_date: string | null; last_uploaded: string | null }
+  targets:       { total_rows: number; earliest_month: string | null; latest_month: string | null; total_target: number; last_uploaded: string | null }
+  costs:         { total_rows: number; earliest_month: string | null; latest_month: string | null; last_uploaded: string | null }
+  incentives:    { total_tiers: number; tiers: number[]; last_uploaded: string | null }
 }
 
 function fmtDate(d: string | null) {
   if (!d) return '-'
-  return new Date(d).toLocaleDateString('th-TH', { day: 'numeric', month: 'short', year: '2-digit' })
+  return new Date(d).toLocaleDateString('en-US', { day: 'numeric', month: 'short', year: '2-digit' })
 }
 function fmtMonth(d: string | null) {
   if (!d) return '-'
-  return new Date(d).toLocaleDateString('th-TH', { month: 'short', year: '2-digit' })
+  return new Date(d).toLocaleDateString('en-US', { month: 'short', year: '2-digit' })
 }
 function fmtUpload(d: string | null) {
   if (!d) return null
-  return new Date(d).toLocaleString('th-TH', { day: 'numeric', month: 'short', year: '2-digit', hour: '2-digit', minute: '2-digit' })
+  return new Date(d).toLocaleString('en-US', { day: 'numeric', month: 'short', year: '2-digit', hour: '2-digit', minute: '2-digit' })
 }
 
 interface StatusRowProps { label: string; value: React.ReactNode }
@@ -46,7 +50,7 @@ function StatusRow({ label, value }: StatusRowProps) {
 }
 
 function EmptyStatus() {
-  return <p className="text-xs text-muted-foreground text-center py-4">ยังไม่มีข้อมูล</p>
+  return <p className="text-xs text-muted-foreground text-center py-4">No data available</p>
 }
 
 function StatusCard({ title, badge, lastUploaded, empty, children }: {
@@ -62,7 +66,7 @@ function StatusCard({ title, badge, lastUploaded, empty, children }: {
         {empty ? <EmptyStatus /> : children}
         {lastUploaded && (
           <p className="text-[10px] text-muted-foreground mt-3 pt-2 border-t">
-            อัปเดตล่าสุด: {lastUploaded}
+            Last updated: {lastUploaded}
           </p>
         )}
       </CardContent>
@@ -70,16 +74,37 @@ function StatusCard({ title, badge, lastUploaded, empty, children }: {
   )
 }
 
-type Step = 'select' | 'validate' | 'preview' | 'uploading' | 'done'
+type Step = 'select' | 'validate' | 'preview'
+
+const MAX_FILE_MB   = 50
+const MAX_CONCURRENT = 3
+
+interface UploadResult {
+  ok: boolean; row_count?: number; error_count?: number
+  errors?: string[]; error?: string; extra_columns?: string[]
+}
+
+interface UploadJob {
+  id:       string
+  fileType: UploadFileType
+  file:     File
+  label:    string
+  status:   'queued' | 'uploading' | 'done' | 'failed'
+  progress: number
+  result?:  UploadResult
+}
 
 interface UploadBatch {
   id: string; table_name: string; filename: string | null
-  row_count: number | null; error_count: number; status: string; uploaded_at: string
+  row_count: number | null; error_count: number; status: string
+  uploaded_at: string; uploaded_by: string | null
+  user_profiles: { email: string; full_name: string | null } | null
 }
 
-const fetcher = (url: string) => fetch(url).then(r => r.json())
+const fetcher = (url: string) => fetch(url, { cache: 'no-store' }).then(r => r.json())
 
 export default function UploadPage() {
+  // ── Form state (current file being prepared) ───────────────
   const [fileType, setFileType]         = useState<UploadFileType>('online_sales')
   const [step, setStep]                 = useState<Step>('select')
   const [file, setFile]                 = useState<File | null>(null)
@@ -87,34 +112,115 @@ export default function UploadPage() {
   const [extraColumns, setExtraColumns] = useState<string[]>([])
   const [preview, setPreview]           = useState<Record<string, string>[]>([])
   const [validError, setValidError]     = useState<string | null>(null)
-  const [result, setResult]             = useState<{ ok: boolean; row_count?: number; error_count?: number; errors?: string[]; error?: string; extra_columns?: string[] } | null>(null)
   const [dragOver, setDragOver]         = useState(false)
+
+  // ── Upload job queue ───────────────────────────────────────
+  const [jobs, setJobs] = useState<UploadJob[]>([])
+
+  // ── History pagination ─────────────────────────────────────
+  const HISTORY_PAGE_SIZE = 10
+  const [historyPage, setHistoryPage] = useState(1)
+
   const inputRef = useRef<HTMLInputElement>(null)
 
-  const { data: batches, mutate } = useSWR<UploadBatch[]>('/api/upload/history', fetcher)
-  const { data: status, mutate: mutateStatus, isLoading: statusLoading } = useSWR<DataStatus>('/api/upload/status', fetcher)
+  const { data: batches, mutate, isValidating: batchesValidating } = useSWR<UploadBatch[]>('/api/upload/history', fetcher, { revalidateOnFocus: true })
+  const { data: status, mutate: mutateStatus, isValidating: statusValidating } = useSWR<DataStatus>('/api/upload/status', fetcher, { revalidateOnFocus: true })
 
+  // ── Start a queued job via XHR ─────────────────────────────
+  const startJob = useCallback((job: UploadJob) => {
+    const form = new FormData()
+    form.append('file', job.file)
+
+    const xhr = new XMLHttpRequest()
+    xhr.upload.onprogress = (e) => {
+      if (!e.lengthComputable) return
+      const pct = Math.round((e.loaded / e.total) * 100)
+      setJobs(prev => prev.map(j => j.id === job.id ? { ...j, progress: pct } : j))
+    }
+    xhr.onload = () => {
+      let result: UploadResult
+      try { result = JSON.parse(xhr.responseText) }
+      catch { result = { ok: false, error: 'Invalid server response' } }
+      setJobs(prev => prev.map(j =>
+        j.id === job.id ? { ...j, status: result.ok ? 'done' : 'failed', progress: 100, result } : j
+      ))
+      mutate()
+      mutateStatus()
+    }
+    xhr.onerror = () => {
+      setJobs(prev => prev.map(j =>
+        j.id === job.id ? { ...j, status: 'failed', result: { ok: false, error: 'Network error' } } : j
+      ))
+    }
+    xhr.open('POST', `/api/upload/${job.fileType}`)
+    xhr.send(form)
+  }, [mutate, mutateStatus])
+
+  // ── Add job to queue, auto-start if slot available ─────────
+  const enqueueJob = useCallback((job: UploadJob) => {
+    setJobs(prev => {
+      const active = prev.filter(j => j.status === 'uploading').length
+      const status = active < MAX_CONCURRENT ? 'uploading' : 'queued'
+      const next = { ...job, status } as UploadJob
+      if (status === 'uploading') setTimeout(() => startJob(next), 0)
+      return [next, ...prev]
+    })
+  }, [startJob])
+
+  // ── When a job finishes, start next queued ─────────────────
+  const prevJobsRef = useRef<UploadJob[]>([])
+  useCallback(() => {
+    const prevActive = prevJobsRef.current.filter(j => j.status === 'uploading').length
+    setJobs(prev => {
+      const active = prev.filter(j => j.status === 'uploading').length
+      if (active < prevActive) {
+        // a job just finished — start next queued
+        const nextQueued = prev.find(j => j.status === 'queued')
+        if (nextQueued && active < MAX_CONCURRENT) {
+          setTimeout(() => startJob(nextQueued), 0)
+          return prev.map(j => j.id === nextQueued.id ? { ...j, status: 'uploading' } : j)
+        }
+      }
+      prevJobsRef.current = prev
+      return prev
+    })
+  }, [startJob])
+
+  // Simpler: watch jobs and start queued when slot opens
+  const jobsRef = useRef(jobs)
+  jobsRef.current = jobs
+  const tryStartQueued = useCallback(() => {
+    setJobs(prev => {
+      const active = prev.filter(j => j.status === 'uploading').length
+      if (active >= MAX_CONCURRENT) return prev
+      const nextQueued = [...prev].reverse().find(j => j.status === 'queued')
+      if (!nextQueued) return prev
+      setTimeout(() => startJob(nextQueued), 0)
+      return prev.map(j => j.id === nextQueued.id ? { ...j, status: 'uploading' as const } : j)
+    })
+  }, [startJob])
+
+  // ── File processing ────────────────────────────────────────
   const processFile = useCallback((f: File) => {
-    setFile(f)
-    setResult(null)
-    setValidError(null)
+    if (f.size > MAX_FILE_MB * 1024 * 1024) {
+      setFile(f); setValidError(`File exceeds ${MAX_FILE_MB} MB limit`); setStep('validate'); return
+    }
+    setFile(f); setValidError(null)
 
     Papa.parse<Record<string, string>>(f, {
-      header: true,
-      skipEmptyLines: true,
-      preview: 6,
+      header: true, skipEmptyLines: true, preview: 2,
       transformHeader: (h) => h.trim(),
       complete: ({ data }) => {
-        if (!data.length) { setValidError('ไฟล์ว่างเปล่า'); setStep('validate'); return }
+        if (!data.length) { setValidError('Empty file'); setStep('validate'); return }
         const hdrs = Object.keys(data[0])
         setHeaders(hdrs)
         const { ok, error, extraColumns: extras } = validateHeaders(hdrs, fileType)
         setValidError(ok ? null : (error ?? null))
         setExtraColumns(ok ? extras : [])
-        setPreview(data.slice(0, 5))
+        setPreview(data.slice(0, 1))
         setStep(ok ? 'preview' : 'validate')
       },
-      error: () => { setValidError('ไม่สามารถอ่านไฟล์ได้'); setStep('validate') },
+      error: () => { setValidError('Unable to read file'); setStep('validate') },
     })
   }, [fileType])
 
@@ -132,30 +238,43 @@ export default function UploadPage() {
 
   const reset = () => {
     setStep('select'); setFile(null); setHeaders([])
-    setExtraColumns([]); setPreview([]); setValidError(null); setResult(null)
+    setExtraColumns([]); setPreview([]); setValidError(null)
   }
 
-  const onTypeChange = (t: UploadFileType) => {
-    setFileType(t); reset()
-  }
+  const onTypeChange = (t: UploadFileType) => { setFileType(t); reset() }
 
-  const doUpload = async () => {
+  // ── Confirm upload → enqueue + reset form ──────────────────
+  const doUpload = () => {
     if (!file) return
-    setStep('uploading')
-    const form = new FormData()
-    form.append('file', file)
-    try {
-      const res = await fetch(`/api/upload/${fileType}`, { method: 'POST', body: form })
-      const json = await res.json()
-      setResult(json)
-      setStep('done')
-      mutate()
-      mutateStatus()
-    } catch {
-      setResult({ ok: false, error: 'Network error' })
-      setStep('done')
+    const job: UploadJob = {
+      id:       crypto.randomUUID(),
+      fileType, file,
+      label:    FILE_TYPE_CONFIGS[fileType].label,
+      status:   'uploading',
+      progress: 0,
     }
+    enqueueJob(job)
+    reset()
   }
+
+  // ── Dismiss finished job ───────────────────────────────────
+  const dismissJob = useCallback((id: string) => {
+    setJobs(prev => {
+      const updated = prev.filter(j => j.id !== id)
+      setTimeout(tryStartQueued, 0)
+      return updated
+    })
+  }, [tryStartQueued])
+
+  // ── Auto-dismiss successful jobs after 3 s ─────────────────
+  useEffect(() => {
+    const successJobs = jobs.filter(j => j.status === 'done')
+    if (successJobs.length === 0) return
+    const timers = successJobs.map(j =>
+      setTimeout(() => dismissJob(j.id), 3000)
+    )
+    return () => timers.forEach(clearTimeout)
+  }, [jobs, dismissJob])
 
   const cfg = FILE_TYPE_CONFIGS[fileType]
 
@@ -164,7 +283,7 @@ export default function UploadPage() {
       <div>
         <h1 className="text-2xl font-bold">Upload Data</h1>
         <p className="text-muted-foreground text-sm mt-1">
-          อัปโหลด CSV — ระบบตรวจสอบ header อัตโนมัติก่อน import เข้า database
+          Upload CSV — Automated header validation before importing to database
         </p>
       </div>
 
@@ -207,7 +326,7 @@ export default function UploadPage() {
                     : "bg-background text-muted-foreground border-gray-200 hover:border-[#003DA6] hover:text-foreground"
                 )}
               >
-                <option value="" disabled className="text-muted-foreground bg-background">ประเภทอื่นๆ...</option>
+                <option value="" disabled className="text-muted-foreground bg-background">Other Types...</option>
                 {FILE_TYPES.filter(([type]) => !['online_sales', 'offline_sales', 'telesales'].includes(type as string)).map(([type, c]) => (
                   <option key={type} value={type} className="text-foreground bg-background">{c.label}</option>
                 ))}
@@ -231,8 +350,8 @@ export default function UploadPage() {
             {!file ? (
               <>
                 <Upload className="h-10 w-10 mx-auto text-gray-400 mb-3" />
-                <p className="text-sm font-medium">วางไฟล์ที่นี่ หรือคลิกเพื่อเลือกไฟล์</p>
-                <p className="text-xs text-muted-foreground mt-1">รองรับเฉพาะไฟล์ .csv</p>
+                <p className="text-sm font-medium">Drag and drop file here, or click to select</p>
+                <p className="text-xs text-muted-foreground mt-1">CSV only · Max {MAX_FILE_MB} MB · Up to {MAX_CONCURRENT} uploads at once</p>
               </>
             ) : (
               <div className="flex items-center justify-center gap-3">
@@ -250,22 +369,22 @@ export default function UploadPage() {
             <div className="flex items-start gap-3 rounded-lg border border-red-200 bg-red-50 p-4">
               <AlertCircle className="h-5 w-5 text-red-500 shrink-0 mt-0.5" />
               <div>
-                <p className="text-sm font-semibold text-red-700">Header ไม่ตรง</p>
+                <p className="text-sm font-semibold text-red-700">Invalid Headers</p>
                 <p className="text-sm text-red-600 mt-0.5">{validError}</p>
-                <button onClick={reset} className="text-xs underline text-red-500 mt-2">เลือกไฟล์ใหม่</button>
+                <button onClick={reset} className="text-xs underline text-red-500 mt-2">Select new file</button>
               </div>
             </div>
           )}
 
           {/* Preview table */}
-          {(step === 'preview' || step === 'uploading') && preview.length > 0 && (
+          {step === 'preview' && preview.length > 0 && (
             <div className="space-y-2">
               <div className="flex items-center gap-2 flex-wrap">
                 <CheckCircle className="h-4 w-4 text-green-500 shrink-0" />
-                <p className="text-sm font-medium text-green-700">Header ถูกต้อง — ตัวอย่าง 5 แถวแรก</p>
+                <p className="text-sm font-medium text-green-700">Valid Headers — Preview of first row</p>
                 {extraColumns.length > 0 && (
                   <span className="text-xs text-amber-600 bg-amber-50 border border-amber-200 rounded-full px-2 py-0.5">
-                    {extraColumns.length} column นอก schema — เก็บใน Storage แต่ไม่ import ลง DB
+                    {extraColumns.length} extra columns — saved to Storage but not imported to DB
                   </span>
                 )}
               </div>
@@ -313,223 +432,539 @@ export default function UploadPage() {
             </div>
           )}
 
-          {/* Upload result */}
-          {step === 'done' && result && (
-            <div className={cn(
-              'rounded-lg border p-4',
-              result.ok ? 'border-green-200 bg-green-50' : 'border-red-200 bg-red-50',
-            )}>
-              <div className="flex items-center gap-2 mb-1">
-                {result.ok
-                  ? <CheckCircle className="h-5 w-5 text-green-500" />
-                  : <XCircle className="h-5 w-5 text-red-500" />}
-                <p className={cn('text-sm font-semibold', result.ok ? 'text-green-700' : 'text-red-700')}>
-                  {result.ok ? 'Upload สำเร็จ' : 'Upload ล้มเหลว'}
-                </p>
-              </div>
-              {result.ok && (
-                <p className="text-sm text-green-600">
-                  {result.row_count} rows imported
-                  {(result.error_count ?? 0) > 0 && `, ${result.error_count} rows skipped`}
-                </p>
-              )}
-              {!result.ok && <p className="text-sm text-red-600">{result.error}</p>}
-              {(result.errors?.length ?? 0) > 0 && (
-                <div className="mt-2 text-xs text-amber-700 space-y-0.5">
-                  {result.errors!.map((e, i) => <p key={i}>{e}</p>)}
-                </div>
-              )}
-              <button onClick={reset} className="text-xs underline mt-3 text-muted-foreground">Upload ไฟล์ใหม่</button>
+          {/* Action buttons */}
+          {step === 'preview' && (
+            <div className="flex gap-3">
+              <button
+                onClick={doUpload}
+                className="px-5 py-2 rounded-lg bg-[#003DA6] text-white text-sm font-medium hover:bg-[#002d80] transition-colors"
+              >
+                Confirm Upload
+              </button>
+              <button onClick={reset} className="px-4 py-2 rounded-lg border text-sm hover:bg-muted transition-colors">
+                Cancel
+              </button>
             </div>
           )}
-
-          {/* Action buttons */}
-          <div className="flex gap-3">
-            {step === 'preview' && (
-              <>
-                <button
-                  onClick={doUpload}
-                  className="px-5 py-2 rounded-lg bg-[#003DA6] text-white text-sm font-medium hover:bg-[#002d80] transition-colors"
-                >
-                  ยืนยัน Upload
-                </button>
-                <button onClick={reset} className="px-4 py-2 rounded-lg border text-sm hover:bg-muted transition-colors">
-                  ยกเลิก
-                </button>
-              </>
-            )}
-            {step === 'uploading' && (
-              <button disabled className="px-5 py-2 rounded-lg bg-[#003DA6]/60 text-white text-sm font-medium cursor-not-allowed flex items-center gap-2">
-                <span className="h-4 w-4 border-2 border-white/40 border-t-white rounded-full animate-spin" />
-                กำลัง Upload...
-              </button>
-            )}
-          </div>
         </CardContent>
       </Card>
 
-      {/* Data Status */}
-      <div className="space-y-3">
-        <div className="flex items-center justify-between">
-          <div>
-            <h2 className="text-base font-semibold">สถานะข้อมูลปัจจุบัน</h2>
-            <p className="text-xs text-muted-foreground">ข้อมูลที่อยู่ใน database ขณะนี้</p>
+      {/* Upload Jobs */}
+      {jobs.length > 0 && (
+        <div className="space-y-2">
+          {jobs.length > 2 && (
+            <p className="text-xs text-muted-foreground text-right">
+              {jobs.length} files · scroll to see all
+            </p>
+          )}
+          {/* max-h = ~2 cards (each ~100px) + gap */}
+          <div className="space-y-2 max-h-[220px] overflow-y-auto pr-1 scrollbar-thin">
+          {jobs.map(job => {
+            const isUploading = job.status === 'uploading'
+            const isQueued    = job.status === 'queued'
+            const isDone      = job.status === 'done'
+            const isFailed    = job.status === 'failed'
+            return (
+              <div key={job.id} className={cn(
+                'rounded-xl border p-4 space-y-3',
+                isUploading || isQueued ? 'border-gray-200 bg-gray-50/60'
+                  : isDone ? 'border-green-200 bg-green-50/60'
+                  : 'border-red-200 bg-red-50/60',
+              )}>
+                <div className="flex items-start justify-between gap-3">
+                  <div className="flex items-center gap-3 min-w-0">
+                    <div className="shrink-0 h-9 w-9 rounded-lg bg-white border flex items-center justify-center">
+                      <FileText className="h-4 w-4 text-[#003DA6]" />
+                    </div>
+                    <div className="min-w-0">
+                      <p className="text-sm font-medium truncate">{job.file.name}</p>
+                      <p className="text-xs text-muted-foreground">
+                        {job.label} · {(job.file.size / 1024 / 1024).toFixed(1)} MB
+                      </p>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2 shrink-0">
+                    {isQueued && <Badge variant="secondary" className="text-xs">Queued</Badge>}
+                    {(isDone || isFailed) && (
+                      <button onClick={() => dismissJob(job.id)} className="text-muted-foreground hover:text-foreground transition-colors">
+                        <XCircle className="h-4 w-4" />
+                      </button>
+                    )}
+                  </div>
+                </div>
+
+                <div className="space-y-1">
+                  <div className="flex justify-between items-center">
+                    <span className="text-xs text-muted-foreground">
+                      {isQueued    ? 'Waiting for slot…'
+                       : isUploading ? 'Uploading to server…'
+                       : isDone && job.result
+                         ? `${job.result.row_count?.toLocaleString()} rows imported${(job.result.error_count ?? 0) > 0 ? `, ${job.result.error_count?.toLocaleString()} skipped` : ''}`
+                       : job.result?.error ?? 'Upload failed'}
+                    </span>
+                    <span className={cn(
+                      'text-xs font-medium',
+                      isUploading || isQueued ? 'text-[#003DA6]'
+                        : isDone ? 'text-green-600' : 'text-red-600',
+                    )}>
+                      {isQueued ? '—' : isUploading ? `${job.progress}%` : isDone ? '100%' : '—'}
+                    </span>
+                  </div>
+                  <div className="h-1.5 w-full rounded-full bg-gray-200 overflow-hidden">
+                    <div
+                      className={cn(
+                        'h-full rounded-full transition-all duration-300',
+                        isUploading || isQueued ? 'bg-[#003DA6]'
+                          : isDone ? 'bg-green-500' : 'bg-red-500',
+                      )}
+                      style={{ width: isQueued ? '0%' : isUploading ? `${job.progress}%` : isDone ? '100%' : '40%' }}
+                    />
+                  </div>
+                </div>
+
+                {(isDone || isFailed) && (job.result?.errors?.length ?? 0) > 0 && (() => {
+                  const groups: Record<string, number> = {}
+                  for (const e of job.result!.errors!) {
+                    const key = e.replace(/^Row \d+: /, '')
+                    groups[key] = (groups[key] ?? 0) + 1
+                  }
+                  return (
+                    <div className="pt-1 space-y-0.5 border-t border-dashed border-amber-200">
+                      {Object.entries(groups).map(([msg, count]) => (
+                        <p key={msg} className="text-xs text-amber-700">
+                          {count > 1 ? `${count} rows` : '1 row'}: {msg}
+                        </p>
+                      ))}
+                    </div>
+                  )
+                })()}
+              </div>
+            )
+          })}
           </div>
+        </div>
+      )}
+
+      {/* Overview + Data Status + Upload History Tabs */}
+      <Tabs defaultValue="overview" className="gap-4">
+        <div className="flex items-center justify-between">
+          <TabsList>
+            <TabsTrigger value="overview">Overview</TabsTrigger>
+            <TabsTrigger value="status">Data Status</TabsTrigger>
+            <TabsTrigger value="history">History</TabsTrigger>
+          </TabsList>
+
           <button
-            onClick={() => mutateStatus()}
-            className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors"
+            onClick={() => { mutateStatus(); mutate() }}
+            disabled={statusValidating || batchesValidating}
+            className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors disabled:opacity-50"
           >
-            <RefreshCw className={cn('h-3.5 w-3.5', statusLoading && 'animate-spin')} />
-            รีเฟรช
+            <RefreshCw className={cn('h-3.5 w-3.5', (statusValidating || batchesValidating) && 'animate-spin')} />
+            Refresh
           </button>
         </div>
 
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-          {/* Online Sales */}
-          <StatusCard
-            title="Online Sales"
-            badge={status ? formatNumber(status.order_sales.online_rows) + ' rows' : undefined}
-            lastUploaded={fmtUpload(status?.order_sales.last_uploaded ?? null)}
-            empty={!status || status.order_sales.online_rows === 0}
-          >
-            <StatusRow label="Order ล่าสุด" value={fmtDate(status?.order_sales.latest_date ?? null)} />
-            <StatusRow label="Order เก่าสุด" value={fmtDate(status?.order_sales.earliest_date ?? null)} />
-            <StatusRow label="ยอดรวม" value={<span className="text-[#003DA6]">{formatTHB(status?.order_sales.online_sales ?? 0)}</span>} />
-          </StatusCard>
-
-          {/* Offline Sales */}
-          <StatusCard
-            title="Offline Sales"
-            badge={status ? formatNumber(status.order_sales.offline_rows) + ' rows' : undefined}
-            lastUploaded={fmtUpload(status?.order_sales.last_uploaded ?? null)}
-            empty={!status || status.order_sales.offline_rows === 0}
-          >
-            <StatusRow label="Order ล่าสุด" value={fmtDate(status?.order_sales.latest_date ?? null)} />
-            <StatusRow label="Order เก่าสุด" value={fmtDate(status?.order_sales.earliest_date ?? null)} />
-            <StatusRow label="ยอดรวม" value={<span className="text-[#EE2737]">{formatTHB(status?.order_sales.offline_sales ?? 0)}</span>} />
-          </StatusCard>
-
-          {/* Leads */}
-          <StatusCard
-            title="Lead Customers"
-            badge={status ? formatNumber(status.leads.total_rows) + ' leads' : undefined}
-            lastUploaded={fmtUpload(status?.leads.last_uploaded ?? null)}
-            empty={!status || status.leads.total_rows === 0}
-          >
-            <StatusRow label="จำนวน Lead" value={formatNumber(status?.leads.total_rows ?? 0)} />
-          </StatusCard>
-
-          {/* Products */}
-          <StatusCard
-            title="Products"
-            badge={status ? formatNumber(status.products.total_rows) + ' SKUs' : undefined}
-            lastUploaded={fmtUpload(status?.products.last_uploaded ?? null)}
-            empty={!status || status.products.total_rows === 0}
-          >
-            <StatusRow label="จำนวน SKU" value={formatNumber(status?.products.total_rows ?? 0)} />
-            <StatusRow label="จำนวน Brand" value={formatNumber(status?.products.total_brands ?? 0)} />
-          </StatusCard>
-
-          {/* Telesales */}
-          <StatusCard
-            title="Telesales"
-            badge={status ? formatNumber(status.telesales.total_rows) + ' rows' : undefined}
-            lastUploaded={fmtUpload(status?.telesales.last_uploaded ?? null)}
-            empty={!status || status.telesales.total_rows === 0}
-          >
-            <StatusRow label="วันที่ล่าสุด" value={fmtDate(status?.telesales.latest_date ?? null)} />
-            <StatusRow label="วันที่เก่าสุด" value={fmtDate(status?.telesales.earliest_date ?? null)} />
-            <StatusRow label="จำนวน Agent" value={formatNumber(status?.telesales.total_agents ?? 0)} />
-          </StatusCard>
-
-          {/* Targets */}
-          <StatusCard
-            title="Targets"
-            badge={status ? formatNumber(status.targets.total_rows) + ' rows' : undefined}
-            lastUploaded={fmtUpload(status?.targets.last_uploaded ?? null)}
-            empty={!status || status.targets.total_rows === 0}
-          >
-            <StatusRow label="เดือนล่าสุด" value={fmtMonth(status?.targets.latest_month ?? null)} />
-            <StatusRow label="เดือนเก่าสุด" value={fmtMonth(status?.targets.earliest_month ?? null)} />
-            <StatusRow label="ยอด Target รวม" value={formatTHB(status?.targets.total_target ?? 0)} />
-          </StatusCard>
-
-          {/* Costs */}
-          <StatusCard
-            title="Costs"
-            badge={status ? formatNumber(status.costs.total_rows) + ' เดือน' : undefined}
-            lastUploaded={fmtUpload(status?.costs.last_uploaded ?? null)}
-            empty={!status || status.costs.total_rows === 0}
-          >
-            <StatusRow label="เดือนล่าสุด" value={fmtMonth(status?.costs.latest_month ?? null)} />
-            <StatusRow label="เดือนเก่าสุด" value={fmtMonth(status?.costs.earliest_month ?? null)} />
-          </StatusCard>
-
-          {/* Incentives */}
-          <StatusCard
-            title="Incentives"
-            badge={status ? status.incentives.total_tiers + ' tiers' : undefined}
-            lastUploaded={fmtUpload(status?.incentives.last_uploaded ?? null)}
-            empty={!status || status.incentives.total_tiers === 0}
-          >
-            <StatusRow label="จำนวน Tier" value={status?.incentives.total_tiers ?? 0} />
-            <StatusRow
-              label="Tiers"
-              value={status?.incentives.tiers.map(t => `${(t * 100).toFixed(0)}%`).join(', ') ?? '-'}
-            />
-          </StatusCard>
-        </div>
-      </div>
-
-      {/* Upload History */}
-      <Card>
-        <CardHeader><CardTitle className="text-base">Upload History</CardTitle></CardHeader>
-        <CardContent>
-          {!batches || batches.length === 0 ? (
-            <p className="text-muted-foreground text-sm text-center py-8">ยังไม่มีประวัติการ upload</p>
-          ) : (
-            <div className="rounded-lg border overflow-auto">
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="border-b bg-muted/50">
-                    <th className="px-4 py-3 text-left font-medium text-muted-foreground">Date</th>
-                    <th className="px-4 py-3 text-left font-medium text-muted-foreground">Type</th>
-                    <th className="px-4 py-3 text-left font-medium text-muted-foreground">File</th>
-                    <th className="px-4 py-3 text-right font-medium text-muted-foreground">Rows</th>
-                    <th className="px-4 py-3 text-right font-medium text-muted-foreground">Errors</th>
-                    <th className="px-4 py-3 text-center font-medium text-muted-foreground">Status</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {batches.map(b => (
-                    <tr key={b.id} className="border-b last:border-0 hover:bg-muted/30">
-                      <td className="px-4 py-2.5 text-xs text-muted-foreground">
-                        {new Date(b.uploaded_at).toLocaleString('th-TH', { dateStyle: 'short', timeStyle: 'short' })}
-                      </td>
-                      <td className="px-4 py-2.5">
-                        <Badge variant="secondary">
-                          {FILE_TYPE_CONFIGS[b.table_name as UploadFileType]?.label ?? b.table_name}
-                        </Badge>
-                      </td>
-                      <td className="px-4 py-2.5 text-sm max-w-[200px] truncate">{b.filename ?? '-'}</td>
-                      <td className="px-4 py-2.5 text-right">{b.row_count ?? 0}</td>
-                      <td className="px-4 py-2.5 text-right">
-                        {b.error_count > 0 ? <span className="text-amber-500">{b.error_count}</span> : 0}
-                      </td>
-                      <td className="px-4 py-2.5 text-center">
-                        {b.status === 'success' ? <CheckCircle className="h-4 w-4 text-green-500 mx-auto" />
-                          : b.status === 'partial' ? <AlertCircle className="h-4 w-4 text-amber-500 mx-auto" />
-                          : b.status === 'failed'  ? <XCircle className="h-4 w-4 text-red-500 mx-auto" />
-                          : <Clock className="h-4 w-4 text-gray-400 mx-auto" />}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+        {/* Tab: Overview */}
+        <TabsContent value="overview">
+          {statusValidating && !status ? (
+            <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+              <Card className="col-span-2"><CardContent className="pt-4 space-y-2">{Array.from({length:5}).map((_,i)=><Skeleton key={i} className="h-4 w-full"/>)}</CardContent></Card>
+              <Card><CardContent className="pt-4 space-y-2">{Array.from({length:4}).map((_,i)=><Skeleton key={i} className="h-4 w-full"/>)}</CardContent></Card>
+              <Card><CardContent className="pt-4 space-y-2">{Array.from({length:5}).map((_,i)=><Skeleton key={i} className="h-4 w-full"/>)}</CardContent></Card>
+              <Card className="col-span-2 lg:col-span-4"><CardContent className="pt-4"><div className="grid grid-cols-4 gap-4">{Array.from({length:4}).map((_,i)=><div key={i} className="space-y-2 text-center"><Skeleton className="h-8 w-16 mx-auto"/><Skeleton className="h-3 w-20 mx-auto"/></div>)}</div></CardContent></Card>
             </div>
+          ) : (
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+            {/* Combined Sales */}
+            <Card className="col-span-2 lg:col-span-2">
+              <CardHeader className="pb-2">
+                <CardTitle className="text-sm font-semibold">Sales Summary</CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-0">
+                <StatusRow
+                  label="Online Sales"
+                  value={
+                    <span className="text-[#003DA6] font-semibold">
+                      {status ? formatTHB(status.online_sales.total_sales) : '—'}
+                      <span className="text-muted-foreground font-normal ml-1.5 text-[11px]">
+                        ({formatNumber(status?.online_sales.total_rows ?? 0)} rows)
+                      </span>
+                    </span>
+                  }
+                />
+                <StatusRow
+                  label="Offline Sales"
+                  value={
+                    <span className="text-[#EE2737] font-semibold">
+                      {status ? formatTHB(status.offline_sales.total_sales) : '—'}
+                      <span className="text-muted-foreground font-normal ml-1.5 text-[11px]">
+                        ({formatNumber(status?.offline_sales.total_rows ?? 0)} rows)
+                      </span>
+                    </span>
+                  }
+                />
+                <StatusRow
+                  label="Combined Total"
+                  value={
+                    <span className="font-bold">
+                      {status ? formatTHB(status.online_sales.total_sales + status.offline_sales.total_sales) : '—'}
+                    </span>
+                  }
+                />
+                <StatusRow
+                  label="Date Range (Online)"
+                  value={`${fmtDate(status?.online_sales.earliest_date ?? null)} – ${fmtDate(status?.online_sales.latest_date ?? null)}`}
+                />
+                <StatusRow
+                  label="Date Range (Offline)"
+                  value={`${fmtDate(status?.offline_sales.earliest_date ?? null)} – ${fmtDate(status?.offline_sales.latest_date ?? null)}`}
+                />
+              </CardContent>
+            </Card>
+
+            {/* Leads & Telesales */}
+            <Card>
+              <CardHeader className="pb-2">
+                <CardTitle className="text-sm font-semibold">Leads & Telesales</CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-0">
+                <StatusRow label="Total Leads"    value={formatNumber(status?.leads.total_rows ?? 0)} />
+                <StatusRow label="Telesales Calls" value={formatNumber(status?.telesales.total_rows ?? 0)} />
+                <StatusRow label="Active Agents"  value={formatNumber(status?.telesales.total_agents ?? 0)} />
+                <StatusRow
+                  label="Call Date Range"
+                  value={`${fmtDate(status?.telesales.earliest_date ?? null)} – ${fmtDate(status?.telesales.latest_date ?? null)}`}
+                />
+              </CardContent>
+            </Card>
+
+            {/* Products & Targets */}
+            <Card>
+              <CardHeader className="pb-2">
+                <CardTitle className="text-sm font-semibold">Products & Targets</CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-0">
+                <StatusRow label="Total SKUs"     value={formatNumber(status?.products.total_rows ?? 0)} />
+                <StatusRow label="Total Brands"   value={formatNumber(status?.products.total_brands ?? 0)} />
+                <StatusRow label="Target Periods" value={formatNumber(status?.targets.total_rows ?? 0)} />
+                <StatusRow label="Total Target"   value={formatTHB(status?.targets.total_target ?? 0)} />
+                <StatusRow label="Incentive Tiers" value={status?.incentives.total_tiers ?? 0} />
+              </CardContent>
+            </Card>
+
+            {/* Upload Summary */}
+            <Card className="col-span-2 lg:col-span-4">
+              <CardHeader className="pb-2">
+                <CardTitle className="text-sm font-semibold">Upload Activity</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+                  {[
+                    { label: 'Total Uploads',   value: formatNumber(batches?.length ?? 0) },
+                    { label: 'Successful',       value: formatNumber(batches?.filter(b => b.status === 'success').length ?? 0), color: 'text-green-600' },
+                    { label: 'Partial',          value: formatNumber(batches?.filter(b => b.status === 'partial').length ?? 0), color: 'text-amber-500' },
+                    { label: 'Failed',           value: formatNumber(batches?.filter(b => b.status === 'failed').length ?? 0), color: 'text-red-500' },
+                  ].map(item => (
+                    <div key={item.label} className="text-center space-y-1">
+                      <p className={`text-2xl font-bold tabular-nums ${item.color ?? ''}`}>{item.value}</p>
+                      <p className="text-xs text-muted-foreground">{item.label}</p>
+                    </div>
+                  ))}
+                </div>
+              </CardContent>
+            </Card>
+          </div>
           )}
-        </CardContent>
-      </Card>
+        </TabsContent>
+
+        {/* Tab: Data Status */}
+        <TabsContent value="status">
+          {statusValidating && !status ? (
+            <div className="rounded-lg border overflow-hidden">
+              <div className="bg-muted/50 px-4 py-3 grid grid-cols-6 gap-4">
+                {['Table','Rows','Details','Date Range','Last Updated','Status'].map(h => (
+                  <Skeleton key={h} className="h-4 w-full" />
+                ))}
+              </div>
+              {Array.from({length: 8}).map((_, i) => (
+                <div key={i} className="px-4 py-3 grid grid-cols-6 gap-4 border-t">
+                  <Skeleton className="h-4 w-24" />
+                  <Skeleton className="h-4 w-12 ml-auto" />
+                  <Skeleton className="h-4 w-28" />
+                  <Skeleton className="h-4 w-32" />
+                  <Skeleton className="h-4 w-28" />
+                  <Skeleton className="h-4 w-4 mx-auto rounded-full" />
+                </div>
+              ))}
+            </div>
+          ) : (
+          <div className="rounded-lg border overflow-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b bg-muted/50">
+                  <th className="px-4 py-3 text-left font-medium text-muted-foreground">Table</th>
+                  <th className="px-4 py-3 text-right font-medium text-muted-foreground">Rows</th>
+                  <th className="px-4 py-3 text-left font-medium text-muted-foreground">Details</th>
+                  <th className="px-4 py-3 text-left font-medium text-muted-foreground">Date Range</th>
+                  <th className="px-4 py-3 text-left font-medium text-muted-foreground">Last Updated</th>
+                  <th className="px-4 py-3 text-center font-medium text-muted-foreground">Status</th>
+                </tr>
+              </thead>
+              <tbody>
+                {/* Online Sales */}
+                <tr className="border-b hover:bg-muted/30">
+                  <td className="px-4 py-2.5 font-medium">Online Sales</td>
+                  <td className="px-4 py-2.5 text-right tabular-nums">{formatNumber(status?.online_sales.total_rows ?? 0)}</td>
+                  <td className="px-4 py-2.5 text-xs text-muted-foreground">{status ? formatTHB(status.online_sales.total_sales) : '—'} total</td>
+                  <td className="px-4 py-2.5 text-xs text-muted-foreground">
+                    {fmtDate(status?.online_sales.earliest_date ?? null)} – {fmtDate(status?.online_sales.latest_date ?? null)}
+                  </td>
+                  <td className="px-4 py-2.5 text-xs text-muted-foreground">{fmtUpload(status?.online_sales.last_uploaded ?? null) ?? '—'}</td>
+                  <td className="px-4 py-2.5 text-center">
+                    {(status?.online_sales.total_rows ?? 0) > 0
+                      ? <CheckCircle className="h-4 w-4 text-green-500 mx-auto" />
+                      : <Clock className="h-4 w-4 text-gray-300 mx-auto" />}
+                  </td>
+                </tr>
+                {/* Offline Sales */}
+                <tr className="border-b hover:bg-muted/30">
+                  <td className="px-4 py-2.5 font-medium">Offline Sales</td>
+                  <td className="px-4 py-2.5 text-right tabular-nums">{formatNumber(status?.offline_sales.total_rows ?? 0)}</td>
+                  <td className="px-4 py-2.5 text-xs text-muted-foreground">{status ? formatTHB(status.offline_sales.total_sales) : '—'} total</td>
+                  <td className="px-4 py-2.5 text-xs text-muted-foreground">
+                    {fmtDate(status?.offline_sales.earliest_date ?? null)} – {fmtDate(status?.offline_sales.latest_date ?? null)}
+                  </td>
+                  <td className="px-4 py-2.5 text-xs text-muted-foreground">{fmtUpload(status?.offline_sales.last_uploaded ?? null) ?? '—'}</td>
+                  <td className="px-4 py-2.5 text-center">
+                    {(status?.offline_sales.total_rows ?? 0) > 0
+                      ? <CheckCircle className="h-4 w-4 text-green-500 mx-auto" />
+                      : <Clock className="h-4 w-4 text-gray-300 mx-auto" />}
+                  </td>
+                </tr>
+                {/* Leads */}
+                <tr className="border-b hover:bg-muted/30">
+                  <td className="px-4 py-2.5 font-medium">Leads</td>
+                  <td className="px-4 py-2.5 text-right tabular-nums">{formatNumber(status?.leads.total_rows ?? 0)}</td>
+                  <td className="px-4 py-2.5 text-xs text-muted-foreground">—</td>
+                  <td className="px-4 py-2.5 text-xs text-muted-foreground">—</td>
+                  <td className="px-4 py-2.5 text-xs text-muted-foreground">{fmtUpload(status?.leads.last_uploaded ?? null) ?? '—'}</td>
+                  <td className="px-4 py-2.5 text-center">
+                    {(status?.leads.total_rows ?? 0) > 0
+                      ? <CheckCircle className="h-4 w-4 text-green-500 mx-auto" />
+                      : <Clock className="h-4 w-4 text-gray-300 mx-auto" />}
+                  </td>
+                </tr>
+                {/* Products */}
+                <tr className="border-b hover:bg-muted/30">
+                  <td className="px-4 py-2.5 font-medium">Products</td>
+                  <td className="px-4 py-2.5 text-right tabular-nums">{formatNumber(status?.products.total_rows ?? 0)}</td>
+                  <td className="px-4 py-2.5 text-xs text-muted-foreground">{formatNumber(status?.products.total_brands ?? 0)} brands</td>
+                  <td className="px-4 py-2.5 text-xs text-muted-foreground">—</td>
+                  <td className="px-4 py-2.5 text-xs text-muted-foreground">{fmtUpload(status?.products.last_uploaded ?? null) ?? '—'}</td>
+                  <td className="px-4 py-2.5 text-center">
+                    {(status?.products.total_rows ?? 0) > 0
+                      ? <CheckCircle className="h-4 w-4 text-green-500 mx-auto" />
+                      : <Clock className="h-4 w-4 text-gray-300 mx-auto" />}
+                  </td>
+                </tr>
+                {/* Telesales */}
+                <tr className="border-b hover:bg-muted/30">
+                  <td className="px-4 py-2.5 font-medium">Telesales Calls</td>
+                  <td className="px-4 py-2.5 text-right tabular-nums">{formatNumber(status?.telesales.total_rows ?? 0)}</td>
+                  <td className="px-4 py-2.5 text-xs text-muted-foreground">{formatNumber(status?.telesales.total_agents ?? 0)} agents</td>
+                  <td className="px-4 py-2.5 text-xs text-muted-foreground">
+                    {fmtDate(status?.telesales.earliest_date ?? null)} – {fmtDate(status?.telesales.latest_date ?? null)}
+                  </td>
+                  <td className="px-4 py-2.5 text-xs text-muted-foreground">{fmtUpload(status?.telesales.last_uploaded ?? null) ?? '—'}</td>
+                  <td className="px-4 py-2.5 text-center">
+                    {(status?.telesales.total_rows ?? 0) > 0
+                      ? <CheckCircle className="h-4 w-4 text-green-500 mx-auto" />
+                      : <Clock className="h-4 w-4 text-gray-300 mx-auto" />}
+                  </td>
+                </tr>
+                {/* Targets */}
+                <tr className="border-b hover:bg-muted/30">
+                  <td className="px-4 py-2.5 font-medium">Targets</td>
+                  <td className="px-4 py-2.5 text-right tabular-nums">{formatNumber(status?.targets.total_rows ?? 0)}</td>
+                  <td className="px-4 py-2.5 text-xs text-muted-foreground">{status ? formatTHB(status.targets.total_target) : '—'} total</td>
+                  <td className="px-4 py-2.5 text-xs text-muted-foreground">
+                    {fmtMonth(status?.targets.earliest_month ?? null)} – {fmtMonth(status?.targets.latest_month ?? null)}
+                  </td>
+                  <td className="px-4 py-2.5 text-xs text-muted-foreground">{fmtUpload(status?.targets.last_uploaded ?? null) ?? '—'}</td>
+                  <td className="px-4 py-2.5 text-center">
+                    {(status?.targets.total_rows ?? 0) > 0
+                      ? <CheckCircle className="h-4 w-4 text-green-500 mx-auto" />
+                      : <Clock className="h-4 w-4 text-gray-300 mx-auto" />}
+                  </td>
+                </tr>
+                {/* Costs */}
+                <tr className="border-b hover:bg-muted/30">
+                  <td className="px-4 py-2.5 font-medium">Costs</td>
+                  <td className="px-4 py-2.5 text-right tabular-nums">{formatNumber(status?.costs.total_rows ?? 0)}</td>
+                  <td className="px-4 py-2.5 text-xs text-muted-foreground">—</td>
+                  <td className="px-4 py-2.5 text-xs text-muted-foreground">
+                    {fmtMonth(status?.costs.earliest_month ?? null)} – {fmtMonth(status?.costs.latest_month ?? null)}
+                  </td>
+                  <td className="px-4 py-2.5 text-xs text-muted-foreground">{fmtUpload(status?.costs.last_uploaded ?? null) ?? '—'}</td>
+                  <td className="px-4 py-2.5 text-center">
+                    {(status?.costs.total_rows ?? 0) > 0
+                      ? <CheckCircle className="h-4 w-4 text-green-500 mx-auto" />
+                      : <Clock className="h-4 w-4 text-gray-300 mx-auto" />}
+                  </td>
+                </tr>
+                {/* Incentives */}
+                <tr className="hover:bg-muted/30">
+                  <td className="px-4 py-2.5 font-medium">Incentives</td>
+                  <td className="px-4 py-2.5 text-right tabular-nums">{status?.incentives.total_tiers ?? 0}</td>
+                  <td className="px-4 py-2.5 text-xs text-muted-foreground">
+                    {status?.incentives.tiers.map(t => `${(t * 100).toFixed(0)}%`).join(', ') || '—'}
+                  </td>
+                  <td className="px-4 py-2.5 text-xs text-muted-foreground">—</td>
+                  <td className="px-4 py-2.5 text-xs text-muted-foreground">{fmtUpload(status?.incentives.last_uploaded ?? null) ?? '—'}</td>
+                  <td className="px-4 py-2.5 text-center">
+                    {(status?.incentives.total_tiers ?? 0) > 0
+                      ? <CheckCircle className="h-4 w-4 text-green-500 mx-auto" />
+                      : <Clock className="h-4 w-4 text-gray-300 mx-auto" />}
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          )}
+        </TabsContent>
+
+        {/* Tab: History */}
+        <TabsContent value="history">
+          {batchesValidating && !batches ? (
+            <div className="rounded-lg border overflow-hidden">
+              <div className="bg-muted/50 px-4 py-3 grid grid-cols-7 gap-4">
+                {['Date','Type','File','Uploaded By','Rows','Errors','Status'].map(h => (
+                  <Skeleton key={h} className="h-4 w-full" />
+                ))}
+              </div>
+              {Array.from({length: 10}).map((_, i) => (
+                <div key={i} className="px-4 py-3 grid grid-cols-7 gap-4 border-t">
+                  <Skeleton className="h-4 w-20" />
+                  <Skeleton className="h-5 w-20 rounded-full" />
+                  <Skeleton className="h-4 w-32" />
+                  <Skeleton className="h-4 w-24" />
+                  <Skeleton className="h-4 w-10 ml-auto" />
+                  <Skeleton className="h-4 w-8 ml-auto" />
+                  <Skeleton className="h-4 w-4 mx-auto rounded-full" />
+                </div>
+              ))}
+            </div>
+          ) : !batches || batches.length === 0 ? (
+            <p className="text-muted-foreground text-sm text-center py-8">No upload history</p>
+          ) : (() => {
+            const totalPages = Math.ceil(batches.length / HISTORY_PAGE_SIZE)
+            const pageRows  = batches.slice((historyPage - 1) * HISTORY_PAGE_SIZE, historyPage * HISTORY_PAGE_SIZE)
+            return (
+              <div className="space-y-3">
+                <div className="rounded-lg border overflow-auto">
+                  <table className="w-full text-sm">
+                    <thead>
+                      <tr className="border-b bg-muted/50">
+                        <th className="px-4 py-3 text-left font-medium text-muted-foreground">Date</th>
+                        <th className="px-4 py-3 text-left font-medium text-muted-foreground">Type</th>
+                        <th className="px-4 py-3 text-left font-medium text-muted-foreground">File</th>
+                        <th className="px-4 py-3 text-left font-medium text-muted-foreground">Uploaded By</th>
+                        <th className="px-4 py-3 text-right font-medium text-muted-foreground">Rows</th>
+                        <th className="px-4 py-3 text-right font-medium text-muted-foreground">Errors</th>
+                        <th className="px-4 py-3 text-center font-medium text-muted-foreground">Status</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {pageRows.map(b => (
+                        <tr key={b.id} className="border-b last:border-0 hover:bg-muted/30">
+                          <td className="px-4 py-2.5 text-xs text-muted-foreground">
+                            {new Date(b.uploaded_at).toLocaleString('en-US', { dateStyle: 'short', timeStyle: 'short' })}
+                          </td>
+                          <td className="px-4 py-2.5">
+                            <Badge variant="secondary">
+                              {FILE_TYPE_CONFIGS[b.table_name as UploadFileType]?.label ?? b.table_name}
+                            </Badge>
+                          </td>
+                          <td className="px-4 py-2.5 text-sm max-w-[200px] truncate">{b.filename ?? '-'}</td>
+                          <td className="px-4 py-2.5 text-xs text-muted-foreground">
+                            {b.user_profiles
+                              ? (b.user_profiles.full_name || b.user_profiles.email)
+                              : <span className="italic">— (ยังไม่มี Auth)</span>}
+                          </td>
+                          <td className="px-4 py-2.5 text-right">{b.row_count ?? 0}</td>
+                          <td className="px-4 py-2.5 text-right">
+                            {b.error_count > 0 ? <span className="text-amber-500">{b.error_count}</span> : 0}
+                          </td>
+                          <td className="px-4 py-2.5 text-center">
+                            {b.status === 'success' ? <CheckCircle className="h-4 w-4 text-green-500 mx-auto" />
+                              : b.status === 'partial' ? <AlertCircle className="h-4 w-4 text-amber-500 mx-auto" />
+                              : b.status === 'failed'  ? <XCircle className="h-4 w-4 text-red-500 mx-auto" />
+                              : <Clock className="h-4 w-4 text-gray-400 mx-auto" />}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+
+                {/* Pagination */}
+                <div className="flex items-center justify-between text-sm">
+                  <p className="text-xs text-muted-foreground">
+                    Showing {(historyPage - 1) * HISTORY_PAGE_SIZE + 1}–{Math.min(historyPage * HISTORY_PAGE_SIZE, batches.length)} of {batches.length}
+                  </p>
+                  <div className="flex items-center gap-1">
+                    <button
+                      onClick={() => setHistoryPage(1)}
+                      disabled={historyPage === 1}
+                      className="px-2 py-1 rounded border text-xs disabled:opacity-40 hover:bg-muted transition-colors"
+                    >«</button>
+                    <button
+                      onClick={() => setHistoryPage(p => Math.max(1, p - 1))}
+                      disabled={historyPage === 1}
+                      className="px-2.5 py-1 rounded border text-xs disabled:opacity-40 hover:bg-muted transition-colors"
+                    >‹</button>
+
+                    {Array.from({ length: totalPages }, (_, i) => i + 1)
+                      .filter(p => p === 1 || p === totalPages || Math.abs(p - historyPage) <= 1)
+                      .reduce<(number | '…')[]>((acc, p, idx, arr) => {
+                        if (idx > 0 && p - (arr[idx - 1] as number) > 1) acc.push('…')
+                        acc.push(p)
+                        return acc
+                      }, [])
+                      .map((p, idx) =>
+                        p === '…' ? (
+                          <span key={`ellipsis-${idx}`} className="px-2 py-1 text-xs text-muted-foreground">…</span>
+                        ) : (
+                          <button
+                            key={p}
+                            onClick={() => setHistoryPage(p as number)}
+                            className={cn(
+                              'px-2.5 py-1 rounded border text-xs transition-colors',
+                              historyPage === p
+                                ? 'bg-[#003DA6] text-white border-[#003DA6]'
+                                : 'hover:bg-muted',
+                            )}
+                          >{p}</button>
+                        )
+                      )}
+
+                    <button
+                      onClick={() => setHistoryPage(p => Math.min(totalPages, p + 1))}
+                      disabled={historyPage === totalPages}
+                      className="px-2.5 py-1 rounded border text-xs disabled:opacity-40 hover:bg-muted transition-colors"
+                    >›</button>
+                    <button
+                      onClick={() => setHistoryPage(totalPages)}
+                      disabled={historyPage === totalPages}
+                      className="px-2 py-1 rounded border text-xs disabled:opacity-40 hover:bg-muted transition-colors"
+                    >»</button>
+                  </div>
+                </div>
+              </div>
+            )
+          })()}
+        </TabsContent>
+      </Tabs>
     </div>
   )
 }

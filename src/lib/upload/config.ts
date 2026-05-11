@@ -23,25 +23,25 @@ export interface FileTypeConfig {
 export const FILE_TYPE_CONFIGS: Record<UploadFileType, FileTypeConfig> = {
   online_sales: {
     label: 'Online Sales',
-    table: 'order_sales',
+    table: 'online_sales',
     storageFolder: 'order_sales/online',
     storageFilename: 'online_sales',
-    conflictKey: 'order_number',
+    conflictKey: 'order_number,prod_num',
     requiredHeaders: ['order_number', 'ITEM_ID', 'Sales In VAT'],
     schemaHeaders: ['order_number', 'order_date', 'mmid', 'mobile', 'dynamic_cmg', 'ITEM_ID', 'Qty Sold (Online)', 'Sales In VAT', 'is_in_paid_sales_report'],
     forbiddenHeaders: ['sls_trx_id', 'Sales Ex VAT'],
-    mismatchHint: 'ไฟล์นี้ดูเหมือน Offline Sales — กรุณาเลือก "Offline Sales"',
+    mismatchHint: 'This file appears to be Offline Sales — please select "Offline Sales"',
   },
   offline_sales: {
     label: 'Offline Sales',
-    table: 'order_sales',
+    table: 'offline_sales',
     storageFolder: 'order_sales/offline',
     storageFilename: 'offline_sales',
-    conflictKey: 'order_number',
+    conflictKey: 'order_number,prod_num',
     requiredHeaders: ['sls_trx_id', 'TRANSACTION_DATE', 'Sales Ex VAT'],
     schemaHeaders: ['sls_trx_id', 'TRANSACTION_DATE', 'mmid', 'mobile', 'dynamic_cmg', 'prod_num', 'sales_qty', 'Sales Ex VAT'],
     forbiddenHeaders: ['order_number', 'Sales In VAT'],
-    mismatchHint: 'ไฟล์นี้ดูเหมือน Online Sales — กรุณาเลือก "Online Sales"',
+    mismatchHint: 'This file appears to be Online Sales — please select "Online Sales"',
   },
   leads: {
     label: 'Lead Customers',
@@ -94,8 +94,8 @@ export const FILE_TYPE_CONFIGS: Record<UploadFileType, FileTypeConfig> = {
     storageFolder: 'incentives',
     storageFilename: 'incentives',
     conflictKey: 'tier',
-    requiredHeaders: ['Tier', 'incentive_per_head'],
-    schemaHeaders: ['Tier', 'incentive_per_head'],
+    requiredHeaders: ['tier', 'incentive_per_head'],
+    schemaHeaders: ['tier', 'incentive_per_head'],
   },
 }
 
@@ -115,14 +115,14 @@ export function validateHeaders(
   if (cfg.forbiddenHeaders) {
     const found = cfg.forbiddenHeaders.filter(h => headers.includes(h))
     if (found.length > 0) {
-      return { ok: false, error: cfg.mismatchHint ?? `พบ column ที่ไม่ควรมี: ${found.join(', ')}`, extraColumns: [] }
+      return { ok: false, error: cfg.mismatchHint ?? `Found unexpected columns: ${found.join(', ')}`, extraColumns: [] }
     }
   }
 
   // Check required headers
   const missing = cfg.requiredHeaders.filter(h => !headers.includes(h))
   if (missing.length > 0) {
-    return { ok: false, error: `ไม่พบ column ที่จำเป็น: ${missing.join(', ')}`, extraColumns: [] }
+    return { ok: false, error: `Missing required columns: ${missing.join(', ')}`, extraColumns: [] }
   }
 
   // Columns in file that are NOT in schema — will be stored in Storage but ignored in Silver

@@ -51,9 +51,9 @@ const ETL_TRANSFORMS: Record<UploadFileType, (row: Row, batchId: string) => Silv
     prod_num:          str(row['ITEM_ID']),
     sales_qty:         toNum(row['Qty Sold (Online)']),
     sales_in_vat:      toNum(row['Sales In VAT']),
-    channel:           'Online',
     is_in_paid_report: toBool(row['is_in_paid_sales_report']),
     batch_id:          batchId,
+    updated_at:        new Date().toISOString(),
   }),
 
   offline_sales: (row, batchId) => ({
@@ -65,9 +65,8 @@ const ETL_TRANSFORMS: Record<UploadFileType, (row: Row, batchId: string) => Silv
     prod_num:          str(row['prod_num']),
     sales_qty:         toNum(row['sales_qty']),
     sales_in_vat:      Math.round(toNum(row['Sales Ex VAT']) * 1.07 * 10000) / 10000,
-    channel:           'Offline',
-    is_in_paid_report: null,
     batch_id:          batchId,
+    updated_at:        new Date().toISOString(),
   }),
 
   leads: (row, batchId) => ({
@@ -76,6 +75,7 @@ const ETL_TRANSFORMS: Record<UploadFileType, (row: Row, batchId: string) => Silv
     mobile:         str(row['mobile']),
     lead_customers: str(row['lead_customers']),
     batch_id:       batchId,
+    updated_at:     new Date().toISOString(),
   }),
 
   products: (row, batchId) => ({
@@ -90,6 +90,7 @@ const ETL_TRANSFORMS: Record<UploadFileType, (row: Row, batchId: string) => Silv
     is_1px:            toBool(row['is1PX']),
     url_makro_pro:     str(row['url_makro_pro']),
     batch_id:          batchId,
+    updated_at:        new Date().toISOString(),
   }),
 
   telesales: (row, batchId) => ({
@@ -103,6 +104,7 @@ const ETL_TRANSFORMS: Record<UploadFileType, (row: Row, batchId: string) => Silv
     agent:                str(row['agent']),
     lead_customers:       str(row['source_tab']),
     batch_id:             batchId,
+    updated_at:           new Date().toISOString(),
   }),
 
   targets: (row, batchId) => ({
@@ -112,6 +114,7 @@ const ETL_TRANSFORMS: Record<UploadFileType, (row: Row, batchId: string) => Silv
     buying_target:  toNum(row['buying_target']),
     contact_target: toNum(row['contact_target']),
     batch_id:       batchId,
+    updated_at:     new Date().toISOString(),
   }),
 
   costs: (row, batchId) => ({
@@ -119,12 +122,14 @@ const ETL_TRANSFORMS: Record<UploadFileType, (row: Row, batchId: string) => Silv
     cost_per_agent:      toNum(row['cost_per_agent']),
     cost_per_supervisor: toNum(row['cost_per_supervisor']),
     batch_id:            batchId,
+    updated_at:          new Date().toISOString(),
   }),
 
   incentives: (row, batchId) => ({
-    tier:               toNum(row['Tier']),
+    tier:               toNum(row['tier']),
     incentive_per_head: toNum(row['incentive_per_head']),
     batch_id:           batchId,
+    updated_at:         new Date().toISOString(),
   }),
 }
 
@@ -140,13 +145,17 @@ export function transformRows(
   rows.forEach((row, i) => {
     try {
       const result = transform(row, batchId)
-      // Drop rows with null primary keys
+      // Drop rows with null required fields
       if (result['order_number'] === null && type === 'online_sales') {
         errors.push(`Row ${i + 2}: order_number is empty`)
         return
       }
       if (result['order_number'] === null && type === 'offline_sales') {
         errors.push(`Row ${i + 2}: sls_trx_id is empty`)
+        return
+      }
+      if (result['order_date'] === null && ['online_sales', 'offline_sales'].includes(type)) {
+        errors.push(`Row ${i + 2}: order_date is invalid or empty`)
         return
       }
       if (result['mmid'] === null && ['leads', 'telesales'].includes(type)) {
