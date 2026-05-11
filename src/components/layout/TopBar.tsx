@@ -2,10 +2,17 @@
 import { useState } from 'react'
 import { usePathname } from 'next/navigation'
 import { format } from 'date-fns'
-import { PrinterIcon, Menu } from 'lucide-react'
+import { PrinterIcon } from 'lucide-react'
 import { Button } from '@/components/ui/button'
+import { Separator } from '@/components/ui/separator'
+import {
+  Breadcrumb,
+  BreadcrumbItem,
+  BreadcrumbList,
+  BreadcrumbPage,
+} from '@/components/ui/breadcrumb'
+import { SidebarTrigger } from '@/components/ui/sidebar'
 import { useDateRange, type FilterMode } from '@/context/DateRangeContext'
-import { useSidebar } from '@/context/SidebarContext'
 
 const HIDE_CONTROLS_PATHS = ['/upload', '/settings']
 
@@ -15,9 +22,26 @@ const TABS: { mode: FilterMode; label: string }[] = [
   { mode: 'custom', label: 'Custom' },
 ]
 
+const PAGE_LABELS: Record<string, string> = {
+  '/overview': 'Overview',
+  '/telesales': 'Telesales',
+  '/sales': 'Sales',
+  '/products': 'Products',
+  '/leads': 'Leads',
+  '/incentives': 'Incentives',
+  '/upload': 'Upload Data',
+  '/settings': 'Settings',
+}
+
+function getPageLabel(pathname: string): string {
+  for (const [path, label] of Object.entries(PAGE_LABELS)) {
+    if (pathname === path || pathname.startsWith(path + '/')) return label
+  }
+  return 'Dashboard'
+}
+
 export function TopBar({ title }: { title?: string }) {
   const { mode, setMode, range, customRange, setCustomRange } = useDateRange()
-  const { toggle } = useSidebar()
   const pathname = usePathname()
   const hideControls = HIDE_CONTROLS_PATHS.some(p => pathname.startsWith(p))
   const [showCustom, setShowCustom] = useState(false)
@@ -39,13 +63,20 @@ export function TopBar({ title }: { title?: string }) {
     setShowCustom(false)
   }
 
+  const pageLabel = title ?? getPageLabel(pathname)
+
   return (
-    <header className="no-print sticky top-0 z-10 bg-background/95 backdrop-blur border-b px-6 py-3 flex items-center justify-between">
-      <div className="flex items-center gap-3">
-        <Button variant="ghost" size="icon" onClick={toggle} className="h-8 w-8">
-          <Menu className="h-4 w-4" />
-        </Button>
-        {title && <h1 className="text-xl font-bold">{title}</h1>}
+    <header className="no-print sticky top-0 z-10 bg-background/95 backdrop-blur border-b px-4 py-3 flex items-center justify-between">
+      <div className="flex items-center gap-2">
+        <SidebarTrigger className="h-8 w-8" />
+        <Separator orientation="vertical" className="h-5" />
+        <Breadcrumb>
+          <BreadcrumbList>
+            <BreadcrumbItem>
+              <BreadcrumbPage>{pageLabel}</BreadcrumbPage>
+            </BreadcrumbItem>
+          </BreadcrumbList>
+        </Breadcrumb>
       </div>
 
       {!hideControls && (

@@ -1,37 +1,13 @@
 import { createServiceClient } from "@/lib/supabase/server"
 import { NextResponse } from 'next/server'
 import type { NextRequest } from 'next/server'
-import { querySalesOnline, querySalesOffline, countNewCustomers, MOCK_TARGET, queryByDate } from '@/lib/mock/data'
-
-const USE_MOCK = process.env.USE_MOCK_DATA === 'true'
 
 export async function GET(request: NextRequest) {
   const { searchParams } = new URL(request.url)
   const from = searchParams.get('from') ?? new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString().split('T')[0]
   const to   = searchParams.get('to')   ?? new Date().toISOString().split('T')[0]
 
-  if (USE_MOCK) {
-    const online  = querySalesOnline(from, to)
-    const offline = querySalesOffline(from, to)
-    const total_sales_online  = online.reduce((s, r) => s + r.sales_amount, 0)
-    const total_sales_offline = offline.reduce((s, r) => s + r.sales_amount, 0)
-    const total_sales  = total_sales_online + total_sales_offline
-    const total_orders = online.length + offline.length
-    const target       = from <= MOCK_TARGET.period_end && to >= MOCK_TARGET.period_start ? MOCK_TARGET.sales_target_thb : 0
-    const by_date      = queryByDate(from, to)
-    const recent_orders = [
-      ...online.map(o => ({ ...o, channel: 'online' })),
-      ...offline.map(o => ({ ...o, channel: 'offline' })),
-    ].sort((a, b) => b.order_date.localeCompare(a.order_date)).slice(0, 50)
 
-    return NextResponse.json({
-      total_sales, total_sales_online, total_sales_offline,
-      target, target_pct: target > 0 ? total_sales / target : 0,
-      new_customers: countNewCustomers(from, to),
-      avg_order_value: total_orders > 0 ? total_sales / total_orders : 0,
-      by_date, recent_orders,
-    })
-  }
 
   const supabase = createServiceClient()
   const [onlineRes, offlineRes, targetRes, newCustRes] = await Promise.all([

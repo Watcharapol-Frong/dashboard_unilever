@@ -1,25 +1,21 @@
 import { createServiceClient } from "@/lib/supabase/server"
 import { NextResponse } from 'next/server'
 import type { NextRequest } from 'next/server'
-import { querySalesOnline, querySalesOffline } from '@/lib/mock/data'
 
-const USE_MOCK = process.env.USE_MOCK_DATA === 'true'
 
 export async function GET(request: NextRequest) {
   const { searchParams } = new URL(request.url)
   const from = searchParams.get('from') ?? new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString().split('T')[0]
   const to   = searchParams.get('to')   ?? new Date().toISOString().split('T')[0]
 
-  const all = USE_MOCK
-    ? [...querySalesOnline(from, to), ...querySalesOffline(from, to)]
-    : await (async () => {
-        const supabase = createServiceClient()
-        const [onlineRes, offlineRes] = await Promise.all([
-          supabase.from('sales_online').select('product_sku, product_brand, qty, sales_amount').gte('order_date', from).lte('order_date', to),
-          supabase.from('sales_offline').select('product_sku, product_brand, qty, sales_amount').gte('order_date', from).lte('order_date', to),
-        ])
-        return [...(onlineRes.data ?? []), ...(offlineRes.data ?? [])]
-      })()
+  const all = await (async () => {
+    const supabase = createServiceClient()
+    const [onlineRes, offlineRes] = await Promise.all([
+      supabase.from('sales_online').select('product_sku, product_brand, qty, sales_amount').gte('order_date', from).lte('order_date', to),
+      supabase.from('sales_offline').select('product_sku, product_brand, qty, sales_amount').gte('order_date', from).lte('order_date', to),
+    ])
+    return [...(onlineRes.data ?? []), ...(offlineRes.data ?? [])]
+  })()
 
   const skuMap = new Map<string, { product_sku: string; product_brand: string | null; qty: number; sales_amount: number }>()
   for (const r of all) {

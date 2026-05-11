@@ -1,9 +1,7 @@
 import { createServiceClient } from "@/lib/supabase/server"
 import { NextResponse } from 'next/server'
 import type { NextRequest } from 'next/server'
-import { queryCalls, querySalesOnline, MOCK_LEADS } from '@/lib/mock/data'
 
-const USE_MOCK = process.env.USE_MOCK_DATA === 'true'
 
 function buildTelesalesResponse(allCalls: { customer_id: string; call_date: string; call_status: string; agent_name: string; agent_company: string }[], leadCount: number, firstOrders: number) {
   const summary = {
@@ -80,12 +78,7 @@ export async function GET(request: NextRequest) {
   const from = searchParams.get('from') ?? new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString().split('T')[0]
   const to   = searchParams.get('to')   ?? new Date().toISOString().split('T')[0]
 
-  if (USE_MOCK) {
-    const allCalls   = queryCalls(from, to)
-    const firstOrders = querySalesOnline(from, to).length
-    const leadCount  = MOCK_LEADS.length
-    return NextResponse.json(buildTelesalesResponse(allCalls, leadCount, firstOrders))
-  }
+
 
   const supabase = createServiceClient()
   const { data: calls } = await supabase

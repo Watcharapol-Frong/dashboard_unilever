@@ -5,7 +5,7 @@ import { cn } from '@/lib/utils'
 import { useSidebar } from '@/context/SidebarContext'
 import {
   LayoutDashboard, Phone, ShoppingCart, Package,
-  Users, Gift, Upload, Settings, ChevronRight, PanelLeftClose, PanelLeftOpen
+  Users, Gift, Upload, ChevronRight, PanelLeftClose, PanelLeftOpen
 } from 'lucide-react'
 
 const NAV_ITEMS = [
@@ -19,7 +19,6 @@ const NAV_ITEMS = [
 
 const ADMIN_ITEMS = [
   { href: '/upload', label: 'Upload Data', icon: Upload },
-  { href: '/settings', label: 'Settings', icon: Settings },
 ]
 
 export function Sidebar() {
@@ -36,13 +35,14 @@ export function Sidebar() {
       {/* Logo */}
       <div className={cn('border-b border-white/10 flex items-center', isOpen ? 'p-6' : 'p-4 justify-center')}>
         {isOpen ? (
-          <div className="flex-1 min-w-0">
-            <div className="text-xs font-semibold text-white/60 uppercase tracking-wider mb-1">Makro Pro × Unilever</div>
-            <div className="text-lg font-bold">Home Care Dashboard</div>
-            <div className="text-xs text-white/50 mt-0.5">Category Manager</div>
+          <div className="flex-1 min-w-0 flex items-center gap-2">
+            <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-white/20 font-bold text-white">
+              U
+            </div>
+            <div className="text-lg font-bold">Unilever Project</div>
           </div>
         ) : (
-          <div className="text-white font-bold text-lg">M</div>
+          <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-white/20 font-bold text-white">U</div>
         )}
       </div>
 

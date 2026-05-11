@@ -1,77 +1,7 @@
 import { createServiceClient } from "@/lib/supabase/server"
 import { NextResponse } from 'next/server'
 import type { NextRequest } from 'next/server'
-import {
-  querySalesOnline, querySalesOffline, queryCalls,
-  countNewCustomers, MOCK_TARGET,
-} from '@/lib/mock/data'
 
-const USE_MOCK = process.env.USE_MOCK_DATA === 'true'
-
-function computeOverview(from: string, to: string, prev_from: string, prev_to: string) {
-  const days = Math.max(1, Math.round((new Date(to).getTime() - new Date(from).getTime()) / 86400000) + 1)
-
-  const online  = querySalesOnline(from, to)
-  const offline = querySalesOffline(from, to)
-  const calls   = queryCalls(from, to)
-
-  const total_sales_online  = online.reduce((s, r) => s + r.sales_amount, 0)
-  const total_sales_offline = offline.reduce((s, r) => s + r.sales_amount, 0)
-  const total_sales   = total_sales_online + total_sales_offline
-  const order_count   = online.length + offline.length
-  const aov           = order_count > 0 ? total_sales / order_count : 0
-  const total_calls   = calls.length
-  const contacted     = calls.filter(c => ['Contacted','Interested','Not Interested','Ordered'].includes(c.call_status)).length
-  const interested    = calls.filter(c => ['Interested','Ordered'].includes(c.call_status)).length
-  const ordered       = calls.filter(c => c.call_status === 'Ordered').length
-
-  const allCustIds = new Set([...online.map(r => r.customer_id), ...offline.map(r => r.customer_id)])
-  const total_customers = allCustIds.size
-  const new_customers = countNewCustomers(from, to)
-  const returning_customers = Math.max(0, total_customers - new_customers)
-
-  const target = from <= MOCK_TARGET.period_end && to >= MOCK_TARGET.period_start ? MOCK_TARGET.sales_target_thb : 0
-
-  // Previous period
-  let prev_new_customers = 0, prev_total_sales = 0, prev_total_calls = 0
-  let prev_contacted = 0, prev_interested = 0, prev_ordered = 0
-  if (prev_from && prev_to) {
-    const pOnline  = querySalesOnline(prev_from, prev_to)
-    const pOffline = querySalesOffline(prev_from, prev_to)
-    const pCalls   = queryCalls(prev_from, prev_to)
-    prev_total_sales    = [...pOnline, ...pOffline].reduce((s, r) => s + r.sales_amount, 0)
-    prev_total_calls    = pCalls.length
-    prev_contacted      = pCalls.filter(c => ['Contacted','Interested','Not Interested','Ordered'].includes(c.call_status)).length
-    prev_interested     = pCalls.filter(c => ['Interested','Ordered'].includes(c.call_status)).length
-    prev_ordered        = pCalls.filter(c => c.call_status === 'Ordered').length
-    prev_new_customers  = countNewCustomers(prev_from, prev_to)
-  }
-
-  return {
-    new_customers,
-    new_customers_per_day: new_customers / days,
-    returning_customers,
-    retention_rate: total_customers > 0 ? returning_customers / total_customers : 0,
-    total_customers,
-    total_sales, total_sales_online, total_sales_offline,
-    order_count, aov,
-    sales_target: target,
-    target_pct: target > 0 ? total_sales / target : 0,
-    total_calls,
-    calls_per_day: total_calls / days,
-    connection_rate: total_calls > 0 ? contacted / total_calls : 0,
-    contacted,
-    conversion_count: ordered,
-    conversion_rate: contacted > 0 ? ordered / contacted : 0,
-    engaged: interested,
-    engaged_rate: contacted > 0 ? interested / contacted : 0,
-    prev_new_customers,
-    prev_total_sales,
-    prev_total_calls,
-    prev_conversion_rate: prev_contacted > 0 ? prev_ordered / prev_contacted : 0,
-    prev_engaged_rate:    prev_contacted > 0 ? prev_interested / prev_contacted : 0,
-  }
-}
 
 export async function GET(request: NextRequest) {
   const { searchParams } = new URL(request.url)
@@ -82,7 +12,7 @@ export async function GET(request: NextRequest) {
   const prev_from = searchParams.get('prev_from') ?? ''
   const prev_to   = searchParams.get('prev_to')   ?? ''
 
-  if (USE_MOCK) return NextResponse.json(computeOverview(from, to, prev_from, prev_to))
+
 
   const supabase = createServiceClient()
   const days = Math.max(1, Math.round((new Date(to).getTime() - new Date(from).getTime()) / 86400000) + 1)

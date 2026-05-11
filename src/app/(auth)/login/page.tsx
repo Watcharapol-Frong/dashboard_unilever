@@ -33,9 +33,7 @@ export default function LoginPage() {
       <div className="w-full max-w-md space-y-6">
         {/* Logos/Branding */}
         <div className="text-center text-white space-y-2">
-          <div className="text-xs uppercase tracking-widest text-white/60 font-semibold">Makro Pro × Unilever × Telesales</div>
-          <h1 className="text-3xl font-bold">Home Care Dashboard</h1>
-          <p className="text-white/60 text-sm">Category Manager — Collaboration Platform</p>
+          <h1 className="text-3xl font-bold">Unilever Project</h1>
         </div>
 
         <Card>
