@@ -4,7 +4,7 @@ import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import {
   LayoutDashboard, Phone, ShoppingCart, Package,
-  Users, Gift, Upload,
+  Gift, Upload, Users, Settings,
 } from 'lucide-react'
 
 import {
@@ -30,16 +30,17 @@ const PLACEHOLDER_USER = {
 }
 
 const NAV_ITEMS = [
-  { href: '/overview', label: 'Overview', icon: LayoutDashboard },
-  { href: '/telesales', label: 'Telesales', icon: Phone },
-  { href: '/sales', label: 'Sales', icon: ShoppingCart },
-  { href: '/products', label: 'Products', icon: Package },
-  { href: '/leads', label: 'Leads', icon: Users },
+  { href: '/overview',   label: 'Overview',   icon: LayoutDashboard },
+  { href: '/telesales',  label: 'Telesales',  icon: Phone },
+  { href: '/sales',      label: 'Sales',      icon: ShoppingCart },
+  { href: '/products',   label: 'Products',   icon: Package },
   { href: '/incentives', label: 'Incentives', icon: Gift },
 ]
 
 const ADMIN_ITEMS = [
-  { href: '/upload', label: 'Upload Data', icon: Upload },
+  { href: '/leads',      label: 'Leads',       icon: Users },
+  { href: '/upload',     label: 'Upload Data', icon: Upload },
+  { href: '/settings',   label: 'Settings',    icon: Settings },
 ]
 
 export function AppSidebar() {

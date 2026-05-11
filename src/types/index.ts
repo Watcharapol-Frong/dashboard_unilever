@@ -1,4 +1,4 @@
-export type UserRole = 'admin' | 'viewer_telesales'
+export type UserRole = 'admin' | 'viewer'
 
 export interface UserRoleRecord {
   user_id: string
@@ -12,34 +12,31 @@ export interface DateRange {
   to: Date
 }
 
+export interface Target {
+  month: string        // 'YYYY-MM-DD' (first of month)
+  dynamic_cmg: string
+  sales_target: number | null
+  buying_target: number | null
+  contact_target: number | null
+  batch_id: string | null
+  updated_at: string
+}
+
 export interface UploadBatch {
   id: string
-  type: string
+  table_name: string
   filename: string | null
-  row_count: number | null
+  storage_path: string | null
+  row_count: number
   error_count: number
   uploaded_at: string
   status: string
-}
-
-export interface Target {
-  id: string
-  period_label: string
-  period_start: string
-  period_end: string
-  sales_target_thb: number
-  new_customer_target: number
-  call_target: number
-  channel: string
 }
 
 export interface OverviewKpi {
   // customers
   new_customers: number
   new_customers_per_day: number
-  returning_customers: number
-  retention_rate: number
-  total_customers: number
   // sales
   total_sales: number
   total_sales_online: number
@@ -52,52 +49,46 @@ export interface OverviewKpi {
   total_calls: number
   calls_per_day: number
   connection_rate: number
-  contacted: number
-  // conversion
-  conversion_count: number
-  conversion_rate: number
-  engaged: number
-  engaged_rate: number
+  contacted: number           // = reached (รับสาย)
+  not_reached: number
   // comparison (vs previous period)
   prev_new_customers: number
   prev_total_sales: number
   prev_total_calls: number
-  prev_conversion_rate: number
-  prev_engaged_rate: number
+  prev_connection_rate: number
+  // call status map
+  callStatusMap: Record<string, number>
 }
 
 export interface AgentPerformance {
-  agent_name: string
-  agent_company: string | null
+  agent: string
   total_calls: number
-  contacted: number
-  interested: number
-  ordered: number
-  connection_rate: number
-  conversion_rate: number
+  reached: number
+  not_reached: number
+  reach_rate: number
 }
 
 export interface TelesalesKpi {
   summary: {
     total_calls: number
-    contacted: number
-    no_answer: number
-    interested: number
-    not_interested: number
-    ordered: number
+    reached: number
+    not_reached: number
+    call_status_breakdown: Record<string, number>
   }
   by_agent: AgentPerformance[]
-  by_date: { date: string; total_calls: number; contacted: number }[]
+  by_date: { date: string; total_calls: number; reached: number }[]
   sankey: {
     nodes: { id: string }[]
     links: { source: string; target: string; value: number }[]
   }
+  callStatusMap: Record<string, number>
 }
 
 export interface SalesKpi {
   total_sales: number
   total_sales_online: number
   total_sales_offline: number
+  total_orders: number
   target: number
   target_pct: number
   new_customers: number
@@ -107,35 +98,54 @@ export interface SalesKpi {
 }
 
 export interface RecentOrder {
-  order_id: string
+  order_number: string
   order_date: string
-  customer_name: string | null
-  product_sku: string
-  product_brand: string | null
-  qty: number
-  sales_amount: number
+  mmid: string | null
+  prod_num: string | null
+  sales_qty: number
+  sales_in_vat: number
+  dynamic_cmg: string | null
   channel: string
 }
 
 export interface ProductKpi {
-  by_sku: {
-    product_sku: string
-    product_brand: string | null
-    qty: number
-    sales_amount: number
-    pct_of_total: number
-  }[]
+  by_product: ProductRow[]
+  by_brand: BrandRow[]
   total_revenue: number
+  uni_revenue: number
+  uni_revenue_pct: number
+  uni_product_count: number
 }
 
+export interface ProductRow {
+  prod_num: string
+  brands: string | null
+  product_name_th: string | null
+  product_name_en: string | null
+  is_uni_hoc_pd: boolean
+  total_qty: number
+  total_sales: number
+  pct_of_total: number
+}
+
+export interface BrandRow {
+  brands: string
+  total_sales: number
+  total_qty: number
+  product_count: number
+  pct_of_total: number
+}
+
+// FileType must match UploadFileType in src/lib/upload/config.ts
 export type FileType =
-  | 'sales_online'
-  | 'sales_offline'
-  | 'product_list'
-  | 'incentive'
-  | 'telesales_call_log'
-  | 'lead_list'
-  | 'target'
+  | 'online_sales'
+  | 'offline_sales'
+  | 'products'
+  | 'incentives'
+  | 'telesales'
+  | 'leads'
+  | 'targets'
+  | 'costs'
 
 export interface SchemaField {
   key: string

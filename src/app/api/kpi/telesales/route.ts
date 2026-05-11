@@ -1,93 +1,136 @@
-import { createServiceClient } from "@/lib/supabase/server"
+import { createServiceClient } from '@/lib/supabase/server'
 import { NextResponse } from 'next/server'
 import type { NextRequest } from 'next/server'
 
-
-function buildTelesalesResponse(allCalls: { customer_id: string; call_date: string; call_status: string; agent_name: string; agent_company: string }[], leadCount: number, firstOrders: number) {
-  const summary = {
-    total_calls:    allCalls.length,
-    contacted:      allCalls.filter(c => c.call_status === 'Contacted').length,
-    no_answer:      allCalls.filter(c => c.call_status === 'No Answer').length,
-    interested:     allCalls.filter(c => c.call_status === 'Interested').length,
-    not_interested: allCalls.filter(c => c.call_status === 'Not Interested').length,
-    ordered:        allCalls.filter(c => c.call_status === 'Ordered').length,
-  }
-
-  const agentMap = new Map<string, { agent_name: string; agent_company: string; total_calls: number; contacted: number; interested: number; ordered: number }>()
-  for (const c of allCalls) {
-    if (!agentMap.has(c.agent_name)) agentMap.set(c.agent_name, { agent_name: c.agent_name, agent_company: c.agent_company, total_calls: 0, contacted: 0, interested: 0, ordered: 0 })
-    const a = agentMap.get(c.agent_name)!
-    a.total_calls++
-    if (c.call_status === 'Contacted')     a.contacted++
-    if (c.call_status === 'Interested')    a.interested++
-    if (c.call_status === 'Ordered')       a.ordered++
-  }
-  const by_agent = [...agentMap.values()].map(a => ({
-    ...a,
-    connection_rate: a.total_calls > 0 ? a.contacted / a.total_calls : 0,
-    conversion_rate: a.contacted > 0 ? a.interested / a.contacted : 0,
-  })).sort((a, b) => b.total_calls - a.total_calls)
-
-  const dateMap = new Map<string, { date: string; total_calls: number; contacted: number }>()
-  for (const c of allCalls) {
-    if (!dateMap.has(c.call_date)) dateMap.set(c.call_date, { date: c.call_date, total_calls: 0, contacted: 0 })
-    const d = dateMap.get(c.call_date)!
-    d.total_calls++
-    if (['Contacted','Interested','Not Interested','Ordered'].includes(c.call_status)) d.contacted++
-  }
-  const by_date = [...dateMap.values()].sort((a, b) => a.date.localeCompare(b.date))
-
-  const contacted_total    = allCalls.filter(c => ['Contacted','Interested','Not Interested','Ordered'].includes(c.call_status)).length
-  const interested_total   = allCalls.filter(c => ['Interested','Ordered'].includes(c.call_status)).length
-  const not_interested_total = summary.not_interested
-  const no_answer_total    = summary.no_answer
-  const ordered_total      = summary.ordered
-  const lc = leadCount || allCalls.length
-
-  const sankey = {
-    nodes: [
-      { id: 'Lead List' }, { id: 'Called' }, { id: 'Contacted' }, { id: 'No Answer' },
-      { id: 'Interested' }, { id: 'Not Interested' }, { id: 'Ordered' }, { id: 'First Purchase' },
-    ].filter(n => {
-      if (n.id === 'Lead List')       return lc > 0
-      if (n.id === 'Called')          return allCalls.length > 0
-      if (n.id === 'No Answer')       return no_answer_total > 0
-      if (n.id === 'Contacted')       return contacted_total > 0
-      if (n.id === 'Interested')      return interested_total > 0
-      if (n.id === 'Not Interested')  return not_interested_total > 0
-      if (n.id === 'Ordered')         return ordered_total > 0
-      if (n.id === 'First Purchase')  return firstOrders > 0
-      return true
-    }),
-    links: [
-      lc > 0 && allCalls.length > 0         ? { source: 'Lead List',    target: 'Called',         value: Math.min(lc, allCalls.length) } : null,
-      contacted_total > 0                   ? { source: 'Called',       target: 'Contacted',      value: contacted_total } : null,
-      no_answer_total > 0                   ? { source: 'Called',       target: 'No Answer',      value: no_answer_total } : null,
-      interested_total > 0                  ? { source: 'Contacted',    target: 'Interested',     value: interested_total } : null,
-      not_interested_total > 0              ? { source: 'Contacted',    target: 'Not Interested', value: not_interested_total } : null,
-      ordered_total > 0                     ? { source: 'Interested',   target: 'Ordered',        value: ordered_total } : null,
-      firstOrders > 0 && ordered_total > 0  ? { source: 'Ordered',      target: 'First Purchase', value: Math.min(firstOrders, ordered_total) } : null,
-    ].filter(Boolean),
-  }
-
-  return { summary, by_agent, by_date, sankey }
+// Thai call-status → Sankey English node mapping
+const STATUS_TO_NODE: Record<string, string | null> = {
+  'รับสาย':       'Reached',
+  'ไม่รับสาย':   'No Answer',
+  'สายไม่ว่าง':  'No Answer',
+  'ปิดเครื่อง':  'No Answer',
+  'เบอร์ไม่ถูกต้อง': 'Invalid',
+  'ไม่สนใจ':     'Not Interested',
+  'สนใจ':        'Interested',
+  'สั่งซื้อแล้ว': 'Ordered',
+  'รอโทรกลับ':   'Reached',   // reached but callback
+  'นัดหมาย':     'Interested',
 }
 
 export async function GET(request: NextRequest) {
   const { searchParams } = new URL(request.url)
-  const from = searchParams.get('from') ?? new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString().split('T')[0]
-  const to   = searchParams.get('to')   ?? new Date().toISOString().split('T')[0]
-
-
+  const today      = new Date().toISOString().split('T')[0]
+  const monthStart = new Date(new Date().getFullYear(), new Date().getMonth(), 1)
+    .toISOString().split('T')[0]
+  const from = searchParams.get('from') ?? monthStart
+  const to   = searchParams.get('to')   ?? today
 
   const supabase = createServiceClient()
-  const { data: calls } = await supabase
-    .from('telesales_calls')
-    .select('customer_id, call_date, call_status, agent_name, agent_company')
-    .gte('call_date', from).lte('call_date', to)
 
-  const { data: leads } = await supabase.from('leads').select('customer_id')
-  const { data: onlineOrders } = await supabase.from('sales_online').select('customer_id').gte('order_date', from).lte('order_date', to)
+  const [callStatusRes, agentRes, byDateRes, leadCountRes] = await Promise.all([
+    // Call status breakdown for period
+    supabase.rpc('get_call_status_counts_range', { p_from: from, p_to: to }),
 
-  return NextResponse.json(buildTelesalesResponse(calls ?? [], (leads ?? []).length, (onlineOrders ?? []).length))
+    // Agent performance
+    supabase.rpc('get_agent_performance', { p_from: from, p_to: to }),
+
+    // Daily trend
+    supabase.rpc('get_telesales_by_date', { p_from: from, p_to: to }),
+
+    // Total lead count
+    supabase
+      .from('leads')
+      .select('*', { count: 'exact', head: true }),
+  ])
+
+  // ── Call status breakdown ─────────────────────────────────────
+  const callStatusRows: { call_status: string; total: number }[] = callStatusRes.data ?? []
+  const callStatusMap: Record<string, number> = {}
+  for (const r of callStatusRows) {
+    callStatusMap[r.call_status ?? 'ไม่ระบุ'] = Number(r.total)
+  }
+  const total_calls = Object.values(callStatusMap).reduce((s, v) => s + v, 0)
+  const reached     = callStatusMap['รับสาย'] ?? 0
+
+  // ── Summary ───────────────────────────────────────────────────
+  const summary = {
+    total_calls,
+    reached,
+    not_reached: total_calls - reached,
+    call_status_breakdown: callStatusMap,
+  }
+
+  // ── Agent performance ─────────────────────────────────────────
+  const by_agent = (agentRes.data ?? []).map((r: {
+    agent: string;
+    total_calls: number;
+    reached: number;
+    not_reached: number;
+  }) => ({
+    agent:          r.agent,
+    total_calls:    Number(r.total_calls),
+    reached:        Number(r.reached),
+    not_reached:    Number(r.not_reached),
+    reach_rate:     Number(r.total_calls) > 0 ? Number(r.reached) / Number(r.total_calls) : 0,
+  }))
+
+  // ── Daily trend ────────────────────────────────────────────────
+  const by_date = (byDateRes.data ?? []).map((r: {
+    call_date: string;
+    total_calls: number;
+    reached: number;
+  }) => ({
+    date:        r.call_date,
+    total_calls: Number(r.total_calls),
+    reached:     Number(r.reached),
+  }))
+
+  // ── Sankey funnel (Lead → Called → Reached / No Answer) ──────
+  const lead_count  = leadCountRes.count ?? 0
+
+  // Bucket call statuses into Sankey nodes
+  let reachedCount    = 0
+  let noAnswerCount   = 0
+  let interestedCount = 0
+  let orderedCount    = 0
+  let notInterested   = 0
+
+  for (const [status, cnt] of Object.entries(callStatusMap)) {
+    const node = STATUS_TO_NODE[status] ?? 'No Answer'
+    if (node === 'Reached')         reachedCount    += cnt
+    else if (node === 'No Answer')  noAnswerCount   += cnt
+    else if (node === 'Interested') interestedCount += cnt
+    else if (node === 'Ordered')    orderedCount    += cnt
+    else if (node === 'Not Interested') notInterested += cnt
+    else if (node === 'Invalid')    noAnswerCount   += cnt
+  }
+
+  const sankeyNodes = [
+    lead_count  > 0 ? { id: 'Lead List' }     : null,
+    total_calls > 0 ? { id: 'Called' }         : null,
+    reachedCount    > 0 ? { id: 'Reached' }    : null,
+    noAnswerCount   > 0 ? { id: 'No Answer' }  : null,
+    interestedCount > 0 ? { id: 'Interested' } : null,
+    orderedCount    > 0 ? { id: 'Ordered' }    : null,
+    notInterested   > 0 ? { id: 'Not Interested' } : null,
+  ].filter(Boolean) as { id: string }[]
+
+  const sankeyLinks = [
+    lead_count > 0 && total_calls > 0
+      ? { source: 'Lead List', target: 'Called', value: Math.min(lead_count, total_calls) }
+      : null,
+    reachedCount > 0
+      ? { source: 'Called', target: 'Reached',   value: reachedCount }  : null,
+    noAnswerCount > 0
+      ? { source: 'Called', target: 'No Answer', value: noAnswerCount } : null,
+    interestedCount > 0
+      ? { source: 'Reached', target: 'Interested', value: interestedCount } : null,
+    notInterested > 0
+      ? { source: 'Reached', target: 'Not Interested', value: notInterested } : null,
+    orderedCount > 0
+      ? { source: 'Interested', target: 'Ordered', value: orderedCount } : null,
+  ].filter(Boolean)
+
+  const sankey = { nodes: sankeyNodes, links: sankeyLinks }
+
+  return NextResponse.json({ summary, by_agent, by_date, sankey, callStatusMap })
 }

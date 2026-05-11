@@ -4,6 +4,7 @@ import Papa from 'papaparse'
 import { createServiceClient, getSessionUserId, writeAuditLog } from '@/lib/supabase/server'
 import { FILE_TYPE_CONFIGS, generateStoragePath, validateHeaders } from '@/lib/upload/config'
 import { transformRows } from '@/lib/upload/etl'
+import { encrypt } from '@/lib/utils/crypto'
 import type { UploadFileType } from '@/lib/upload/config'
 
 const BUCKET = 'csv-uploads'
@@ -48,17 +49,30 @@ export async function POST(
   const { ok, error: headerError, extraColumns } = validateHeaders(headers, type)
   if (!ok) return NextResponse.json({ error: headerError }, { status: 422 })
 
-  // ── 3. Upload raw CSV to Storage ──────────────────────────
+  // ── 3. Upload raw CSV to Storage (Encrypted) ─────────────
   const storagePath = generateStoragePath(type)
+  const encryptionKey = process.env.STORAGE_ENCRYPTION_KEY
+  
+  if (!encryptionKey) {
+    console.error(`[upload/${type}] Encryption key missing in environment variables`)
+    return NextResponse.json({ error: 'Server configuration error (encryption)' }, { status: 500 })
+  }
+
+  // Encrypt the raw text before storage
+  const encryptedBuffer = encrypt(text, encryptionKey)
+
   const { error: storageError } = await supabase.storage
     .from(BUCKET)
-    .upload(storagePath, new Blob([text], { type: 'text/csv' }), { upsert: false })
+    .upload(storagePath, encryptedBuffer, { 
+      upsert: false,
+      contentType: 'application/octet-stream' 
+    })
 
   if (storageError) {
     console.error(`[upload/${type}] Step 3 Storage error:`, storageError)
     return NextResponse.json({ error: `Storage error: ${storageError.message}` }, { status: 500 })
   }
-  console.log(`[upload/${type}] Step 3 OK — storage: ${storagePath}`)
+  console.log(`[upload/${type}] Step 3 OK — storage (encrypted): ${storagePath}`)
 
   // ── 4. Create upload_batch record ─────────────────────────
   const { data: batch, error: batchError } = await supabase

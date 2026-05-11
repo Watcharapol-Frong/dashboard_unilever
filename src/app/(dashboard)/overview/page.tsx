@@ -50,18 +50,17 @@ export default function OverviewPage() {
     mode === 'month' ? 'vs last month' :
     mode === 'week'  ? 'vs last week'  : 'vs prev period'
 
-  // Aggregate daily sales → weekly for the bar chart
+  // Aggregate daily sales → weekly for bar chart
   const barData = (() => {
     const days = sales?.by_date ?? []
     if (days.length <= 14) {
       return days.map(d => ({ date: d.date.slice(5), Online: d.online, Offline: d.offline }))
     }
-    // Group by ISO week (Mon–Sun)
     const weekMap = new Map<string, { Online: number; Offline: number }>()
     for (const d of days) {
       const dt = new Date(d.date)
-      const day = dt.getDay() // 0=Sun
-      const diff = (day === 0 ? -6 : 1) - day // offset to Monday
+      const day = dt.getDay()
+      const diff = (day === 0 ? -6 : 1) - day
       const mon = new Date(dt)
       mon.setDate(dt.getDate() + diff)
       const key = `${String(mon.getMonth() + 1).padStart(2, '0')}/${String(mon.getDate()).padStart(2, '0')}`
@@ -71,25 +70,26 @@ export default function OverviewPage() {
     return [...weekMap.entries()].map(([date, v]) => ({ date, ...v }))
   })()
 
-  // Call outcomes pie
-  const callPie = kpi ? [
-    { id: 'Contacted', label: 'Contacted', value: kpi.contacted },
-    { id: 'No Answer', label: 'No Answer', value: kpi.total_calls - kpi.contacted },
-  ] : []
+  // Call status pie from real Thai statuses
+  const callPie = Object.entries(kpi?.callStatusMap ?? {})
+    .filter(([, v]) => v > 0)
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, 6)
+    .map(([status, value]) => ({ id: status, label: status, value }))
 
   // Channel pie
   const channelPie = kpi ? [
-    { id: 'Online', label: 'Online', value: kpi.total_sales_online },
+    { id: 'Online',  label: 'Online',  value: kpi.total_sales_online },
     { id: 'Offline', label: 'Offline', value: kpi.total_sales_offline },
   ] : []
 
   // Target gauge segments
-  const target = kpi?.sales_target ?? 0
-  const onlineActual = kpi?.total_sales_online ?? 0
+  const target       = kpi?.sales_target ?? 0
+  const onlineActual  = kpi?.total_sales_online  ?? 0
   const offlineActual = kpi?.total_sales_offline ?? 0
-  const totalActual = onlineActual + offlineActual
+  const totalActual   = onlineActual + offlineActual
 
-  const onlinePct = target > 0 ? Math.min(onlineActual / target, 1) : 0
+  const onlinePct  = target > 0 ? Math.min(onlineActual  / target, 1) : 0
   const offlinePct = target > 0 ? Math.min(offlineActual / target, 1) : 0
 
   return (
@@ -99,8 +99,8 @@ export default function OverviewPage() {
         <p className="text-muted-foreground text-sm mt-1">Unilever Project Summary</p>
       </div>
 
-      {/* 5 KPI Cards */}
-      <div className="grid grid-cols-2 lg:grid-cols-5 gap-4">
+      {/* 4 KPI Cards */}
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         <KpiCard
           title="New Customers"
           value={formatNumber(kpi?.new_customers ?? 0)}
@@ -108,15 +108,6 @@ export default function OverviewPage() {
           comparisonLabel={comparisonLabel}
           extras={[
             { label: 'Per day', value: `${(kpi?.new_customers_per_day ?? 0).toFixed(1)} / day` },
-          ]}
-          loading={isLoading}
-        />
-        <KpiCard
-          title="Returning Customers"
-          value={formatNumber(kpi?.returning_customers ?? 0)}
-          extras={[
-            { label: 'Retention rate', value: formatPct(kpi?.retention_rate ?? 0) },
-            { label: 'Total buyers', value: formatNumber(kpi?.total_customers ?? 0) },
           ]}
           loading={isLoading}
         />
@@ -138,18 +129,18 @@ export default function OverviewPage() {
           comparisonLabel={comparisonLabel}
           extras={[
             { label: 'Per day', value: `${(kpi?.calls_per_day ?? 0).toFixed(1)} / day` },
-            { label: 'Connection rate', value: formatPct(kpi?.connection_rate ?? 0) },
+            { label: 'Reach rate', value: formatPct(kpi?.connection_rate ?? 0) },
           ]}
           loading={isLoading}
         />
         <KpiCard
-          title="Conversion"
-          value={formatPct(kpi?.conversion_rate ?? 0)}
-          comparison={cmp(kpi?.conversion_rate ?? 0, kpi?.prev_conversion_rate ?? 0)}
+          title="Reach Rate"
+          value={formatPct(kpi?.connection_rate ?? 0)}
+          comparison={cmp(kpi?.connection_rate ?? 0, kpi?.prev_connection_rate ?? 0)}
           comparisonLabel={comparisonLabel}
           extras={[
-            { label: 'Converted', value: formatNumber(kpi?.conversion_count ?? 0) + ' orders' },
-            { label: 'Engaged rate', value: formatPct(kpi?.engaged_rate ?? 0) },
+            { label: 'Reached (รับสาย)', value: formatNumber(kpi?.contacted ?? 0) },
+            { label: 'Not reached', value: formatNumber(kpi?.not_reached ?? 0) },
           ]}
           loading={isLoading}
         />
@@ -195,15 +186,16 @@ export default function OverviewPage() {
                   <StackedBar
                     height={18}
                     segments={[
-                      { value: onlineActual, color: '#003DA6', label: 'Online' },
+                      { value: onlineActual,  color: '#003DA6', label: 'Online' },
                       { value: offlineActual, color: '#EE2737', label: 'Offline' },
                       { value: Math.max(0, target - totalActual), color: '#e5e7eb', label: 'Remaining' },
                     ]}
                   />
                   <p className={cn('text-xs font-semibold', target > 0 ? (
-                    kpi.target_pct >= 0.9 ? 'text-green-600' : kpi.target_pct >= 0.7 ? 'text-amber-500' : 'text-red-500'
+                    (kpi.target_pct ?? 0) >= 0.9 ? 'text-green-600' :
+                    (kpi.target_pct ?? 0) >= 0.7 ? 'text-amber-500' : 'text-red-500'
                   ) : 'text-muted-foreground')}>
-                    {formatPct(kpi.target_pct)} of target
+                    {formatPct(kpi.target_pct ?? 0)} of target
                   </p>
                 </div>
 
@@ -256,7 +248,7 @@ export default function OverviewPage() {
               groupMode="stacked"
               height={280}
               colors={['#003DA6', '#EE2737']}
-              valueFormat={v => formatTHB(v)}
+              valueFormat={v => formatTHB(Number(v))}
               tickRotation={-45}
             />
           ) : (

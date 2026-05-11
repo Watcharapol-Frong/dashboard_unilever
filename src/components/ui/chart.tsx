@@ -170,4 +170,32 @@ function getPayloadConfigFromPayload(config: ChartConfig, payload: unknown, key:
   return configLabelKey in config ? config[configLabelKey] : config[key as keyof typeof config]
 }
 
-export { ChartContainer, ChartTooltip, ChartTooltipContent }
+const ChartLegend = RechartsPrimitive.Legend
+
+function ChartLegendContent({
+  className,
+  payload,
+}: React.ComponentProps<"div"> & {
+  payload?: Array<{ value: string; color?: string }>
+}) {
+  const { config } = useChart()
+  if (!payload?.length) return null
+  return (
+    <div className={cn("flex items-center justify-center gap-4 pt-3 text-xs", className)}>
+      {payload.map(item => {
+        const cfg = config[item.value as keyof typeof config]
+        return (
+          <div key={item.value} className="flex items-center gap-1.5">
+            <div
+              className="h-2.5 w-2.5 shrink-0 rounded-[2px]"
+              style={{ backgroundColor: cfg?.color ?? item.color }}
+            />
+            <span className="text-muted-foreground">{cfg?.label ?? item.value}</span>
+          </div>
+        )
+      })}
+    </div>
+  )
+}
+
+export { ChartContainer, ChartTooltip, ChartTooltipContent, ChartLegend, ChartLegendContent }

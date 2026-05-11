@@ -277,29 +277,52 @@ CREATE TRIGGER trg_pad_mmid_telesales_calls
   BEFORE INSERT OR UPDATE OF mmid ON telesales_calls
   FOR EACH ROW EXECUTE FUNCTION pad_mmid_to_14();
 
--- pad_mobile_to_10
-CREATE OR REPLACE FUNCTION pad_mobile_to_10()
+-- format_and_mask_mobile
+CREATE OR REPLACE FUNCTION format_and_mask_mobile()
 RETURNS trigger LANGUAGE plpgsql AS $$
 BEGIN
   IF NEW.mobile IS NOT NULL THEN
-    NEW.mobile := LPAD(NEW.mobile, 10, '0');
+    -- Pad to 10 digits and mask the last 5 digits with 'x'
+    NEW.mobile := SUBSTRING(LPAD(NEW.mobile, 10, '0'), 1, 5) || 'xxxxx';
   END IF;
   RETURN NEW;
 END;
 $$;
 
-CREATE TRIGGER trg_pad_mobile_online_sales
+CREATE TRIGGER trg_mask_mobile_online_sales
   BEFORE INSERT OR UPDATE OF mobile ON online_sales
-  FOR EACH ROW EXECUTE FUNCTION pad_mobile_to_10();
+  FOR EACH ROW EXECUTE FUNCTION format_and_mask_mobile();
 
-CREATE TRIGGER trg_pad_mobile_offline_sales
+CREATE TRIGGER trg_mask_mobile_offline_sales
   BEFORE INSERT OR UPDATE OF mobile ON offline_sales
-  FOR EACH ROW EXECUTE FUNCTION pad_mobile_to_10();
+  FOR EACH ROW EXECUTE FUNCTION format_and_mask_mobile();
 
-CREATE TRIGGER trg_pad_mobile_leads
+CREATE TRIGGER trg_mask_mobile_leads
   BEFORE INSERT OR UPDATE OF mobile ON leads
-  FOR EACH ROW EXECUTE FUNCTION pad_mobile_to_10();
+  FOR EACH ROW EXECUTE FUNCTION format_and_mask_mobile();
 
-CREATE TRIGGER trg_pad_mobile_telesales_calls
+CREATE TRIGGER trg_mask_mobile_telesales_calls
   BEFORE INSERT OR UPDATE OF mobile ON telesales_calls
-  FOR EACH ROW EXECUTE FUNCTION pad_mobile_to_10();
+  FOR EACH ROW EXECUTE FUNCTION format_and_mask_mobile();
+
+-- format_and_mask_cust_name
+CREATE OR REPLACE FUNCTION format_and_mask_cust_name()
+RETURNS trigger LANGUAGE plpgsql AS $$
+DECLARE
+  parts text[];
+BEGIN
+  IF NEW.cust_name IS NOT NULL THEN
+    parts := string_to_array(trim(NEW.cust_name), ' ');
+    IF array_length(parts, 1) = 1 THEN
+      NEW.cust_name := substring(parts[1], 1, 3) || 'xxxx';
+    ELSIF array_length(parts, 1) >= 2 THEN
+      NEW.cust_name := substring(parts[1], 1, 3) || 'xxxx ' || substring(parts[2], 1, 3) || 'xxxx';
+    END IF;
+  END IF;
+  RETURN NEW;
+END;
+$$;
+
+CREATE TRIGGER trg_mask_cust_name_leads
+  BEFORE INSERT OR UPDATE OF cust_name ON leads
+  FOR EACH ROW EXECUTE FUNCTION format_and_mask_cust_name();

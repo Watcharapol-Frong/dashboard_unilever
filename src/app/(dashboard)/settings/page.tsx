@@ -4,20 +4,31 @@ import useSWR from 'swr'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
-import { Select } from '@/components/ui/select'
 import { Badge } from '@/components/ui/badge'
-import { formatTHB, formatDate, formatNumber } from '@/lib/utils'
+import { formatTHB, formatNumber } from '@/lib/utils'
 import type { Target } from '@/types'
 import { Plus, Trash2 } from 'lucide-react'
 
 const fetcher = (url: string) => fetch(url).then(r => r.json())
 
+function monthLabel(m: string) {
+  // 'YYYY-MM-DD' → 'Jan 2026'
+  try {
+    return new Date(m + 'T00:00:00').toLocaleDateString('en-US', { month: 'short', year: 'numeric' })
+  } catch {
+    return m
+  }
+}
+
 export default function SettingsPage() {
   const { data: targets, mutate } = useSWR<Target[]>('/api/targets', fetcher)
 
   const [form, setForm] = useState({
-    period_label: '', period_start: '', period_end: '',
-    sales_target_thb: '', new_customer_target: '', call_target: '', channel: 'all'
+    month:          '',
+    dynamic_cmg:    '',
+    sales_target:   '',
+    buying_target:  '',
+    contact_target: '',
   })
   const [saving, setSaving] = useState(false)
   const [saveMsg, setSaveMsg] = useState('')
@@ -30,18 +41,16 @@ export default function SettingsPage() {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        period_label: form.period_label,
-        period_start: form.period_start,
-        period_end: form.period_end,
-        sales_target_thb: parseFloat(form.sales_target_thb) || 0,
-        new_customer_target: parseInt(form.new_customer_target) || 0,
-        call_target: parseInt(form.call_target) || 0,
-        channel: form.channel,
+        month:          form.month,
+        dynamic_cmg:    form.dynamic_cmg.trim(),
+        sales_target:   form.sales_target   ? parseFloat(form.sales_target)   : null,
+        buying_target:  form.buying_target  ? parseFloat(form.buying_target)  : null,
+        contact_target: form.contact_target ? parseFloat(form.contact_target) : null,
       }),
     })
     if (res.ok) {
       setSaveMsg('Target saved!')
-      setForm({ period_label: '', period_start: '', period_end: '', sales_target_thb: '', new_customer_target: '', call_target: '', channel: 'all' })
+      setForm({ month: '', dynamic_cmg: '', sales_target: '', buying_target: '', contact_target: '' })
       mutate()
     } else {
       const d = await res.json()
@@ -50,61 +59,76 @@ export default function SettingsPage() {
     setSaving(false)
   }
 
-  async function deleteTarget(id: string) {
-    await fetch(`/api/targets?id=${id}`, { method: 'DELETE' })
+  async function deleteTarget(month: string, dynamic_cmg: string) {
+    await fetch(`/api/targets?month=${encodeURIComponent(month)}&dynamic_cmg=${encodeURIComponent(dynamic_cmg)}`, {
+      method: 'DELETE',
+    })
     mutate()
   }
 
-  const today = new Date().toISOString().split('T')[0]
+  const today = new Date().toISOString().slice(0, 7)  // 'YYYY-MM'
 
   return (
     <div className="space-y-6">
       <div>
         <h1 className="text-2xl font-bold">Settings</h1>
-        <p className="text-muted-foreground text-sm mt-1">Manage KPI targets for each campaign period</p>
+        <p className="text-muted-foreground text-sm mt-1">Manage sales targets per Dynamic CMG and month</p>
       </div>
 
       <Card>
         <CardHeader>
           <CardTitle className="text-base flex items-center gap-2">
-            <Plus className="h-4 w-4" /> Add Target Period
+            <Plus className="h-4 w-4" /> Add / Update Target
           </CardTitle>
         </CardHeader>
         <CardContent>
           <form onSubmit={saveTarget} className="grid grid-cols-2 md:grid-cols-3 gap-4">
-            <div className="space-y-1.5 col-span-2 md:col-span-1">
-              <label className="text-xs font-medium">Period Label</label>
-              <Input placeholder="e.g. May 2026" value={form.period_label} onChange={e => setForm(f => ({ ...f, period_label: e.target.value }))} required />
+            <div className="space-y-1.5">
+              <label className="text-xs font-medium">Month</label>
+              <Input
+                type="month"
+                value={form.month.slice(0, 7)}
+                onChange={e => setForm(f => ({ ...f, month: e.target.value + '-01' }))}
+                required
+              />
             </div>
             <div className="space-y-1.5">
-              <label className="text-xs font-medium">Start Date</label>
-              <Input type="date" value={form.period_start} onChange={e => setForm(f => ({ ...f, period_start: e.target.value }))} required />
-            </div>
-            <div className="space-y-1.5">
-              <label className="text-xs font-medium">End Date</label>
-              <Input type="date" value={form.period_end} onChange={e => setForm(f => ({ ...f, period_end: e.target.value }))} required />
+              <label className="text-xs font-medium">Dynamic CMG</label>
+              <Input
+                placeholder="e.g. CMG_A"
+                value={form.dynamic_cmg}
+                onChange={e => setForm(f => ({ ...f, dynamic_cmg: e.target.value }))}
+                required
+              />
             </div>
             <div className="space-y-1.5">
               <label className="text-xs font-medium">Sales Target (THB)</label>
-              <Input type="number" placeholder="3000000" value={form.sales_target_thb} onChange={e => setForm(f => ({ ...f, sales_target_thb: e.target.value }))} required />
+              <Input
+                type="number"
+                placeholder="3000000"
+                value={form.sales_target}
+                onChange={e => setForm(f => ({ ...f, sales_target: e.target.value }))}
+              />
             </div>
             <div className="space-y-1.5">
-              <label className="text-xs font-medium">New Customer Target</label>
-              <Input type="number" placeholder="100" value={form.new_customer_target} onChange={e => setForm(f => ({ ...f, new_customer_target: e.target.value }))} />
+              <label className="text-xs font-medium">Buying Target (THB)</label>
+              <Input
+                type="number"
+                placeholder="optional"
+                value={form.buying_target}
+                onChange={e => setForm(f => ({ ...f, buying_target: e.target.value }))}
+              />
             </div>
             <div className="space-y-1.5">
-              <label className="text-xs font-medium">Call Target</label>
-              <Input type="number" placeholder="1000" value={form.call_target} onChange={e => setForm(f => ({ ...f, call_target: e.target.value }))} />
+              <label className="text-xs font-medium">Contact Target</label>
+              <Input
+                type="number"
+                placeholder="100"
+                value={form.contact_target}
+                onChange={e => setForm(f => ({ ...f, contact_target: e.target.value }))}
+              />
             </div>
-            <div className="space-y-1.5">
-              <label className="text-xs font-medium">Channel</label>
-              <Select value={form.channel} onChange={e => setForm(f => ({ ...f, channel: e.target.value }))}>
-                <option value="all">All Channels</option>
-                <option value="online">Online</option>
-                <option value="offline">Offline</option>
-              </Select>
-            </div>
-            <div className="flex items-end col-span-2 md:col-span-1">
+            <div className="flex items-end">
               <Button type="submit" disabled={saving} className="w-full">
                 {saving ? 'Saving...' : 'Save Target'}
               </Button>
@@ -126,26 +150,28 @@ export default function SettingsPage() {
           ) : (
             <div className="space-y-3">
               {targets.map(t => {
-                const isActive = t.period_start <= today && t.period_end >= today
+                const isActive = t.month.slice(0, 7) === today
                 return (
-                  <div key={t.id} className="flex items-center justify-between p-4 rounded-lg border hover:bg-muted/30">
+                  <div
+                    key={`${t.month}__${t.dynamic_cmg}`}
+                    className="flex items-center justify-between p-4 rounded-lg border hover:bg-muted/30"
+                  >
                     <div>
                       <div className="flex items-center gap-2 flex-wrap">
-                        <span className="font-medium">{t.period_label}</span>
-                        {isActive && <Badge variant="success">Active</Badge>}
-                        <Badge variant="secondary">{t.channel}</Badge>
+                        <span className="font-medium">{monthLabel(t.month)}</span>
+                        <span className="text-sm text-muted-foreground">— {t.dynamic_cmg}</span>
+                        {isActive && <Badge variant="success">Current Month</Badge>}
                       </div>
-                      <div className="text-xs text-muted-foreground mt-1">
-                        {formatDate(t.period_start)} — {formatDate(t.period_end)}
-                        &nbsp;|&nbsp;Sales: {formatTHB(t.sales_target_thb)}
-                        &nbsp;|&nbsp;New Customers: {formatNumber(t.new_customer_target)}
-                        &nbsp;|&nbsp;Calls: {formatNumber(t.call_target)}
+                      <div className="text-xs text-muted-foreground mt-1 space-x-3">
+                        {t.sales_target   != null && <span>Sales: {formatTHB(t.sales_target)}</span>}
+                        {t.buying_target  != null && <span>Buying: {formatTHB(t.buying_target)}</span>}
+                        {t.contact_target != null && <span>Contact: {formatNumber(t.contact_target)}</span>}
                       </div>
                     </div>
                     <Button
                       variant="ghost"
                       size="icon"
-                      onClick={() => deleteTarget(t.id)}
+                      onClick={() => deleteTarget(t.month, t.dynamic_cmg)}
                       className="text-muted-foreground hover:text-red-500 flex-shrink-0"
                     >
                       <Trash2 className="h-4 w-4" />

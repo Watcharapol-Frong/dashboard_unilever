@@ -11,7 +11,7 @@ import type { FileType } from '@/types'
 interface UploadResult { ok?: boolean; row_count?: number; error_count?: number; errors?: string[]; error?: string }
 
 export function CsvUploader({ onUploaded }: { onUploaded?: () => void }) {
-  const [fileType, setFileType] = useState<FileType>('sales_online')
+  const [fileType, setFileType] = useState<FileType>('online_sales')
   const [file, setFile] = useState<File | null>(null)
   const [preview, setPreview] = useState<Record<string, string>[]>([])
   const [columnMap, setColumnMap] = useState<Record<string, string>>({})

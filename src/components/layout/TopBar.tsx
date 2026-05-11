@@ -14,7 +14,7 @@ import {
 import { SidebarTrigger } from '@/components/ui/sidebar'
 import { useDateRange, type FilterMode } from '@/context/DateRangeContext'
 
-const HIDE_CONTROLS_PATHS = ['/upload', '/settings']
+const HIDE_CONTROLS_PATHS = ['/upload', '/settings', '/leads']
 
 const TABS: { mode: FilterMode; label: string }[] = [
   { mode: 'month', label: 'Month' },

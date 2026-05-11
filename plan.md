@@ -1,7 +1,7 @@
-# Makro × Unilever × Telesales Dashboard — Project Plan
+# Unilever Project — Telesales Dashboard Plan
 
-> อัปเดตล่าสุด: 2026-05-11  
-> สถานะปัจจุบัน: Upload pipeline สมบูรณ์ · Upload UI ครบ (Tabs/Skeleton/Pagination/Progress cards) · Auth schema DB พร้อม · Dashboard UI (Mock data) พร้อม · Auth implementation + Gold views + Deploy ยังไม่เริ่ม
+> อัปเดตล่าสุด: 2026-05-11
+> สถานะปัจจุบัน: Upload pipeline ✅ · Silver/Gold schema ✅ · Storage Encryption ✅ · Data Masking (mobile + name) ✅ · **กำลัง: ทดสอบ Upload ข้อมูลจริง** · Auth ❌ · Deploy ❌
 
 ---
 
@@ -12,7 +12,7 @@ Dashboard ร่วม 3 บริษัท (Makro, Unilever, Telesales Company)
 **Core requirements:**
 - Admin อัปโหลด CSV 8 ประเภท → ระบบ validate → ETL → Supabase
 - Dashboard แสดง KPI, chart, funnel แบบ real-time กรองตาม date range
-- Role-based access: `admin` เห็นทุกอย่าง, `viewer_telesales` เห็นเฉพาะข้อมูลบริษัทตัวเอง
+- Role-based access: `admin` เห็นทุกอย่าง, `viewer` เห็นเฉพาะข้อมูลบริษัทตัวเอง
 - Login ด้วย Magic Link เท่านั้น (ไม่มี password)
 
 ---
@@ -23,8 +23,8 @@ Dashboard ร่วม 3 บริษัท (Makro, Unilever, Telesales Company)
 |---|---|
 | Framework | Next.js 14 (App Router) + TypeScript |
 | UI / Components | shadcn/ui + Tailwind CSS |
-| Charts | @nivo/bar, @nivo/line, @nivo/pie, @nivo/sankey |
-| Auth | Supabase Auth (Magic Link + Invite) |
+| Charts | @nivo/bar, @nivo/line, @nivo/pie + Recharts (shadcn chart) |
+| Auth | Supabase Auth (Magic Link + Invite) — DB พร้อม, Next.js ยังไม่ implement |
 | Database | Supabase (PostgreSQL) |
 | CSV Parsing | Papa Parse (client preview + server ETL) |
 | Data Fetching | SWR (auto-revalidate, isValidating for UX) |
@@ -38,237 +38,245 @@ Dashboard ร่วม 3 บริษัท (Makro, Unilever, Telesales Company)
 CSV File (Admin upload)
         │
         ▼
-[Bronze] Supabase Storage bucket: csv-uploads
-        Folder: {table}/{channel}/{timestamp}_{type}.csv
+[Bronze] Supabase Storage: csv-uploads (private)
+         RLS: admin only (INSERT/SELECT/UPDATE/DELETE)
+         File limit: 50 MB · MIME: text/csv, text/plain, application/vnd.ms-excel
+         ⚠️  ไฟล์ถูก AES-256-GCM Encrypt ก่อน upload (key ใน STORAGE_ENCRYPTION_KEY)
+         ชื่อไฟล์: {folder}/{timestamp}_{6-char-token}_{type}.csv
         │
         ▼ (ETL ใน /api/upload/[type])
-[Silver] Supabase PostgreSQL — typed tables (ดู Section 5)
-        │  online_sales, offline_sales, leads, products,
-        │  telesales_calls, targets, costs, incentives
+[Silver] PostgreSQL tables
+         online_sales, offline_sales
+         leads, telesales_calls, products
+         targets, costs, incentives
+         Triggers: LPAD mmid→14 digits
+                   format_and_mask_mobile()  → mobile: 08999xxxxx
+                   format_and_mask_cust_name() → cust_name: วัชxxxx เจxxxxx
+        │
         ▼ (Gold VIEW)
-[Gold]   order_sales VIEW = UNION ALL (online_sales + offline_sales)
-        (+ future: vw_daily_sales, vw_agent_performance ฯลฯ)
+[Gold]   order_sales VIEW
+         = UNION ALL (online_sales + offline_sales)
+         LEFT JOIN products ON prod_num
+         + is_uni_hoc_pd = (product_name_en IS NOT NULL)
+         + channel จาก silver table column
+        │
+        ▼ (RPC functions)
+[Agg]   get_sales_totals()          — SUM sales bypass PostgREST 1000-row cap
+        get_tier_breakdown()        — leads × telesales_calls GROUP BY category
+        get_call_status_counts()    — telesales_calls GROUP BY call_status
+        pad_mmid_to_14()            — trigger function
+        format_and_mask_mobile()    — trigger: LPAD→10 digits + mask last 5 → 08999xxxxx
+        format_and_mask_cust_name() — trigger: mask name → วัชxxxx เจxxxxx
 ```
-
-**Upload pipeline ทำงานอย่างไร:**
-1. User เลือก file type → drag/drop CSV (max 50 MB)
-2. Client parse header → validate ด้วย fingerprint (requiredHeaders / forbiddenHeaders)
-3. Preview 1 แถวแรก → confirm
-4. POST `/api/upload/{type}` → server parse → validate → upload to Storage → ETL → dedup → Upsert Silver (chunk 500 rows) → บันทึก upload_batches log
-5. Progress card แสดง real-time upload % (XHR) → auto-dismiss 3 วินาที หลัง success
-6. รองรับ concurrent upload สูงสุด 3 ไฟล์พร้อมกัน (queue เมื่อเกิน)
-
-**Sliding-window upsert:** แต่ละ upload อาจครอบคลุม date range ซ้อนกับ upload ก่อน → ใช้ `UPSERT ON CONFLICT (composite key)` ทับข้อมูลเดิมเสมอ
 
 ---
 
 ## 4. Environment Variables
 
-สร้างไฟล์ `.env.local` (ไม่ commit):
-
 ```
 NEXT_PUBLIC_SUPABASE_URL=https://xxxx.supabase.co
 NEXT_PUBLIC_SUPABASE_ANON_KEY=eyJ...
-SUPABASE_SERVICE_ROLE_KEY=eyJ...   # ใช้ใน server routes เท่านั้น
+SUPABASE_SERVICE_ROLE_KEY=eyJ...   # server routes only
 NEXT_PUBLIC_APP_URL=http://localhost:3000
-USE_MOCK_DATA=true                 # true = ใช้ mock, ลบ/false = ใช้ real DB
+STORAGE_ENCRYPTION_KEY=<64-char hex>  # AES-256-GCM key สำหรับ encrypt CSV ก่อน upload
 ```
 
-> ⚠️ **สำคัญ:** ค่า JWT key ต้องไม่มี single quotes ครอบ — เขียนตรงๆ ไม่ใส่เครื่องหมาย `'...'`  
-> Next.js อ่าน single quotes เป็นส่วนหนึ่งของค่า ทำให้ Supabase client ได้รับ JWT ที่ invalid
->
-> ✅ ถูก: `NEXT_PUBLIC_SUPABASE_ANON_KEY=eyJhbGci...`  
-> ❌ ผิด: `NEXT_PUBLIC_SUPABASE_ANON_KEY='eyJhbGci...'`
+> ⚠️ ค่า JWT key ต้องไม่มี single quotes ครอบ  
+> ✅ `NEXT_PUBLIC_SUPABASE_ANON_KEY=eyJhbGci...`  
+> ❌ `NEXT_PUBLIC_SUPABASE_ANON_KEY='eyJhbGci...'`
 
 ---
 
-## 5. Silver Layer — Database Schema
+## 5. Database Schema
 
-### Migration files
+### Migration files (consolidated)
 ```
 supabase/migrations/
-  20260510032319_silver_tables.sql             # สร้าง 8 tables เดิม
-  20260510032924_fix_telesales_source_tab.sql  # rename source_tab → lead_customers
-  20260510120000_auth_schema.sql               # user_profiles, invite_codes, audit_logs
-  20260510150000_split_order_sales.sql         # แยก order_sales → online_sales + offline_sales + VIEW
-  20260510180000_fix_sales_composite_key.sql   # เปลี่ยน PK order_number → UNIQUE(order_number, prod_num)
+  20260511200000_consolidated_schema.sql   # source of truth ทุก Silver tables + auth schema
+  20260511210000_leads_kpi_functions.sql   # RPC: get_tier_breakdown, get_call_status_counts
+  20260511220000_storage_security.sql      # Storage bucket policies + file limits
 ```
 
-### วิธี apply migrations
-```bash
-npx supabase link --project-ref <project-ref>
-npx supabase db push
-```
+> Migration squash: ไฟล์เก่า 20260510xxxxxx ถูก squash → `20260511200000` แล้ว  
+> `supabase migration repair` ใช้ mark applied แล้วใน remote DB
 
-### Tables
+### Silver Tables
 
-#### upload_batches (audit log — referenced โดยทุก table)
+#### upload_batches (audit log)
 | column | type | note |
 |---|---|---|
-| id | uuid PK | auto |
-| table_name | text | ชื่อ silver table ที่ import |
-| filename | text | ชื่อไฟล์ต้นฉบับ |
-| storage_path | text | path ใน Storage bucket |
-| row_count | integer | จำนวน row ที่ import สำเร็จ (หลัง dedup) |
-| error_count | integer | จำนวน row ที่ error |
+| id | uuid PK | |
+| table_name | text | silver table ที่ import |
+| filename | text | |
+| storage_path | text | path ใน bucket |
+| row_count | integer | rows ที่ import สำเร็จ |
+| error_count | integer | |
 | status | text | `success` / `partial` / `failed` |
+| uploaded_by | uuid FK→auth.users | null ก่อน Auth implement |
 | uploaded_at | timestamptz | |
 
 #### online_sales
 | column | type | note |
 |---|---|---|
-| id | uuid PK | surrogate key (auto) |
-| order_number | text | UNIQUE constraint ร่วมกับ prod_num |
+| id | uuid PK | surrogate key |
+| order_number | text NOT NULL | UNIQUE ร่วมกับ prod_num |
 | order_date | date NOT NULL | |
-| mmid | text | รหัสลูกค้า Makro |
-| mobile | text | |
-| dynamic_cmg | text | กลุ่ม CMG |
-| prod_num | text | UNIQUE constraint ร่วมกับ order_number |
-| sales_qty | numeric(10,2) | จาก `Qty Sold (Online)` |
-| sales_in_vat | numeric(14,4) | จาก `Sales In VAT` |
+| mmid | text | LPAD→14 digits (trigger) |
+| mobile | text | LPAD→10 digits (trigger) |
+| dynamic_cmg | text | |
+| prod_num | text | |
+| sales_qty | numeric(10,2) | |
+| sales_in_vat | numeric(14,2) | |
+| channel | text NOT NULL | DEFAULT 'Online' · CHECK IN ('Online','Offline') |
 | is_in_paid_report | boolean | |
 | batch_id | uuid FK | |
-| updated_at | timestamptz | |
 
 UNIQUE: `(order_number, prod_num)` · Index: order_date, mmid, prod_num, dynamic_cmg
 
 #### offline_sales
-| column | type | note |
-|---|---|---|
-| id | uuid PK | surrogate key (auto) |
-| order_number | text | UNIQUE ร่วมกับ prod_num |
-| order_date | date NOT NULL | จาก `TRANSACTION_DATE` |
-| mmid | text | |
-| mobile | text | |
-| dynamic_cmg | text | |
-| prod_num | text | UNIQUE ร่วมกับ order_number |
-| sales_qty | numeric(10,2) | |
-| sales_in_vat | numeric(14,4) | `Sales Ex VAT × 1.07` |
-| batch_id | uuid FK | |
-| updated_at | timestamptz | |
+เหมือน online_sales ยกเว้น: ไม่มี `is_in_paid_report` · channel DEFAULT `'Offline'`
 
 UNIQUE: `(order_number, prod_num)` · Index: order_date, mmid, prod_num, dynamic_cmg
-
-> ⚠️ **สำคัญ:** conflict key ต้องเป็น composite `(order_number, prod_num)` ไม่ใช่แค่ `order_number`  
-> เพราะ 1 order มีหลาย line items (product SKU) — ถ้าใช้แค่ order_number จะ upsert ทับกัน ทำให้ยอดขายผิด
-
-#### order_sales (Gold VIEW)
-```sql
--- UNION ALL ของ online_sales + offline_sales
--- channel derive จาก source table ('Online' / 'Offline')
-SELECT ..., 'Online' AS channel FROM online_sales
-UNION ALL
-SELECT ..., 'Offline' AS channel FROM offline_sales
-```
 
 #### leads
 | column | type | note |
 |---|---|---|
-| mmid | text PK | |
+| mmid | text PK | LPAD→14 digits (trigger) |
 | cust_name | text | |
-| mobile | text | |
-| lead_customers | text | กลุ่ม lead (เช่น "Wave 1") |
+| mobile | text | LPAD→10 digits (trigger) |
+| lead_customers | text | tier: "0-5000", "5000-10000", "10000-20000", "20000-50000", "50000+" |
 | batch_id, updated_at | | |
 
 #### products
 | column | type | note |
 |---|---|---|
 | prod_num | text PK | |
-| product_name_th / en | text | |
-| brands | text | แบรนด์ Unilever |
+| product_name_th / en | text | is_uni_hoc_pd ใน VIEW ใช้ `product_name_en IS NOT NULL` |
+| brands | text | |
 | senior_buyer_name / buyer_name | text | |
-| class_name / subclass | text | หมวดหมู่ |
+| class_name / subclass | text | |
 | is_1px | boolean | |
 | url_makro_pro | text | |
-| batch_id, updated_at | | |
 
 #### telesales_calls
 | column | type | note |
 |---|---|---|
-| mmid | text PK | 1 row ต่อลูกค้า (upsert) |
-| mobile | text | |
-| first_connected_date | date | จาก col `first_conected_date` (typo ในต้นฉบับ) |
-| call_status | text | |
+| mmid | text PK | LPAD→14 digits (trigger) |
+| mobile | text | LPAD→10 digits (trigger) |
+| first_connected_date | date | (typo ในต้นฉบับ: `first_conected_date`) |
+| call_status | text | ภาษาไทย: รับสาย, ไม่รับสาย 1, ฝากข้อความ ฯลฯ |
 | reason_group / reason_subgroup | text | |
 | contact_note | text | |
 | agent | text | |
-| lead_customers | text | จาก col `source_tab` |
-| batch_id, updated_at | | |
+| lead_customers | text | (renamed from source_tab) |
 
 #### targets
-PK: `(month, dynamic_cmg)` · month: `"Feb 2026"` → `2026-02-01`
+PK: `(month, dynamic_cmg)` · columns: sales_target, buying_target, contact_target
 
 #### costs
-PK: `month` · month: `"Feb 2026"` → `2026-02-01`
+PK: `month` · columns: cost_per_agent, cost_per_supervisor
 
 #### incentives
-PK: `tier` (numeric, เช่น `1.10` = 110%)
+PK: `tier` (numeric) · columns: incentive_per_head
 
----
+### Gold Layer
 
-## 6. Upload Config & ETL
+#### order_sales (VIEW)
+```sql
+SELECT
+  s.id, s.order_number, s.order_date, s.mmid, s.mobile, s.dynamic_cmg,
+  s.prod_num, s.sales_qty, s.sales_in_vat,
+  s.channel,                                    -- จาก silver table
+  s.is_in_paid_report,
+  s.batch_id, s.updated_at,
+  p.product_name_th, p.product_name_en, p.brands,
+  p.senior_buyer_name, p.buyer_name,
+  p.class_name, p.subclass, p.is_1px, p.url_makro_pro,
+  (p.product_name_en IS NOT NULL) AS is_uni_hoc_pd
+FROM online_sales s LEFT JOIN products p ON p.prod_num = s.prod_num
+UNION ALL
+SELECT ... FROM offline_sales s LEFT JOIN products p ON p.prod_num = s.prod_num
+```
 
-### `src/lib/upload/config.ts`
-กำหนด 8 file types พร้อม:
-- `requiredHeaders` — fingerprint ที่ต้องมี
-- `forbiddenHeaders` — ป้องกัน upload ผิดประเภท (เช่น เลือก Online แต่ส่ง Offline ไฟล์)
-- `conflictKey` — ใช้ใน upsert
-- `storageFolder` / `storageFilename`
-
-| type | label | table | conflict key |
+### Triggers (LPAD)
+| Trigger | Table | Column | Format |
 |---|---|---|---|
-| `online_sales` | Online Sales | online_sales | order_number,prod_num |
-| `offline_sales` | Offline Sales | offline_sales | order_number,prod_num |
-| `leads` | Lead Customers | leads | mmid |
-| `products` | Products | products | prod_num |
-| `telesales` | Telesales Calls | telesales_calls | mmid |
-| `targets` | Targets | targets | month,dynamic_cmg |
-| `costs` | Costs | costs | month |
-| `incentives` | Incentives | incentives | tier |
+| trg_pad_mmid_* | online_sales, offline_sales, leads, telesales_calls | mmid | 14 digits |
+| trg_pad_mobile_* | online_sales, offline_sales, leads, telesales_calls | mobile | 10 digits |
 
-### `src/lib/upload/etl.ts`
-ETL transforms โดดเด่น:
-- **online_sales prod_num:** จาก col `ITEM_ID`
-- **Offline sales_in_vat:** `Math.round(Sales_Ex_VAT × 1.07 × 10000) / 10000`
-- **month field:** `"Feb 2026"` → `"2026-02-01"` (via `parseMonth()`)
-- **telesales source_tab** → stored as `lead_customers`
-- **telesales first_conected_date** (typo ในต้นฉบับ) → `first_connected_date`
-- **incentives tier:** lowercase `tier` (ไม่ใช่ `Tier`)
-- **Dedup ก่อน upsert:** Map ตาม composite key → keep last occurrence ป้องกัน "ON CONFLICT DO UPDATE cannot affect row a second time"
-- **Null guard:** row ที่ `order_date` เป็น null → skip (error log)
-
-### CSV ต้นฉบับ — required headers
-
-**Online Sales:** `order_number`, `ITEM_ID`, `Sales In VAT`  
-**Offline Sales:** `sls_trx_id`, `TRANSACTION_DATE`, `Sales Ex VAT`  
-**Leads:** `mmid`, `lead_customers`  
-**Products:** `prod_num`, `brands`  
-**Telesales:** `mmid`, `call_status`, `agent`  
-**Targets:** `month`, `dynamic_cmg`, `sales_target`  
-**Costs:** `month`, `cost_per_agent`  
-**Incentives:** `tier`, `incentive_per_head`
+### Auth Schema
+```sql
+user_profiles: user_id (PK→auth.users), email, full_name, role, company, invited_by, last_seen
+invite_codes:  code (UNIQUE), role, company, max_uses, use_count, expires_at, is_active
+audit_logs:    user_id, action, entity_type, entity_id, metadata (jsonb)
+```
+**Roles:** `admin` (upload + manage all) / `viewer` (read only, filtered by company)
 
 ---
 
-## 7. Storage Bucket
+## 6. Storage Security
 
-Bucket: `csv-uploads` (private, ใน Supabase Storage)
+Bucket: `csv-uploads` (private)
+
+| Setting | Value |
+|---|---|
+| Public | ❌ |
+| File size limit | 50 MB |
+| Allowed MIME | text/csv, text/plain, application/vnd.ms-excel, application/octet-stream |
+
+RLS Policies (storage.objects):
+| Policy | Cmd | Condition |
+|---|---|---|
+| csv_uploads_insert_admin | INSERT | authenticated + role = 'admin' |
+| csv_uploads_select_admin | SELECT | authenticated + role = 'admin' |
+| csv_uploads_update_admin | UPDATE | authenticated + role = 'admin' |
+| csv_uploads_delete_admin | DELETE | authenticated + role = 'admin' |
+| csv_uploads_deny_anon | SELECT | anon → false |
+
+> API routes ใช้ `service_role key` → bypass RLS ✓  
+> Policies ป้องกัน direct client-side access
 
 ```
 csv-uploads/
-  order_sales/online/{timestamp}_online_sales.csv
-  order_sales/offline/{timestamp}_offline_sales.csv
-  leads/{timestamp}_leads.csv
-  products/{timestamp}_products.csv
-  telesales/{timestamp}_telesales.csv
-  targets/{timestamp}_targets.csv
-  costs/{timestamp}_costs.csv
-  incentives/{timestamp}_incentives.csv
+  order_sales/online/{timestamp}_{token}_online_sales.csv   # AES-256 encrypted
+  order_sales/offline/{timestamp}_{token}_offline_sales.csv
+  leads/{timestamp}_{token}_leads.csv
+  products/{timestamp}_{token}_products.csv
+  telesales/{timestamp}_{token}_telesales.csv
+  targets/{timestamp}_{token}_targets.csv
+  costs/{timestamp}_{token}_costs.csv
+  incentives/{timestamp}_{token}_incentives.csv
 ```
 
-timestamp format: `20260510T143022` (auto-generated ตอน upload)
+> ⚠️ **ไฟล์ถูก Encrypt ทั้งหมด** ด้วย AES-256-GCM ก่อน upload — เปิดอ่านตรงๆ ไม่ได้
+> ถ้าต้องการ decrypt (กรณี ETL พัง) ใช้ `src/lib/utils/crypto.ts` `decrypt()` ด้วย `STORAGE_ENCRYPTION_KEY`
 
-**สถานะ:** ✅ Bucket `csv-uploads` สร้างแล้วใน Supabase
+---
+
+## 7. Upload Config & ETL
+
+### `src/lib/upload/config.ts`
+
+| type | table | conflict key |
+|---|---|---|
+| `online_sales` | online_sales | order_number, prod_num |
+| `offline_sales` | offline_sales | order_number, prod_num |
+| `leads` | leads | mmid |
+| `products` | products | prod_num |
+| `telesales` | telesales_calls | mmid |
+| `targets` | targets | month, dynamic_cmg |
+| `costs` | costs | month |
+| `incentives` | incentives | tier |
+
+### `src/lib/upload/etl.ts`
+- **online_sales prod_num:** จาก col `ITEM_ID`
+- **Offline sales_in_vat:** `Sales_Ex_VAT × 1.07` rounded 2 decimal
+- **month field:** `"Feb 2026"` → `"2026-02-01"`
+- **telesales source_tab** → stored as `lead_customers`
+- **Dedup ก่อน upsert:** Map ตาม composite key → prevent "ON CONFLICT DO UPDATE cannot affect row a second time"
+- **Null guard:** row ที่ `order_date` null → skip
+
+> ⚠️ conflict key ต้องเป็น `(order_number, prod_num)` — 1 order มีหลาย line items
 
 ---
 
@@ -276,82 +284,66 @@ timestamp format: `20260510T143022` (auto-generated ตอน upload)
 
 | method | path | description |
 |---|---|---|
-| POST | `/api/upload/[type]` | รับ CSV → validate → Storage → ETL → upsert Silver |
-| GET | `/api/upload/history` | ดึง upload_batches 50 รายการล่าสุด |
-| GET | `/api/upload/status` | summary ของแต่ละ Silver table (rows, dates, totals) |
-| DELETE | `/api/dev/reset` | DEV ONLY — truncate ทุก table + ลบ Storage files |
+| POST | `/api/upload/[type]` | CSV → validate → Storage → ETL → upsert Silver |
+| GET | `/api/upload/history` | upload_batches 50 รายการล่าสุด |
+| GET | `/api/upload/status` | Silver table summaries (RPC aggregate) |
+| DELETE | `/api/dev/reset` | DEV ONLY — truncate all + clear Storage |
 | GET | `/api/kpi/overview` | KPI cards + daily sales trend |
 | GET | `/api/kpi/sales` | Sales performance + recent orders |
 | GET | `/api/kpi/telesales` | Call stats + Sankey funnel data |
 | GET | `/api/kpi/products` | Top SKUs + brand breakdown |
-| GET | `/api/kpi/leads` | Lead list + status counts |
+| GET | `/api/kpi/leads?page=&limit=` | Paginated leads + call status (real data) |
 | GET | `/api/targets` | Targets per month/CMG |
-| POST | `/api/invite` | Admin invite user (Supabase magic link) |
 
-> ⚠️ **PostgREST 1000-row cap:** ทุก query ที่ต้องการ count หรือ aggregate ต้องใช้ `{ count: 'exact' }` และดึงค่าจาก `.count` ไม่ใช่ `data.length` — ไม่เช่นนั้น Supabase จะคืนแค่ 1,000 แถว  
-> สำหรับ sum aggregate ใช้ Supabase RPC function `get_sales_totals()` แทน JS reduce
-
-### Supabase Functions ที่ต้องสร้างใน SQL Editor
-
-```sql
--- Reset all Silver tables (dev)
-CREATE OR REPLACE FUNCTION reset_all_data()
-RETURNS void LANGUAGE plpgsql SECURITY DEFINER AS $$
-BEGIN
-  TRUNCATE online_sales, offline_sales, leads, products,
-           telesales_calls, targets, costs, incentives,
-           upload_batches CASCADE;
-END;
-$$;
-
--- Aggregate sales totals (bypass PostgREST row limit)
-CREATE OR REPLACE FUNCTION get_sales_totals()
-RETURNS TABLE (channel text, total_rows bigint, total_sales numeric)
-LANGUAGE sql STABLE AS $$
-  SELECT 'online'::text,  COUNT(*), COALESCE(SUM(sales_in_vat), 0) FROM online_sales
-  UNION ALL
-  SELECT 'offline'::text, COUNT(*), COALESCE(SUM(sales_in_vat), 0) FROM offline_sales;
-$$;
-```
-
-All KPI routes check `USE_MOCK_DATA` env var → ถ้า `true` ใช้ `src/lib/mock/data.ts`, ถ้า `false` query Silver tables จริง
+> ⚠️ **PostgREST 1000-row cap:** ใช้ `{ count: 'exact' }` + `.count` หรือ RPC สำหรับ aggregate
 
 ---
 
-## 9. File Structure
+## 9. Dashboard Pages
+
+### Sidebar Navigation
+**Dashboard group:** Overview · Telesales · Sales · Products · Incentives
+
+**Admin group (admin only):** Leads · Upload Data · Settings
+
+TopBar ซ่อน date filter + Print บนหน้า: `/upload`, `/settings`, `/leads`
+
+### Leads Page (real data ✅)
+ข้อมูลจาก:
+- `leads` table — mmid, cust_name, mobile, lead_customers (tier)
+- `telesales_calls` table — call_status, agent, first_connected_date, reason_group
+- RPC `get_tier_breakdown()` — leads × telesales_calls per category
+- RPC `get_call_status_counts()` — call status distribution
+
+Components:
+- KPI: Total Leads / Called (%) / Not Called (%) / Reached (% of called)
+- **Leads Category** — Recharts Stacked Bar (Called / Not Called per tier)
+- **Call Status Breakdown** — NivoBar horizontal
+- **All Leads table** — plain `<table>` + server-side pagination 50 rows/page
+
+---
+
+## 10. File Structure
 
 ```
 src/
 ├── app/
-│   ├── (auth)/
-│   │   └── login/page.tsx              # Magic link request form
+│   ├── (auth)/login/page.tsx
 │   ├── (dashboard)/
-│   │   ├── layout.tsx                  # Sidebar + TopBar wrapper
-│   │   ├── overview/page.tsx           # Summary KPIs + sales trend
-│   │   ├── sales/page.tsx              # Sales performance + target gauge
-│   │   ├── telesales/page.tsx          # Call stats + Sankey funnel
-│   │   ├── products/page.tsx           # SKU/brand breakdown
-│   │   ├── leads/page.tsx              # Lead list + status pie
-│   │   ├── incentives/page.tsx         # Incentive tracking
-│   │   ├── upload/page.tsx             # CSV upload + Tabs (Overview/Data Status/History)
-│   │   └── settings/page.tsx           # Targets + invite users
-│   ├── api/
-│   │   ├── upload/[type]/route.ts      # Upload pipeline (8 steps)
-│   │   ├── upload/history/route.ts     # Upload audit log (50 รายการ)
-│   │   ├── upload/status/route.ts      # Silver table summaries (RPC aggregate)
-│   │   ├── dev/reset/route.ts          # DEV ONLY — wipe all data
-│   │   ├── dev/check-sales/route.ts    # DEV — debug sales data
-│   │   ├── kpi/overview/route.ts
-│   │   ├── kpi/sales/route.ts
-│   │   ├── kpi/telesales/route.ts
-│   │   ├── kpi/products/route.ts
-│   │   ├── kpi/leads/route.ts
-│   │   ├── targets/route.ts
-│   │   ├── invite/route.ts
-│   │   └── incentives/route.ts
-│   └── auth/callback/route.ts          # Supabase magic link callback
+│   │   ├── layout.tsx
+│   │   ├── overview/page.tsx
+│   │   ├── sales/page.tsx
+│   │   ├── telesales/page.tsx
+│   │   ├── products/page.tsx
+│   │   ├── leads/page.tsx           # real data · admin only
+│   │   ├── incentives/page.tsx
+│   │   ├── upload/page.tsx          # Tabs: Overview / Data Status / History
+│   │   └── settings/page.tsx
+│   └── api/ ...
 │
 ├── components/
+│   ├── app-sidebar.tsx              # shadcn/ui Sidebar + NavUser + SidebarRail
+│   ├── nav-user.tsx                 # Avatar + DropdownMenu (Account/Billing/Logout)
 │   ├── charts/
 │   │   ├── NivoBar.tsx
 │   │   ├── NivoLine.tsx
@@ -360,174 +352,122 @@ src/
 │   ├── dashboard/
 │   │   ├── KpiCard.tsx
 │   │   ├── TargetGaugeBar.tsx
-│   │   ├── RadialGauge.tsx
 │   │   └── DataTable.tsx
-│   ├── layout/
-│   │   ├── Sidebar.tsx
-│   │   └── TopBar.tsx                  # ซ่อน date filter + Print/PDF บนหน้า /upload, /settings
-│   └── ui/                             # shadcn/ui: card, badge, button, skeleton, tabs, ...
+│   ├── layout/TopBar.tsx
+│   └── ui/                          # shadcn: card, badge, button, skeleton, tabs,
+│                                    #         avatar, dropdown-menu, chart, sidebar ...
 │
 ├── lib/
-│   ├── supabase/
-│   │   ├── client.ts                   # Browser Supabase client (anon key)
-│   │   └── server.ts                   # Server client (service role + cache:'no-store')
-│   ├── upload/
-│   │   ├── config.ts                   # 8 file type configs (composite conflict keys)
-│   │   └── etl.ts                      # Row transform + null guard + dedup logic
-│   ├── mock/data.ts
+│   ├── supabase/client.ts
+│   ├── supabase/server.ts           # createServiceClient() + auth stubs
+│   ├── upload/config.ts             # FILE_TYPE_CONFIGS + generateStoragePath (random token)
+│   ├── upload/etl.ts
+│   ├── utils/crypto.ts              # AES-256-GCM encrypt/decrypt
 │   └── utils.ts
 │
-├── context/
-│   ├── DateRangeContext.tsx
-│   └── SidebarContext.tsx
-├── hooks/
-│   └── useKpi.ts
-├── types/index.ts
-└── middleware.ts                       # TODO: Supabase session check
+├── context/DateRangeContext.tsx
+├── hooks/use-mobile.ts
+└── middleware.ts                    # ADMIN_PATHS defined · TODO: session check
 
-supabase/
-└── migrations/
-    ├── 20260510032319_silver_tables.sql
-    ├── 20260510032924_fix_telesales_source_tab.sql
-    ├── 20260510120000_auth_schema.sql
-    ├── 20260510150000_split_order_sales.sql
-    └── 20260510180000_fix_sales_composite_key.sql
+supabase/migrations/
+  20260511200000_consolidated_schema.sql
+  20260511210000_leads_kpi_functions.sql
+  20260511220000_storage_security.sql
 ```
 
 ---
 
-## 10. Current Status
+## 11. Current Status
 
 ### เสร็จแล้ว ✅
 
-#### Frontend & Components
-- [x] Next.js 14 + TypeScript + Tailwind + shadcn/ui bootstrap
-- [x] Sidebar, TopBar, DateRangePicker layout
-- [x] TopBar: ซ่อน date filter + Print/PDF บนหน้า `/upload` และ `/settings` โดยอัตโนมัติ
-- [x] Dashboard pages ทุกหน้า — ใช้ Mock data
-- [x] Charts: NivoBar, NivoLine, NivoPie, SankeyFunnel
-- [x] KpiCard, TargetGaugeBar, DataTable components
+#### Infrastructure & DB
+- [x] Supabase project · PostgreSQL schema · migrations consolidated
+- [x] Silver tables: online_sales, offline_sales, leads, products, telesales_calls, targets, costs, incentives
+- [x] Gold VIEW: order_sales (UNION ALL + LEFT JOIN products + is_uni_hoc_pd)
+- [x] Triggers: LPAD mmid→14 digits, LPAD mobile→10 digits (all 4 tables)
+- [x] RPC: get_sales_totals, get_tier_breakdown, get_call_status_counts
+- [x] Auth schema: user_profiles, invite_codes, audit_logs
+- [x] Storage security: RLS policies (admin only) + 50MB limit + MIME filter
 
-#### Upload System (สมบูรณ์)
-- [x] Silver schema: online_sales + offline_sales (แยกจาก order_sales) + 6 tables อื่น
-- [x] order_sales Gold VIEW = UNION ALL online_sales + offline_sales
-- [x] Storage bucket `csv-uploads` — private
-- [x] `src/lib/upload/config.ts` — 8 file types, composite conflict keys `(order_number, prod_num)`
-- [x] `src/lib/upload/etl.ts` — ETL + dedup + null guard + tier lowercase fix
-- [x] Extra columns: เก็บใน Storage, ไม่ import ลง DB
+#### Frontend
+- [x] shadcn/ui Sidebar: AppSidebar + SidebarRail + NavUser (Avatar + DropdownMenu)
+- [x] TopBar: SidebarTrigger + Breadcrumb + date filter (hidden on admin pages)
+- [x] Leads page → admin group · real DB data · Stacked Bar chart · server-side pagination
+- [x] Upload page: Tabs / Skeleton / Concurrent upload / Progress card / Pagination
+- [x] Charts: NivoBar, NivoLine, NivoPie, SankeyFunnel, Recharts stacked bar (shadcn chart)
+- [x] KpiCard, DataTable, TargetGaugeBar components
+
+#### Upload Pipeline & Security
+- [x] 8 file types · composite conflict keys · ETL + dedup + null guard
 - [x] `POST /api/upload/[type]` — 8-step pipeline
-- [x] `GET /api/upload/history` — 50 รายการล่าสุด
-- [x] `GET /api/upload/status` — ใช้ `count:'exact'` + RPC `get_sales_totals()` แก้ PostgREST 1000-row cap
-- [x] `DELETE /api/dev/reset` — DEV ONLY: truncate all + clear Storage
-- [x] All server API routes ใช้ `createServiceClient()` (service role key + `cache:'no-store'`)
-
-#### Upload Page UI (สมบูรณ์)
-- [x] File type selector (3 buttons + dropdown สำหรับ Other Types)
-- [x] Drag-drop + file validation (header fingerprint, 50MB limit)
-- [x] Preview 1 แถวแรก + extra column warning
-- [x] **Concurrent upload** สูงสุด 3 ไฟล์พร้อมกัน (queue เมื่อเกิน)
-- [x] **Progress card** (XHR real-time %) — auto-dismiss 3 วินาที (success), manual dismiss (failed)
-- [x] Max 2 cards visible + scroll เมื่อมีมากกว่า 2
-- [x] Error summary groupby type (ไม่แสดง individual row errors)
-- [x] **Tabs** (Overview / Data Status / History)
-  - Overview: Sales Summary, Leads & Telesales, Products & Targets, Upload Activity
-  - Data Status: table 8 แถว (rows, details, date range, last updated, status icon)
-  - History: table 10 rows/page + **pagination** (first/prev/pages/next/last, ellipsis)
-- [x] **Skeleton loading** ทั้ง 3 tabs (แสดงตอน initial load)
-- [x] **Refresh button**: ใช้ `isValidating` แทน `isLoading` → spinner หมุน + disabled ระหว่าง fetch
-- [x] TabsList: ไม่มี badge ตัวเลข (ลบออกตาม UX)
-
-#### Auth Schema (DB พร้อม — Next.js ยังไม่ implement)
-- [x] `user_profiles`, `invite_codes`, `audit_logs` tables
-- [x] `upload_batches.uploaded_by` — FK → auth.users (null จนกว่าจะ implement Auth)
-- [x] `getSessionUserId()` — stub คืน null
-- [x] `writeAuditLog()` — skip ถ้า userId null
+- [x] `GET /api/upload/history` / `status`
+- [x] All API routes: service_role key + cache:'no-store'
+- [x] Storage Encryption: AES-256-GCM (`src/lib/utils/crypto.ts`) ก่อน upload ทุกครั้ง
+- [x] Random token ในชื่อไฟล์: `{timestamp}_{6-char-token}_{type}.csv`
+- [x] `format_and_mask_mobile()`: 0899999999 → 08999xxxxx (DB trigger)
+- [x] `format_and_mask_cust_name()`: วัชรพล เจริญสุข → วัชxxxx เจxxxxx (DB trigger)
+- [x] Branding อัปเดต: Unilever Project · ไอคอน U · ตัด Settings ออก
+- [x] ลบ Mock data ทั้งหมด (src/lib/mock ลบแล้ว · API routes ต่อ DB จริง)
 
 ---
 
-### ยังไม่ได้ทำ ❌
+### Roadmap (แผนต่อไป)
 
-#### Phase ถัดไป: Auth Implementation
-> DB schema พร้อมแล้ว — ต้องทำฝั่ง Next.js
+#### Phase 1 — ทดสอบ Upload ข้อมูลจริง 🔄 (ทำอยู่)
+- [ ] อัปโหลด leads ข้อมูลจริง → ตรวจ row_count / error_count
+- [ ] ตรวจว่า mobile ถูก mask: 08999xxxxx ✓
+- [ ] ตรวจว่า cust_name ถูก mask: วัชxxxx เจxxxxx ✓
+- [ ] อัปโหลด online_sales + offline_sales → ตรวจ Dashboard แสดงผลถูกต้อง
+- [ ] อัปโหลด telesales → ตรวจ Sankey funnel + call status
+- [ ] ทดสอบ Upsert ซ้ำ (อัปโหลดไฟล์เดิม 2 ครั้ง) → ไม่มี error
+- [ ] ตรวจ Storage ว่าไฟล์ถูก Encrypt (เปิดตรงๆ อ่านไม่ออก)
 
-- [ ] หน้า `/register` — กรอก email + invite code → validate → ส่ง magic link
-- [ ] หน้า `/login` — กรอก email → `supabase.auth.signInWithOtp()`
-- [ ] `/auth/callback` — exchange code → session → insert `user_profiles`
-- [ ] `middleware.ts` — check session, redirect `/login` ถ้าไม่มี session
-- [ ] `getSessionUserId()` — เปลี่ยนจาก stub → ดึง JWT จาก request จริง
-- [ ] Settings: สร้าง / revoke invite code, รายชื่อ user
-
-#### Phase: Connect Real Data
-- [ ] ลบ `USE_MOCK_DATA=true` → ต่อ KPI routes กับ Silver tables จริง
-- [ ] ออกแบบ Gold Views (vw_daily_sales, vw_agent_performance ฯลฯ)
+#### Phase 2 — Auth Implementation ❌
+- [ ] `/register` — email + invite code → magic link
+- [ ] `/login` — `supabase.auth.signInWithOtp()`
+- [ ] `/auth/callback` — exchange code → session → insert user_profiles
+- [ ] `middleware.ts` — check session · redirect `/login` · block admin paths for viewer
+- [ ] Settings page — create/revoke invite codes · user list
+- [ ] `/api/dev/reset` จะถูกล็อกโดย Auth middleware โดยอัตโนมัติหลัง Phase นี้
+- [ ] เพิ่ม Auth check ใน Upload API (`getSessionUserId()` → real user id)
 - [ ] RLS Policies (viewer เห็นเฉพาะ company ตัวเอง)
 
-#### Phase: Deploy
+#### Phase 3 — Dashboard Real Data ❌
+- [ ] Overview, Sales, Telesales, Products, Incentives pages → ต่อ Silver/Gold tables จริง
+- [ ] Month/Week/Day (Custom) filter → เปลี่ยน x-axis aggregation ตาม mode
+
+#### Phase 4 — Deploy ❌
 - [ ] Push to GitHub → connect Vercel
-- [ ] Add env vars ใน Vercel dashboard
+- [ ] Add env vars ใน Vercel (รวม STORAGE_ENCRYPTION_KEY)
+- [ ] ตรวจสอบ `NODE_ENV=production` → `/api/dev/reset` ถูกบล็อก
 - [ ] Test magic link ด้วย production URL
 
 ---
 
-## 11. Gold Views (ออกแบบทีหลัง)
-
-- `order_sales` VIEW สร้างแล้ว (UNION ALL online + offline)
-- Future views: `vw_daily_sales`, `vw_agent_performance`, `vw_lead_funnel`, `vw_product_ranking`
-- KPI routes จะ query Gold views แทน Silver tables โดยตรง
-
----
-
-## 12. Auth & Roles
-
-### DB Schema (apply แล้ว — migration: `20260510120000_auth_schema.sql`)
-
-```sql
-user_profiles: user_id (PK→auth.users), email, full_name, role, company, invited_by, last_seen
-invite_codes:  code (UNIQUE), role, company, max_uses, use_count, expires_at, is_active, created_by
-audit_logs:    user_id, action, entity_type, entity_id, metadata (jsonb)
-```
-
-**Roles:** `admin` (upload + manage) / `viewer` (read only, filtered by company)
-
-### Flow (Next.js ยังไม่ implement)
-
-```
-Admin สร้าง invite code (role=viewer, company="Telesales A", max_uses=1)
-  ↓
-ผู้ใช้เปิด /register → กรอก email + code → magic link
-  ↓
-/auth/callback → session → insert user_profiles → redirect /overview
-  ↓
-middleware.ts ตรวจ session ทุก request (TODO)
-```
-
----
-
-## 13. Known Issues & Notes
+## 12. Known Issues & Notes
 
 | เรื่อง | รายละเอียด |
 |---|---|
-| PostgREST 1000-row cap | ใช้ `{ count: 'exact' }` + `.count` field, ไม่ใช่ `data.length` |
-| Sales aggregate | ใช้ RPC `get_sales_totals()` — ต้องสร้างใน Supabase SQL Editor |
-| Composite conflict key | online/offline sales ต้องใช้ `(order_number, prod_num)` — migration 20260510180000 |
-| Next.js fetch cache | ทุก API route ต้องมี `export const dynamic = 'force-dynamic'` + Supabase client ต้องมี `cache: 'no-store'` |
-| isValidating vs isLoading | SWR: ใช้ `isValidating` สำหรับ loading indicator ระหว่าง refresh |
+| PostgREST 1000-row cap | ใช้ `{ count: 'exact' }` + `.count` หรือ RPC สำหรับ aggregate |
+| Supabase embedded join | ต้องมี FK ระหว่างตาราง ไม่เช่นนั้น ใช้ 2 queries + merge แทน |
+| isValidating vs isLoading | SWR: ใช้ `isValidating` สำหรับ refresh UX |
+| LPAD trigger | mmid/mobile ใน CSV บางไฟล์อาจถูกตัด leading zero → trigger แก้อัตโนมัติ |
+| order_sales is VIEW | ไม่สามารถสร้าง trigger บน VIEW ได้ — triggers อยู่บน silver tables |
+| Migration squash | ไฟล์เก่า 20260510xxxxxx squash แล้ว · repair ด้วย `supabase migration repair --status reverted` |
+| Auth stub | `getSessionUserId()` คืน null จนกว่าจะ implement Auth |
 
 ---
 
-## 14. Local Dev
+## 13. Local Dev
 
 ```bash
 npm install
 npm run dev        # http://localhost:3000
-```
 
-ตั้งค่า `.env.local` ก่อน (ดู Section 4)
-
-```bash
 # Apply DB migrations
-npx supabase link --project-ref <ref>
-npx supabase db push
+supabase link --project-ref <ref>
+supabase db push
 
 # DEV: reset all data
 curl -X DELETE http://localhost:3000/api/dev/reset
