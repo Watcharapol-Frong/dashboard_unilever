@@ -1,63 +1,96 @@
 'use client'
-import { createContext, useContext, useState, useMemo } from 'react'
-import { startOfMonth, startOfWeek, subWeeks } from 'date-fns'
+import { createContext, useContext, useState, useMemo, useCallback } from 'react'
+import {
+  startOfMonth, endOfMonth,
+  startOfWeek, endOfWeek,
+  subMonths, addMonths,
+  subWeeks, addWeeks,
+  isAfter, isSameMonth, isSameWeek,
+} from 'date-fns'
 import type { DateRange } from '@/types'
 
-export type FilterMode = 'month' | 'week' | 'custom'
+export type PeriodMode = 'month' | 'week'
 
-interface DateRangeContextValue {
+interface PeriodContextValue {
+  mode: PeriodMode
+  setMode: (m: PeriodMode) => void
+  anchor: Date
   range: DateRange
   prevRange: DateRange
-  mode: FilterMode
-  setMode: (mode: FilterMode) => void
-  customRange: DateRange
-  setCustomRange: (r: DateRange) => void
+  navigatePrev: () => void
+  navigateNext: () => void
+  canNavigateNext: boolean
 }
 
-const DEFAULT_CUSTOM_FROM = new Date(2026, 1, 1) // Feb 1, 2026
+// Week = Sun–Sat
+const WEEK_OPTS = { weekStartsOn: 0 } as const
 
-function computeRanges(mode: FilterMode, custom: DateRange): { range: DateRange; prevRange: DateRange } {
-  const now = new Date()
+function computeRanges(mode: PeriodMode, anchor: Date): { range: DateRange; prevRange: DateRange } {
+  const today = new Date()
+
   if (mode === 'month') {
-    const from = startOfMonth(now)
-    const to = now
-    const prevMonthDay = new Date(now.getFullYear(), now.getMonth() - 1, now.getDate())
-    const prevFrom = startOfMonth(prevMonthDay)
-    return { range: { from, to }, prevRange: { from: prevFrom, to: prevMonthDay } }
+    const from    = startOfMonth(anchor)
+    const rawTo   = endOfMonth(anchor)
+    const to      = isAfter(rawTo, today) ? today : rawTo
+
+    const prevAnchor = subMonths(anchor, 1)
+    const prevFrom   = startOfMonth(prevAnchor)
+    const prevRawTo  = endOfMonth(prevAnchor)
+    const prevTo     = isAfter(prevRawTo, today) ? today : prevRawTo
+
+    return { range: { from, to }, prevRange: { from: prevFrom, to: prevTo } }
   }
-  if (mode === 'week') {
-    const from = startOfWeek(now, { weekStartsOn: 1 })
-    const to = now
-    const lastWeekSameDay = subWeeks(now, 1)
-    const prevFrom = startOfWeek(lastWeekSameDay, { weekStartsOn: 1 })
-    return { range: { from, to }, prevRange: { from: prevFrom, to: lastWeekSameDay } }
-  }
-  const duration = custom.to.getTime() - custom.from.getTime()
-  const prevTo = new Date(custom.from.getTime() - 86400000)
-  const prevFrom = new Date(prevTo.getTime() - duration)
-  return { range: custom, prevRange: { from: prevFrom, to: prevTo } }
+
+  // week
+  const from    = startOfWeek(anchor, WEEK_OPTS)
+  const rawTo   = endOfWeek(anchor, WEEK_OPTS)
+  const to      = isAfter(rawTo, today) ? today : rawTo
+
+  const prevAnchor = subWeeks(anchor, 1)
+  const prevFrom   = startOfWeek(prevAnchor, WEEK_OPTS)
+  const prevRawTo  = endOfWeek(prevAnchor, WEEK_OPTS)
+  const prevTo     = isAfter(prevRawTo, today) ? today : prevRawTo
+
+  return { range: { from, to }, prevRange: { from: prevFrom, to: prevTo } }
 }
 
-const DateRangeContext = createContext<DateRangeContextValue | null>(null)
+const PeriodContext = createContext<PeriodContextValue | null>(null)
 
 export function DateRangeProvider({ children }: { children: React.ReactNode }) {
-  const [mode, setMode] = useState<FilterMode>('custom')
-  const [customRange, setCustomRange] = useState<DateRange>({
-    from: DEFAULT_CUSTOM_FROM,
-    to: new Date('2026-04-26'),
-  })
+  const [mode, setModeState] = useState<PeriodMode>('month')
+  const [anchor, setAnchor]  = useState<Date>(new Date())
 
-  const { range, prevRange } = useMemo(() => computeRanges(mode, customRange), [mode, customRange])
+  const { range, prevRange } = useMemo(() => computeRanges(mode, anchor), [mode, anchor])
+
+  const canNavigateNext = useMemo(() => {
+    const today = new Date()
+    if (mode === 'month') return !isSameMonth(anchor, today) && !isAfter(anchor, today)
+    return !isSameWeek(anchor, today, WEEK_OPTS)
+  }, [mode, anchor])
+
+  const navigatePrev = useCallback(() => {
+    setAnchor(a => mode === 'month' ? subMonths(a, 1) : subWeeks(a, 1))
+  }, [mode])
+
+  const navigateNext = useCallback(() => {
+    if (!canNavigateNext) return
+    setAnchor(a => mode === 'month' ? addMonths(a, 1) : addWeeks(a, 1))
+  }, [mode, canNavigateNext])
+
+  const setMode = useCallback((m: PeriodMode) => {
+    setModeState(m)
+    setAnchor(new Date())
+  }, [])
 
   return (
-    <DateRangeContext.Provider value={{ range, prevRange, mode, setMode, customRange, setCustomRange }}>
+    <PeriodContext.Provider value={{ mode, setMode, anchor, range, prevRange, navigatePrev, navigateNext, canNavigateNext }}>
       {children}
-    </DateRangeContext.Provider>
+    </PeriodContext.Provider>
   )
 }
 
 export function useDateRange() {
-  const ctx = useContext(DateRangeContext)
+  const ctx = useContext(PeriodContext)
   if (!ctx) throw new Error('useDateRange must be used within DateRangeProvider')
   return ctx
 }
