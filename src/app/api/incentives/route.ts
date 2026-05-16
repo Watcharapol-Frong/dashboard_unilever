@@ -1,9 +1,11 @@
-import { createServiceClient } from "@/lib/supabase/server"
 import { NextResponse } from 'next/server'
+import { query } from '@/lib/db'
 
 export async function GET() {
-  const supabase = createServiceClient()
-  const { data, error } = await supabase.from('incentives').select('*').order('period_start', { ascending: false })
-  if (error) return NextResponse.json({ error: error.message }, { status: 500 })
-  return NextResponse.json(data ?? [])
+  try {
+    const rows = await query(`SELECT * FROM incentives ORDER BY tier ASC`)
+    return NextResponse.json(rows)
+  } catch (err) {
+    return NextResponse.json({ error: (err as Error).message }, { status: 500 })
+  }
 }

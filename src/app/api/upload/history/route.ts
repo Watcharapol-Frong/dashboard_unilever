@@ -1,30 +1,23 @@
-import { createServiceClient } from '@/lib/supabase/server'
 import { NextResponse } from 'next/server'
+import { query } from '@/lib/db'
 
 export const dynamic = 'force-dynamic'
 
 export async function GET() {
-  const supabase = createServiceClient()
-
-  // Fetch upload batches without the user_profiles join
-  // (no direct FK between upload_batches.uploaded_by → user_profiles.user_id)
-  const { data, error } = await supabase
-    .from('upload_batches')
-    .select('id, table_name, filename, storage_path, row_count, error_count, status, uploaded_at, uploaded_by')
-    .order('uploaded_at', { ascending: false })
-    .limit(50)
-
-  if (error) {
-    console.error('[history] Supabase error:', error)
+  try {
+    const rows = await query<{
+      id: string; table_name: string; filename: string | null
+      storage_path: string | null; row_count: number | null
+      error_count: number; status: string; uploaded_at: string; uploaded_by: string | null
+    }>(
+      `SELECT id, table_name, filename, storage_path, row_count, error_count, status, uploaded_at, uploaded_by
+       FROM upload_batches
+       ORDER BY uploaded_at DESC
+       LIMIT 50`
+    )
+    return NextResponse.json(rows.map(b => ({ ...b, user_profiles: null })))
+  } catch (err) {
+    console.error('[history] DB error:', err)
     return NextResponse.json([])
   }
-
-  // TODO [AUTH]: once Auth is implemented, fetch user_profiles by uploaded_by uuid
-  // and attach { email, full_name } to each row
-  const rows = (data ?? []).map(b => ({
-    ...b,
-    user_profiles: null,
-  }))
-
-  return NextResponse.json(rows)
 }

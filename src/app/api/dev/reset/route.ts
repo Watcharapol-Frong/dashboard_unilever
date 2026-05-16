@@ -1,20 +1,6 @@
-/**
- * DEV ONLY — Wipe all Silver tables + Storage bucket
- * DELETE /api/dev/reset
- *
- * Requires this function in Supabase SQL Editor (run once):
- *
- * CREATE OR REPLACE FUNCTION reset_all_data()
- * RETURNS void LANGUAGE plpgsql SECURITY DEFINER AS $$
- * BEGIN
- *   TRUNCATE online_sales, offline_sales, leads, products,
- *            telesales_calls, targets, costs, incentives,
- *            upload_batches CASCADE;
- * END;
- * $$;
- */
 import { NextResponse } from 'next/server'
-import { createServiceClient } from '@/lib/supabase/server'
+import { query } from '@/lib/db'
+import { listR2Folder, deleteFromR2 } from '@/lib/storage/r2'
 
 export const dynamic = 'force-dynamic'
 
@@ -23,38 +9,34 @@ export async function DELETE() {
     return NextResponse.json({ error: 'Not allowed in production' }, { status: 403 })
   }
 
-  const supabase = createServiceClient()
   const errors: string[] = []
 
-  // ── 1. Truncate all Silver tables via DB function ─────────────────────────
-  const { error: truncateError } = await supabase.rpc('reset_all_data')
-  if (truncateError) {
-    errors.push(`DB truncate: ${truncateError.message}`)
-    console.error('[reset] truncate error:', truncateError)
-  } else {
-    console.log('[reset] all Silver tables truncated')
+  // ── 1. Delete all rows (CockroachDB doesn't support TRUNCATE CASCADE across tables) ──
+  const tables = ['online_sales','offline_sales','leads','products','telesales_calls','targets','costs','incentives','upload_batches']
+  try {
+    for (const t of tables) await query(`DELETE FROM ${t}`)
+    console.log('[reset] all tables cleared')
+  } catch (err) {
+    errors.push(`DB clear: ${(err as Error).message}`)
+    console.error('[reset] clear error:', err)
   }
 
-  // ── 2. Clear Storage bucket ───────────────────────────────────────────────
-  const BUCKET = 'csv-uploads'
+  // ── 2. Clear R2 storage ───────────────────────────────────
   const folders = [
-    'order_sales/online',
-    'order_sales/offline',
-    'leads',
-    'products',
-    'telesales',
-    'targets',
-    'costs',
-    'incentives',
+    'order_sales/online', 'order_sales/offline',
+    'leads', 'leads-activity', 'products',
+    'telesales', 'targets', 'costs', 'incentives',
   ]
 
   for (const folder of folders) {
-    const { data: files } = await supabase.storage.from(BUCKET).list(folder, { limit: 1000 })
-    if (files && files.length > 0) {
-      const paths = files.map(f => `${folder}/${f.name}`)
-      const { error } = await supabase.storage.from(BUCKET).remove(paths)
-      if (error) errors.push(`Storage ${folder}: ${error.message}`)
-      else console.log(`[reset] cleared storage: ${folder} (${files.length} files)`)
+    try {
+      const keys = await listR2Folder(folder + '/')
+      for (const key of keys) {
+        await deleteFromR2(key)
+      }
+      if (keys.length > 0) console.log(`[reset] cleared R2: ${folder} (${keys.length} files)`)
+    } catch (err) {
+      errors.push(`R2 ${folder}: ${(err as Error).message}`)
     }
   }
 

@@ -14,7 +14,7 @@ import {
 import { SidebarTrigger } from '@/components/ui/sidebar'
 import { useDateRange, type FilterMode } from '@/context/DateRangeContext'
 
-const HIDE_CONTROLS_PATHS = ['/upload', '/settings', '/leads']
+const HIDE_CONTROLS_PATHS = ['/upload', '/leads']
 
 const TABS: { mode: FilterMode; label: string }[] = [
   { mode: 'month', label: 'Month' },
@@ -30,7 +30,6 @@ const PAGE_LABELS: Record<string, string> = {
   '/leads': 'Leads',
   '/incentives': 'Incentives',
   '/upload': 'Upload Data',
-  '/settings': 'Settings',
 }
 
 function getPageLabel(pathname: string): string {

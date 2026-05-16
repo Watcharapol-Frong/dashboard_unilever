@@ -76,6 +76,13 @@ function StatusCard({ title, badge, lastUploaded, empty, children }: {
 
 type Step = 'select' | 'validate' | 'preview'
 
+interface PendingFile {
+  id: string
+  file: File
+  valid: boolean
+  error?: string
+}
+
 const MAX_FILE_MB   = 50
 const MAX_CONCURRENT = 3
 
@@ -113,6 +120,7 @@ export default function UploadPage() {
   const [preview, setPreview]           = useState<Record<string, string>[]>([])
   const [validError, setValidError]     = useState<string | null>(null)
   const [dragOver, setDragOver]         = useState(false)
+  const [pendingFiles, setPendingFiles] = useState<PendingFile[]>([])
 
   // ── Upload job queue ───────────────────────────────────────
   const [jobs, setJobs] = useState<UploadJob[]>([])
@@ -158,13 +166,12 @@ export default function UploadPage() {
 
   // ── Add job to queue, auto-start if slot available ─────────
   const enqueueJob = useCallback((job: UploadJob) => {
-    setJobs(prev => {
-      const active = prev.filter(j => j.status === 'uploading').length
-      const status = active < MAX_CONCURRENT ? 'uploading' : 'queued'
-      const next = { ...job, status } as UploadJob
-      if (status === 'uploading') setTimeout(() => startJob(next), 0)
-      return [next, ...prev]
-    })
+    // Read current count OUTSIDE the setter to avoid React Strict Mode double-invoking the updater
+    const active = jobsRef.current.filter(j => j.status === 'uploading').length
+    const status = active < MAX_CONCURRENT ? 'uploading' : ('queued' as const)
+    const next = { ...job, status } as UploadJob
+    setJobs(prev => [next, ...prev])
+    if (status === 'uploading') setTimeout(() => startJob(next), 0)
   }, [startJob])
 
   // ── When a job finishes, start next queued ─────────────────
@@ -224,24 +231,80 @@ export default function UploadPage() {
     })
   }, [fileType])
 
-  const onDrop = useCallback((e: React.DragEvent) => {
-    e.preventDefault(); setDragOver(false)
-    const f = e.dataTransfer.files[0]
-    if (f?.name.endsWith('.csv')) processFile(f)
-  }, [processFile])
-
-  const onFileInput = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
-    const f = e.target.files?.[0]
-    if (f) processFile(f)
-    e.target.value = ''
-  }, [processFile])
-
   const reset = () => {
     setStep('select'); setFile(null); setHeaders([])
     setExtraColumns([]); setPreview([]); setValidError(null)
+    setPendingFiles([])
   }
 
   const onTypeChange = (t: UploadFileType) => { setFileType(t); reset() }
+
+  // ── Validate a batch of files (headers only) ───────────────
+  const validateFiles = useCallback((files: File[]) => {
+    setPendingFiles([])
+    let resolved = 0
+    const results: PendingFile[] = files.map(f => ({
+      id: crypto.randomUUID(), file: f, valid: false,
+    }))
+
+    files.forEach((f, idx) => {
+      if (f.size > MAX_FILE_MB * 1024 * 1024) {
+        results[idx] = { ...results[idx], valid: false, error: `Exceeds ${MAX_FILE_MB} MB limit` }
+        if (++resolved === files.length) setPendingFiles([...results])
+        return
+      }
+      Papa.parse<Record<string, string>>(f, {
+        header: true, skipEmptyLines: true, preview: 1,
+        transformHeader: (h) => h.trim(),
+        complete: ({ data }) => {
+          if (!data.length) {
+            results[idx] = { ...results[idx], valid: false, error: 'Empty file' }
+          } else {
+            const hdrs = Object.keys(data[0])
+            const { ok, error } = validateHeaders(hdrs, fileType)
+            results[idx] = { ...results[idx], valid: ok, error: ok ? undefined : (error ?? 'Invalid headers') }
+          }
+          if (++resolved === files.length) setPendingFiles([...results])
+        },
+        error: () => {
+          results[idx] = { ...results[idx], valid: false, error: 'Unable to read file' }
+          if (++resolved === files.length) setPendingFiles([...results])
+        },
+      })
+    })
+  }, [fileType])
+
+  // ── Enqueue all valid pending files ───────────────────────
+  const confirmPendingUpload = useCallback(() => {
+    pendingFiles.filter(p => p.valid).forEach(p => {
+      enqueueJob({
+        id:       p.id,
+        fileType, file: p.file,
+        label:    FILE_TYPE_CONFIGS[fileType].label,
+        status:   'uploading',
+        progress: 0,
+      })
+    })
+    setPendingFiles([])
+  }, [pendingFiles, fileType, enqueueJob])
+
+  const onDrop = useCallback((e: React.DragEvent) => {
+    e.preventDefault(); setDragOver(false)
+    const files = Array.from(e.dataTransfer.files).filter(f => f.name.endsWith('.csv'))
+    if (files.length === 0) return
+    if (files.length === 1) { processFile(files[0]) }
+    else { reset(); validateFiles(files) }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [processFile, validateFiles])
+
+  const onFileInput = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = Array.from(e.target.files ?? [])
+    e.target.value = ''
+    if (files.length === 0) return
+    if (files.length === 1) { processFile(files[0]) }
+    else { reset(); validateFiles(files) }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [processFile, validateFiles])
 
   // ── Confirm upload → enqueue + reset form ──────────────────
   const doUpload = () => {
@@ -295,7 +358,7 @@ export default function UploadPage() {
           <div className="space-y-2">
             <label className="text-sm font-medium">File Type</label>
             <div className="flex flex-wrap gap-2">
-              {(['online_sales', 'offline_sales', 'telesales'] as UploadFileType[]).map(type => {
+              {(['online_sales', 'offline_sales'] as UploadFileType[]).map(type => {
                 const c = FILE_TYPE_CONFIGS[type]
                 const isActive = fileType === type
                 return (
@@ -304,8 +367,8 @@ export default function UploadPage() {
                     onClick={() => onTypeChange(type)}
                     className={cn(
                       "px-4 py-2 text-sm font-medium rounded-lg border transition-all",
-                      isActive 
-                        ? "bg-[#003DA6] text-white border-[#003DA6] shadow-sm" 
+                      isActive
+                        ? "bg-[#003DA6] text-white border-[#003DA6] shadow-sm"
                         : "bg-background text-muted-foreground border-gray-200 hover:border-[#003DA6] hover:text-foreground"
                     )}
                   >
@@ -315,18 +378,20 @@ export default function UploadPage() {
               })}
 
               <select
-                value={['online_sales', 'offline_sales', 'telesales'].includes(fileType) ? "" : fileType}
+                value={['online_sales', 'offline_sales'].includes(fileType) ? "" : fileType}
                 onChange={e => {
                   if (e.target.value) onTypeChange(e.target.value as UploadFileType)
                 }}
                 className={cn(
                   "border rounded-lg px-3 py-2 text-sm font-medium focus:outline-none transition-all cursor-pointer",
-                  !['online_sales', 'offline_sales', 'telesales'].includes(fileType)
+                  !['online_sales', 'offline_sales'].includes(fileType)
                     ? "bg-[#003DA6] text-white border-[#003DA6] shadow-sm ring-2 ring-[#003DA6] ring-offset-1"
                     : "bg-background text-muted-foreground border-gray-200 hover:border-[#003DA6] hover:text-foreground"
                 )}
               >
                 <option value="" disabled className="text-muted-foreground bg-background">Other Types...</option>
+                {/* telesales first, then the rest */}
+                <option value="telesales" className="text-foreground bg-background">{FILE_TYPE_CONFIGS['telesales'].label}</option>
                 {FILE_TYPES.filter(([type]) => !['online_sales', 'offline_sales', 'telesales'].includes(type as string)).map(([type, c]) => (
                   <option key={type} value={type} className="text-foreground bg-background">{c.label}</option>
                 ))}
@@ -346,12 +411,12 @@ export default function UploadPage() {
               step !== 'select' && 'border-solid border-gray-200',
             )}
           >
-            <input ref={inputRef} type="file" accept=".csv" className="hidden" onChange={onFileInput} />
+            <input ref={inputRef} type="file" accept=".csv" multiple className="hidden" onChange={onFileInput} />
             {!file ? (
               <>
                 <Upload className="h-10 w-10 mx-auto text-gray-400 mb-3" />
-                <p className="text-sm font-medium">Drag and drop file here, or click to select</p>
-                <p className="text-xs text-muted-foreground mt-1">CSV only · Max {MAX_FILE_MB} MB · Up to {MAX_CONCURRENT} uploads at once</p>
+                <p className="text-sm font-medium">Drag and drop files here, or click to select</p>
+                <p className="text-xs text-muted-foreground mt-1">CSV only · Max {MAX_FILE_MB} MB per file · Multiple files supported · Up to {MAX_CONCURRENT} concurrent uploads</p>
               </>
             ) : (
               <div className="flex items-center justify-center gap-3">
@@ -388,8 +453,8 @@ export default function UploadPage() {
                   </span>
                 )}
               </div>
-              <div className="rounded-lg border overflow-auto max-h-52">
-                <table className="text-xs w-full">
+              <div className="rounded-lg border overflow-x-auto overflow-y-auto max-h-52 max-w-full">
+                <table className="text-xs min-w-max">
                   <thead className="bg-muted/60 sticky top-0">
                     <tr>
                       {headers.map(h => {
@@ -413,7 +478,7 @@ export default function UploadPage() {
                           const isExtra = extraColumns.includes(h)
                           return (
                             <td key={h} className={cn(
-                              'px-3 py-1.5 whitespace-nowrap max-w-[200px] truncate',
+                              'px-3 py-1.5 whitespace-nowrap max-w-[180px] truncate',
                               isExtra ? 'text-gray-400 bg-gray-50/50' : '',
                             )}>
                               {row[h] ?? ''}
@@ -432,7 +497,7 @@ export default function UploadPage() {
             </div>
           )}
 
-          {/* Action buttons */}
+          {/* Action buttons — single file */}
           {step === 'preview' && (
             <div className="flex gap-3">
               <button
@@ -444,6 +509,44 @@ export default function UploadPage() {
               <button onClick={reset} className="px-4 py-2 rounded-lg border text-sm hover:bg-muted transition-colors">
                 Cancel
               </button>
+            </div>
+          )}
+
+          {/* Multi-file batch validation list */}
+          {pendingFiles.length > 0 && (
+            <div className="space-y-2">
+              <div className="flex items-center justify-between">
+                <p className="text-sm font-medium">{pendingFiles.length} files selected</p>
+                <div className="flex gap-2">
+                  {pendingFiles.some(p => p.valid) && (
+                    <button
+                      onClick={confirmPendingUpload}
+                      className="px-4 py-1.5 rounded-lg bg-[#003DA6] text-white text-sm font-medium hover:bg-[#002d80] transition-colors"
+                    >
+                      Upload {pendingFiles.filter(p => p.valid).length} Valid File{pendingFiles.filter(p => p.valid).length > 1 ? 's' : ''}
+                    </button>
+                  )}
+                  <button onClick={() => setPendingFiles([])} className="px-3 py-1.5 rounded-lg border text-sm hover:bg-muted transition-colors">
+                    Clear
+                  </button>
+                </div>
+              </div>
+              <div className="rounded-lg border divide-y overflow-hidden">
+                {pendingFiles.map(p => (
+                  <div key={p.id} className="flex items-center gap-3 px-3 py-2.5">
+                    {p.valid
+                      ? <CheckCircle className="h-4 w-4 text-green-500 shrink-0" />
+                      : <XCircle className="h-4 w-4 text-red-400 shrink-0" />}
+                    <div className="min-w-0 flex-1">
+                      <p className="text-sm truncate">{p.file.name}</p>
+                      {p.error && <p className="text-xs text-red-500 mt-0.5">{p.error}</p>}
+                    </div>
+                    <span className="text-xs text-muted-foreground shrink-0">
+                      {(p.file.size / 1024).toFixed(0)} KB
+                    </span>
+                  </div>
+                ))}
+              </div>
             </div>
           )}
         </CardContent>
@@ -896,10 +999,18 @@ export default function UploadPage() {
                             {b.error_count > 0 ? <span className="text-amber-500">{b.error_count}</span> : 0}
                           </td>
                           <td className="px-4 py-2.5 text-center">
-                            {b.status === 'success' ? <CheckCircle className="h-4 w-4 text-green-500 mx-auto" />
-                              : b.status === 'partial' ? <AlertCircle className="h-4 w-4 text-amber-500 mx-auto" />
-                              : b.status === 'failed'  ? <XCircle className="h-4 w-4 text-red-500 mx-auto" />
-                              : <Clock className="h-4 w-4 text-gray-400 mx-auto" />}
+                            <span className={cn(
+                              'text-xs font-semibold',
+                              b.status === 'success' ? 'text-green-600'
+                              : b.status === 'partial' ? 'text-amber-500'
+                              : b.status === 'failed'  ? 'text-red-500'
+                              : 'text-gray-400',
+                            )}>
+                              {b.status === 'success' ? 'Success'
+                               : b.status === 'partial' ? 'Partial'
+                               : b.status === 'failed'  ? 'Failed'
+                               : 'Processing'}
+                            </span>
                           </td>
                         </tr>
                       ))}

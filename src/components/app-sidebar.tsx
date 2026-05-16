@@ -4,7 +4,7 @@ import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import {
   LayoutDashboard, Phone, ShoppingCart, Package,
-  Gift, Upload, Users, Settings,
+  Gift, Upload, Users,
 } from 'lucide-react'
 
 import {
@@ -40,7 +40,6 @@ const NAV_ITEMS = [
 const ADMIN_ITEMS = [
   { href: '/leads',      label: 'Leads',       icon: Users },
   { href: '/upload',     label: 'Upload Data', icon: Upload },
-  { href: '/settings',   label: 'Settings',    icon: Settings },
 ]
 
 export function AppSidebar() {
