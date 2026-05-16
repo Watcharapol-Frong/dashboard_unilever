@@ -253,11 +253,12 @@ dashboard-unilever/
 - [ ] อัปโหลด telesales → Sankey funnel + call status
 - [ ] ทดสอบ Upsert ซ้ำ (อัปโหลดไฟล์เดิม 2 ครั้ง) → ไม่มี error
 
-#### Phase 2 — Auth Implementation ❌
-- [ ] เลือก Auth provider ที่เข้ากับ CockroachDB (เช่น Clerk, NextAuth, หรือ custom JWT)
-- [ ] `/login` → magic link หรือ email/password
-- [ ] `middleware.ts` → session check + redirect
-- [ ] Role-based access: admin vs viewer
+#### Phase 2 — Auth Implementation ❌ (เลือก Clerk)
+- [ ] สร้าง Clerk application + เพิ่ม env vars (`NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY`, `CLERK_SECRET_KEY`)
+- [ ] ติดตั้ง `@clerk/nextjs` + wrap `ClerkProvider` ใน root layout
+- [ ] `middleware.ts` → `clerkMiddleware()` + protect ADMIN_PATHS
+- [ ] `/login` → `<SignIn />` component (magic link built-in)
+- [ ] Role-based access: ใช้ Clerk `publicMetadata.role` → admin vs viewer
 
 #### Phase 3 — Deploy ❌
 - [ ] Push to GitHub → connect Vercel
