@@ -92,18 +92,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'Storage backup failed' }, { status: 500 })
   }
 
-  // ── 3. Create upload_batch record ─────────────────────────
-  const batch = await queryOne<{ id: string }>(
-    `INSERT INTO upload_batches (table_name, filename, storage_path, status)
-     VALUES ('telesales_calls', $1, $2, 'processing')
-     RETURNING id`,
-    [`gas_${datePart}_${token}.json`, r2Key],
-  )
-  if (!batch) {
-    return NextResponse.json({ error: 'Failed to create batch record' }, { status: 500 })
-  }
-
-  // ── 4. Chunked upsert → telesales_calls ──────────────────
+  // ── 3. Chunked upsert → telesales_calls ──────────────────
   const CHUNK = 500
   let dbError: string | null = null
 
@@ -141,16 +130,17 @@ export async function POST(request: NextRequest) {
     }
   }
 
-  // ── 5. Update batch status ────────────────────────────────
-  await query(
-    `UPDATE upload_batches SET row_count = $1, status = $2 WHERE id = $3`,
-    [rows.length, dbError ? 'failed' : 'success', batch.id],
-  )
-
   if (dbError) {
     console.error('[ingest/telesales-activity] DB upsert failed:', dbError)
     return NextResponse.json({ error: 'DB upsert failed', detail: dbError }, { status: 500 })
   }
+
+  // ── 4. Record batch (after upsert succeeds) ───────────────
+  await query(
+    `INSERT INTO upload_batches (table_name, filename, storage_path, row_count, status)
+     VALUES ('telesales_calls', $1, $2, $3, 'success')`,
+    [`gas_${datePart}_${token}.json`, r2Key, rows.length],
+  )
 
   return NextResponse.json({ ok: true, inserted: rows.length, skipped, storage_path: r2Key })
 }
