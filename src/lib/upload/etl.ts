@@ -13,6 +13,27 @@ function parseMonth(raw: string | undefined): string | null {
   return `${m[2]}-${month}-01`
 }
 
+// PDPA helpers — enforced here since CockroachDB Serverless has no trigger support
+function padMmid(raw: string | undefined): string | null {
+  const v = String(raw ?? '').trim()
+  return v === '' ? null : v.padStart(14, '0')
+}
+
+function maskMobile(raw: string | undefined): string | null {
+  const digits = String(raw ?? '').replace(/\D/g, '')
+  if (!digits) return null
+  const padded = digits.padStart(10, '0')
+  return padded.slice(0, 5) + 'xxxxx'
+}
+
+function maskCustName(raw: string | undefined): string | null {
+  const v = String(raw ?? '').trim()
+  if (!v) return null
+  const parts = v.split(/\s+/)
+  if (parts.length === 1) return parts[0].slice(0, 3) + 'xxxx'
+  return parts[0].slice(0, 3) + 'xxxx ' + parts[1].slice(0, 3) + 'xxxx'
+}
+
 // All helpers accept string | undefined — extra CSV columns return undefined at runtime
 function toDate(raw: string | undefined): string | null {
   if (!raw?.trim()) return null
@@ -45,8 +66,8 @@ const ETL_TRANSFORMS: Record<UploadFileType, (row: Row, batchId: string) => Silv
   online_sales: (row, batchId) => ({
     order_number:      str(row['order_number']),
     order_date:        toDate(row['order_date']),
-    mmid:              str(row['mmid']),
-    mobile:            str(row['mobile']),
+    mmid:              padMmid(row['mmid']),
+    mobile:            maskMobile(row['mobile']),
     dynamic_cmg:       str(row['dynamic_cmg']),
     prod_num:          str(row['ITEM_ID']),
     sales_qty:         toNum(row['Qty Sold (Online)']),
@@ -59,8 +80,8 @@ const ETL_TRANSFORMS: Record<UploadFileType, (row: Row, batchId: string) => Silv
   offline_sales: (row, batchId) => ({
     order_number:      str(row['sls_trx_id']),
     order_date:        toDate(row['TRANSACTION_DATE']),
-    mmid:              str(row['mmid']),
-    mobile:            str(row['mobile']),
+    mmid:              padMmid(row['mmid']),
+    mobile:            maskMobile(row['mobile']),
     dynamic_cmg:       str(row['dynamic_cmg']),
     prod_num:          str(row['prod_num']),
     sales_qty:         toNum(row['sales_qty']),
@@ -70,9 +91,9 @@ const ETL_TRANSFORMS: Record<UploadFileType, (row: Row, batchId: string) => Silv
   }),
 
   leads: (row, batchId) => ({
-    mmid:           str(row['mmid']),
-    cust_name:      str(row['cust_name']),
-    mobile:         str(row['mobile']),
+    mmid:           padMmid(row['mmid']),
+    cust_name:      maskCustName(row['cust_name']),
+    mobile:         maskMobile(row['mobile']),
     lead_customers: str(row['lead_customers']),
     batch_id:       batchId,
     updated_at:     new Date().toISOString(),
@@ -94,8 +115,8 @@ const ETL_TRANSFORMS: Record<UploadFileType, (row: Row, batchId: string) => Silv
   }),
 
   telesales: (row, batchId) => ({
-    mmid:                 str(row['mmid']),
-    mobile:               str(row['mobile']),
+    mmid:                 padMmid(row['mmid']),
+    mobile:               maskMobile(row['mobile']),
     first_connected_date: toDate(row['first_conected_date']),  // typo in source
     call_status:          str(row['call_status']),
     reason_group:         str(row['reason_group']),
