@@ -1,5 +1,5 @@
 'use client'
-import { useState, useRef, useCallback, useEffect } from 'react'
+import { useState, useRef, useCallback } from 'react'
 import Papa from 'papaparse'
 import useSWR from 'swr'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
@@ -10,8 +10,11 @@ import { Skeleton } from '@/components/ui/skeleton'
 import { FILE_TYPE_CONFIGS, validateHeaders } from '@/lib/upload/config'
 import type { UploadFileType } from '@/lib/upload/config'
 import { cn, formatTHB, formatNumber } from '@/lib/utils'
+import { useUploadQueue, MAX_CONCURRENT } from '@/context/UploadQueueContext'
 
 const FILE_TYPES = Object.entries(FILE_TYPE_CONFIGS) as [UploadFileType, typeof FILE_TYPE_CONFIGS[UploadFileType]][]
+
+const MAX_FILE_MB = 50
 
 // ── Data Status types ──────────────────────────────────────
 interface SalesStatus { total_rows: number; total_sales: number; earliest_date: string | null; latest_date: string | null; last_uploaded: string | null }
@@ -83,24 +86,6 @@ interface PendingFile {
   error?: string
 }
 
-const MAX_FILE_MB   = 50
-const MAX_CONCURRENT = 3
-
-interface UploadResult {
-  ok: boolean; row_count?: number; error_count?: number
-  errors?: string[]; error?: string; extra_columns?: string[]
-}
-
-interface UploadJob {
-  id:       string
-  fileType: UploadFileType
-  file:     File
-  label:    string
-  status:   'queued' | 'uploading' | 'done' | 'failed'
-  progress: number
-  result?:  UploadResult
-}
-
 interface UploadBatch {
   id: string; table_name: string; filename: string | null
   row_count: number | null; error_count: number; status: string
@@ -111,6 +96,8 @@ interface UploadBatch {
 const fetcher = (url: string) => fetch(url, { cache: 'no-store' }).then(r => r.json())
 
 export default function UploadPage() {
+  const { jobs, enqueueJob, dismissJob } = useUploadQueue()
+
   // ── Form state (current file being prepared) ───────────────
   const [fileType, setFileType]         = useState<UploadFileType>('online_sales')
   const [step, setStep]                 = useState<Step>('select')
@@ -122,9 +109,6 @@ export default function UploadPage() {
   const [dragOver, setDragOver]         = useState(false)
   const [pendingFiles, setPendingFiles] = useState<PendingFile[]>([])
 
-  // ── Upload job queue ───────────────────────────────────────
-  const [jobs, setJobs] = useState<UploadJob[]>([])
-
   // ── History pagination ─────────────────────────────────────
   const HISTORY_PAGE_SIZE = 10
   const [historyPage, setHistoryPage] = useState(1)
@@ -133,79 +117,6 @@ export default function UploadPage() {
 
   const { data: batches, mutate, isValidating: batchesValidating } = useSWR<UploadBatch[]>('/api/upload/history', fetcher, { revalidateOnFocus: true })
   const { data: status, mutate: mutateStatus, isValidating: statusValidating } = useSWR<DataStatus>('/api/upload/status', fetcher, { revalidateOnFocus: true })
-
-  // ── Start a queued job via XHR ─────────────────────────────
-  const startJob = useCallback((job: UploadJob) => {
-    const form = new FormData()
-    form.append('file', job.file)
-
-    const xhr = new XMLHttpRequest()
-    xhr.upload.onprogress = (e) => {
-      if (!e.lengthComputable) return
-      const pct = Math.round((e.loaded / e.total) * 100)
-      setJobs(prev => prev.map(j => j.id === job.id ? { ...j, progress: pct } : j))
-    }
-    xhr.onload = () => {
-      let result: UploadResult
-      try { result = JSON.parse(xhr.responseText) }
-      catch { result = { ok: false, error: 'Invalid server response' } }
-      setJobs(prev => prev.map(j =>
-        j.id === job.id ? { ...j, status: result.ok ? 'done' : 'failed', progress: 100, result } : j
-      ))
-      mutate()
-      mutateStatus()
-    }
-    xhr.onerror = () => {
-      setJobs(prev => prev.map(j =>
-        j.id === job.id ? { ...j, status: 'failed', result: { ok: false, error: 'Network error' } } : j
-      ))
-    }
-    xhr.open('POST', `/api/upload/${job.fileType}`)
-    xhr.send(form)
-  }, [mutate, mutateStatus])
-
-  // ── Add job to queue, auto-start if slot available ─────────
-  const enqueueJob = useCallback((job: UploadJob) => {
-    // Read current count OUTSIDE the setter to avoid React Strict Mode double-invoking the updater
-    const active = jobsRef.current.filter(j => j.status === 'uploading').length
-    const status = active < MAX_CONCURRENT ? 'uploading' : ('queued' as const)
-    const next = { ...job, status } as UploadJob
-    setJobs(prev => [next, ...prev])
-    if (status === 'uploading') setTimeout(() => startJob(next), 0)
-  }, [startJob])
-
-  // ── When a job finishes, start next queued ─────────────────
-  const prevJobsRef = useRef<UploadJob[]>([])
-  useCallback(() => {
-    const prevActive = prevJobsRef.current.filter(j => j.status === 'uploading').length
-    setJobs(prev => {
-      const active = prev.filter(j => j.status === 'uploading').length
-      if (active < prevActive) {
-        // a job just finished — start next queued
-        const nextQueued = prev.find(j => j.status === 'queued')
-        if (nextQueued && active < MAX_CONCURRENT) {
-          setTimeout(() => startJob(nextQueued), 0)
-          return prev.map(j => j.id === nextQueued.id ? { ...j, status: 'uploading' } : j)
-        }
-      }
-      prevJobsRef.current = prev
-      return prev
-    })
-  }, [startJob])
-
-  // Simpler: watch jobs and start queued when slot opens
-  const jobsRef = useRef(jobs)
-  jobsRef.current = jobs
-  const tryStartQueued = useCallback(() => {
-    setJobs(prev => {
-      const active = prev.filter(j => j.status === 'uploading').length
-      if (active >= MAX_CONCURRENT) return prev
-      const nextQueued = [...prev].reverse().find(j => j.status === 'queued')
-      if (!nextQueued) return prev
-      setTimeout(() => startJob(nextQueued), 0)
-      return prev.map(j => j.id === nextQueued.id ? { ...j, status: 'uploading' as const } : j)
-    })
-  }, [startJob])
 
   // ── File processing ────────────────────────────────────────
   const processFile = useCallback((f: File) => {
@@ -281,8 +192,6 @@ export default function UploadPage() {
         id:       p.id,
         fileType, file: p.file,
         label:    FILE_TYPE_CONFIGS[fileType].label,
-        status:   'uploading',
-        progress: 0,
       })
     })
     setPendingFiles([])
@@ -309,35 +218,13 @@ export default function UploadPage() {
   // ── Confirm upload → enqueue + reset form ──────────────────
   const doUpload = () => {
     if (!file) return
-    const job: UploadJob = {
+    enqueueJob({
       id:       crypto.randomUUID(),
       fileType, file,
       label:    FILE_TYPE_CONFIGS[fileType].label,
-      status:   'uploading',
-      progress: 0,
-    }
-    enqueueJob(job)
+    })
     reset()
   }
-
-  // ── Dismiss finished job ───────────────────────────────────
-  const dismissJob = useCallback((id: string) => {
-    setJobs(prev => {
-      const updated = prev.filter(j => j.id !== id)
-      setTimeout(tryStartQueued, 0)
-      return updated
-    })
-  }, [tryStartQueued])
-
-  // ── Auto-dismiss successful jobs after 3 s ─────────────────
-  useEffect(() => {
-    const successJobs = jobs.filter(j => j.status === 'done')
-    if (successJobs.length === 0) return
-    const timers = successJobs.map(j =>
-      setTimeout(() => dismissJob(j.id), 3000)
-    )
-    return () => timers.forEach(clearTimeout)
-  }, [jobs, dismissJob])
 
   const cfg = FILE_TYPE_CONFIGS[fileType]
 
