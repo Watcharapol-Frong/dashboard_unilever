@@ -1,4 +1,4 @@
-import { S3Client, PutObjectCommand, DeleteObjectCommand, ListObjectsV2Command } from '@aws-sdk/client-s3'
+import { S3Client, PutObjectCommand, DeleteObjectCommand, ListObjectsV2Command, GetObjectCommand } from '@aws-sdk/client-s3'
 
 export const r2 = new S3Client({
   region: 'auto',
@@ -22,6 +22,15 @@ export async function uploadToR2(key: string, body: Buffer | Uint8Array, content
 
 export async function deleteFromR2(key: string) {
   await r2.send(new DeleteObjectCommand({ Bucket: R2_BUCKET, Key: key }))
+}
+
+export async function downloadFromR2(key: string): Promise<Buffer> {
+  const res = await r2.send(new GetObjectCommand({ Bucket: R2_BUCKET, Key: key }))
+  const chunks: Buffer[] = []
+  for await (const chunk of res.Body as AsyncIterable<Uint8Array>) {
+    chunks.push(Buffer.from(chunk))
+  }
+  return Buffer.concat(chunks)
 }
 
 export async function listR2Folder(prefix: string): Promise<string[]> {

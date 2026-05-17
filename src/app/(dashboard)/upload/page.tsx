@@ -93,6 +93,24 @@ interface UploadBatch {
   user_profiles: { email: string; full_name: string | null } | null
 }
 
+interface ReplayResult {
+  ok: boolean
+  replayed_files: number
+  inserted: number
+  errors?: string[]
+}
+
+const REPLAY_TABLES: { value: string; label: string }[] = [
+  { value: 'online_sales',    label: 'Online Sales' },
+  { value: 'offline_sales',   label: 'Offline Sales' },
+  { value: 'leads',           label: 'Lead Customers' },
+  { value: 'products',        label: 'Products' },
+  { value: 'telesales_calls', label: 'Telesales Calls (CSV + Apps Script)' },
+  { value: 'targets',         label: 'Targets' },
+  { value: 'costs',           label: 'Costs' },
+  { value: 'incentives',      label: 'Incentives' },
+]
+
 const fetcher = (url: string) => fetch(url, { cache: 'no-store' }).then(r => r.json())
 
 export default function UploadPage() {
@@ -109,9 +127,36 @@ export default function UploadPage() {
   const [dragOver, setDragOver]         = useState(false)
   const [pendingFiles, setPendingFiles] = useState<PendingFile[]>([])
 
+  // ── Recovery state ─────────────────────────────────────────
+  const [replayTable, setReplayTable]   = useState('telesales_calls')
+  const [replayLoading, setReplayLoading] = useState(false)
+  const [replayResult, setReplayResult] = useState<ReplayResult | null>(null)
+
+  const startReplay = async () => {
+    setReplayLoading(true)
+    setReplayResult(null)
+    try {
+      const res = await fetch('/api/admin/replay', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ table: replayTable }),
+      })
+      const data = await res.json()
+      setReplayResult(data)
+      mutateStatus()
+    } catch {
+      setReplayResult({ ok: false, replayed_files: 0, inserted: 0, errors: ['Network error'] })
+    } finally {
+      setReplayLoading(false)
+    }
+  }
+
   // ── History pagination ─────────────────────────────────────
   const HISTORY_PAGE_SIZE = 10
   const [historyPage, setHistoryPage] = useState(1)
+  const [historySearch, setHistorySearch] = useState('')
+  const [historyTypeFilter, setHistoryTypeFilter] = useState<string>('all')
+  const [historyStatusFilter, setHistoryStatusFilter] = useState<string>('all')
 
   const inputRef = useRef<HTMLInputElement>(null)
 
@@ -542,6 +587,7 @@ export default function UploadPage() {
             <TabsTrigger value="overview">Overview</TabsTrigger>
             <TabsTrigger value="status">Data Status</TabsTrigger>
             <TabsTrigger value="history">History</TabsTrigger>
+            <TabsTrigger value="recovery">Recovery</TabsTrigger>
           </TabsList>
 
           <button
@@ -847,121 +893,267 @@ export default function UploadPage() {
           ) : !batches || batches.length === 0 ? (
             <p className="text-muted-foreground text-sm text-center py-8">No upload history</p>
           ) : (() => {
-            const totalPages = Math.ceil(batches.length / HISTORY_PAGE_SIZE)
-            const pageRows  = batches.slice((historyPage - 1) * HISTORY_PAGE_SIZE, historyPage * HISTORY_PAGE_SIZE)
+            const filteredBatches = batches.filter(b => {
+              const matchesSearch = !historySearch || 
+                (b.filename?.toLowerCase().includes(historySearch.toLowerCase()) || 
+                 b.table_name.toLowerCase().includes(historySearch.toLowerCase()))
+              const matchesType = historyTypeFilter === 'all' || b.table_name === historyTypeFilter
+              const matchesStatus = historyStatusFilter === 'all' || b.status === historyStatusFilter
+              return matchesSearch && matchesType && matchesStatus
+            })
+
+            const totalPages = Math.ceil(filteredBatches.length / HISTORY_PAGE_SIZE)
+            const pageRows  = filteredBatches.slice((historyPage - 1) * HISTORY_PAGE_SIZE, historyPage * HISTORY_PAGE_SIZE)
+
             return (
-              <div className="space-y-3">
-                <div className="rounded-lg border overflow-auto">
-                  <table className="w-full text-sm">
-                    <thead>
-                      <tr className="border-b bg-muted/50">
-                        <th className="px-4 py-3 text-left font-medium text-muted-foreground">Date</th>
-                        <th className="px-4 py-3 text-left font-medium text-muted-foreground">Type</th>
-                        <th className="px-4 py-3 text-left font-medium text-muted-foreground">File</th>
-                        <th className="px-4 py-3 text-left font-medium text-muted-foreground">Uploaded By</th>
-                        <th className="px-4 py-3 text-right font-medium text-muted-foreground">Rows</th>
-                        <th className="px-4 py-3 text-right font-medium text-muted-foreground">Errors</th>
-                        <th className="px-4 py-3 text-center font-medium text-muted-foreground">Status</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {pageRows.map(b => (
-                        <tr key={b.id} className="border-b last:border-0 hover:bg-muted/30">
-                          <td className="px-4 py-2.5 text-xs text-muted-foreground">
-                            {new Date(b.uploaded_at).toLocaleString('en-US', { dateStyle: 'short', timeStyle: 'short' })}
-                          </td>
-                          <td className="px-4 py-2.5">
-                            <Badge variant="secondary">
-                              {FILE_TYPE_CONFIGS[b.table_name as UploadFileType]?.label ?? b.table_name}
-                            </Badge>
-                          </td>
-                          <td className="px-4 py-2.5 text-sm max-w-[200px] truncate">{b.filename ?? '-'}</td>
-                          <td className="px-4 py-2.5 text-xs text-muted-foreground">
-                            {b.user_profiles
-                              ? (b.user_profiles.full_name || b.user_profiles.email)
-                              : <span className="italic">— (ยังไม่มี Auth)</span>}
-                          </td>
-                          <td className="px-4 py-2.5 text-right">{b.row_count ?? 0}</td>
-                          <td className="px-4 py-2.5 text-right">
-                            {b.error_count > 0 ? <span className="text-amber-500">{b.error_count}</span> : 0}
-                          </td>
-                          <td className="px-4 py-2.5 text-center">
-                            <span className={cn(
-                              'text-xs font-semibold',
-                              b.status === 'success' ? 'text-green-600'
-                              : b.status === 'partial' ? 'text-amber-500'
-                              : b.status === 'failed'  ? 'text-red-500'
-                              : 'text-gray-400',
-                            )}>
-                              {b.status === 'success' ? 'Success'
-                               : b.status === 'partial' ? 'Partial'
-                               : b.status === 'failed'  ? 'Failed'
-                               : 'Processing'}
-                            </span>
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-
-                {/* Pagination */}
-                <div className="flex items-center justify-between text-sm">
-                  <p className="text-xs text-muted-foreground">
-                    Showing {(historyPage - 1) * HISTORY_PAGE_SIZE + 1}–{Math.min(historyPage * HISTORY_PAGE_SIZE, batches.length)} of {batches.length}
-                  </p>
-                  <div className="flex items-center gap-1">
-                    <button
-                      onClick={() => setHistoryPage(1)}
-                      disabled={historyPage === 1}
-                      className="px-2 py-1 rounded border text-xs disabled:opacity-40 hover:bg-muted transition-colors"
-                    >«</button>
-                    <button
-                      onClick={() => setHistoryPage(p => Math.max(1, p - 1))}
-                      disabled={historyPage === 1}
-                      className="px-2.5 py-1 rounded border text-xs disabled:opacity-40 hover:bg-muted transition-colors"
-                    >‹</button>
-
-                    {Array.from({ length: totalPages }, (_, i) => i + 1)
-                      .filter(p => p === 1 || p === totalPages || Math.abs(p - historyPage) <= 1)
-                      .reduce<(number | '…')[]>((acc, p, idx, arr) => {
-                        if (idx > 0 && p - (arr[idx - 1] as number) > 1) acc.push('…')
-                        acc.push(p)
-                        return acc
-                      }, [])
-                      .map((p, idx) =>
-                        p === '…' ? (
-                          <span key={`ellipsis-${idx}`} className="px-2 py-1 text-xs text-muted-foreground">…</span>
-                        ) : (
-                          <button
-                            key={p}
-                            onClick={() => setHistoryPage(p as number)}
-                            className={cn(
-                              'px-2.5 py-1 rounded border text-xs transition-colors',
-                              historyPage === p
-                                ? 'bg-[#003DA6] text-white border-[#003DA6]'
-                                : 'hover:bg-muted',
-                            )}
-                          >{p}</button>
-                        )
-                      )}
-
-                    <button
-                      onClick={() => setHistoryPage(p => Math.min(totalPages, p + 1))}
-                      disabled={historyPage === totalPages}
-                      className="px-2.5 py-1 rounded border text-xs disabled:opacity-40 hover:bg-muted transition-colors"
-                    >›</button>
-                    <button
-                      onClick={() => setHistoryPage(totalPages)}
-                      disabled={historyPage === totalPages}
-                      className="px-2 py-1 rounded border text-xs disabled:opacity-40 hover:bg-muted transition-colors"
-                    >»</button>
+              <div className="space-y-4">
+                {/* Filters */}
+                <div className="flex flex-wrap items-center gap-3 bg-muted/30 p-3 rounded-lg border border-dashed">
+                  <div className="flex-1 min-w-[200px]">
+                    <input 
+                      type="text" 
+                      placeholder="Search filename or type..." 
+                      value={historySearch}
+                      onChange={e => { setHistorySearch(e.target.value); setHistoryPage(1) }}
+                      className="w-full text-xs px-3 py-1.5 border rounded-md focus:outline-none focus:ring-1 focus:ring-[#003DA6]"
+                    />
                   </div>
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs text-muted-foreground">Type:</span>
+                    <select 
+                      value={historyTypeFilter}
+                      onChange={e => { setHistoryTypeFilter(e.target.value); setHistoryPage(1) }}
+                      className="text-xs border rounded-md px-2 py-1.5 bg-background focus:outline-none"
+                    >
+                      <option value="all">All Types</option>
+                      {Array.from(new Set(batches.map(b => b.table_name))).map(type => (
+                        <option key={type} value={type}>
+                          {FILE_TYPE_CONFIGS[type as UploadFileType]?.label ?? type}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs text-muted-foreground">Status:</span>
+                    <select 
+                      value={historyStatusFilter}
+                      onChange={e => { setHistoryStatusFilter(e.target.value); setHistoryPage(1) }}
+                      className="text-xs border rounded-md px-2 py-1.5 bg-background focus:outline-none"
+                    >
+                      <option value="all">All Status</option>
+                      <option value="success">Success</option>
+                      <option value="partial">Partial</option>
+                      <option value="failed">Failed</option>
+                    </select>
+                  </div>
+                  {(historySearch || historyTypeFilter !== 'all' || historyStatusFilter !== 'all') && (
+                    <button 
+                      onClick={() => {
+                        setHistorySearch('');
+                        setHistoryTypeFilter('all');
+                        setHistoryStatusFilter('all');
+                        setHistoryPage(1);
+                      }}
+                      className="text-[10px] text-[#003DA6] hover:underline"
+                    >
+                      Reset Filters
+                    </button>
+                  )}
                 </div>
+
+                {filteredBatches.length === 0 ? (
+                  <div className="rounded-lg border border-dashed p-10 text-center">
+                    <p className="text-sm text-muted-foreground">No matches found for your filters</p>
+                  </div>
+                ) : (
+                  <>
+                    <div className="rounded-lg border overflow-auto">
+                      <table className="w-full text-sm">
+                        <thead>
+                          <tr className="border-b bg-muted/50">
+                            <th className="px-4 py-3 text-left font-medium text-muted-foreground">Date</th>
+                            <th className="px-4 py-3 text-left font-medium text-muted-foreground">Type</th>
+                            <th className="px-4 py-3 text-left font-medium text-muted-foreground">File</th>
+                            <th className="px-4 py-3 text-left font-medium text-muted-foreground">Uploaded By</th>
+                            <th className="px-4 py-3 text-right font-medium text-muted-foreground">Rows</th>
+                            <th className="px-4 py-3 text-right font-medium text-muted-foreground">Errors</th>
+                            <th className="px-4 py-3 text-center font-medium text-muted-foreground">Status</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {pageRows.map(b => (
+                            <tr key={b.id} className="border-b last:border-0 hover:bg-muted/30">
+                              <td className="px-4 py-2.5 text-xs text-muted-foreground">
+                                {new Date(b.uploaded_at).toLocaleString('en-US', { dateStyle: 'short', timeStyle: 'short' })}
+                              </td>
+                              <td className="px-4 py-2.5">
+                                <Badge variant="secondary">
+                                  {FILE_TYPE_CONFIGS[b.table_name as UploadFileType]?.label ?? b.table_name}
+                                </Badge>
+                              </td>
+                              <td className="px-4 py-2.5 text-sm max-w-[200px] truncate">{b.filename ?? '-'}</td>
+                              <td className="px-4 py-2.5 text-xs text-muted-foreground">
+                                {b.user_profiles
+                                  ? (b.user_profiles.full_name || b.user_profiles.email)
+                                  : <span className="italic">— (ยังไม่มี Auth)</span>}
+                              </td>
+                              <td className="px-4 py-2.5 text-right">{b.row_count ?? 0}</td>
+                              <td className="px-4 py-2.5 text-right">
+                                {b.error_count > 0 ? <span className="text-amber-500">{b.error_count}</span> : 0}
+                              </td>
+                              <td className="px-4 py-2.5 text-center">
+                                <span className={cn(
+                                  'text-xs font-semibold',
+                                  b.status === 'success' ? 'text-green-600'
+                                  : b.status === 'partial' ? 'text-amber-500'
+                                  : b.status === 'failed'  ? 'text-red-500'
+                                  : 'text-gray-400',
+                                )}>
+                                  {b.status === 'success' ? 'Success'
+                                   : b.status === 'partial' ? 'Partial'
+                                   : b.status === 'failed'  ? 'Failed'
+                                   : 'Processing'}
+                                </span>
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+
+                    {/* Pagination */}
+                    <div className="flex items-center justify-between text-sm">
+                      <p className="text-xs text-muted-foreground">
+                        Showing {(historyPage - 1) * HISTORY_PAGE_SIZE + 1}–{Math.min(historyPage * HISTORY_PAGE_SIZE, filteredBatches.length)} of {filteredBatches.length}
+                      </p>
+                      <div className="flex items-center gap-1">
+                        <button
+                          onClick={() => setHistoryPage(1)}
+                          disabled={historyPage === 1}
+                          className="px-2 py-1 rounded border text-xs disabled:opacity-40 hover:bg-muted transition-colors"
+                        >«</button>
+                        <button
+                          onClick={() => setHistoryPage(p => Math.max(1, p - 1))}
+                          disabled={historyPage === 1}
+                          className="px-2.5 py-1 rounded border text-xs disabled:opacity-40 hover:bg-muted transition-colors"
+                        >‹</button>
+
+                        {Array.from({ length: totalPages }, (_, i) => i + 1)
+                          .filter(p => p === 1 || p === totalPages || Math.abs(p - historyPage) <= 1)
+                          .reduce<(number | '…')[]>((acc, p, idx, arr) => {
+                            if (idx > 0 && p - (arr[idx - 1] as number) > 1) acc.push('…')
+                            acc.push(p)
+                            return acc
+                          }, [])
+                          .map((p, idx) =>
+                            p === '…' ? (
+                              <span key={`ellipsis-${idx}`} className="px-2 py-1 text-xs text-muted-foreground">…</span>
+                            ) : (
+                              <button
+                                key={p}
+                                onClick={() => setHistoryPage(p as number)}
+                                className={cn(
+                                  'px-2.5 py-1 rounded border text-xs transition-colors',
+                                  historyPage === p
+                                    ? 'bg-[#003DA6] text-white border-[#003DA6]'
+                                    : 'hover:bg-muted',
+                                )}
+                              >{p}</button>
+                            )
+                          )}
+
+                        <button
+                          onClick={() => setHistoryPage(p => Math.min(totalPages, p + 1))}
+                          disabled={historyPage === totalPages}
+                          className="px-2.5 py-1 rounded border text-xs disabled:opacity-40 hover:bg-muted transition-colors"
+                        >›</button>
+                        <button
+                          onClick={() => setHistoryPage(totalPages)}
+                          disabled={historyPage === totalPages}
+                          className="px-2 py-1 rounded border text-xs disabled:opacity-40 hover:bg-muted transition-colors"
+                        >»</button>
+                      </div>
+                    </div>
+                  </>
+                )}
               </div>
             )
           })()}
         </TabsContent>
+        {/* Tab: Recovery */}
+        <TabsContent value="recovery">
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-base">Replay from R2 Storage</CardTitle>
+              <p className="text-sm text-muted-foreground">
+                Re-process encrypted backups from R2 into the database. Safe to run multiple times — uses ON CONFLICT upsert.
+              </p>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="space-y-2">
+                <label className="text-sm font-medium">Select Table</label>
+                <select
+                  value={replayTable}
+                  onChange={e => { setReplayTable(e.target.value); setReplayResult(null) }}
+                  disabled={replayLoading}
+                  className="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#003DA6] disabled:opacity-50"
+                >
+                  {REPLAY_TABLES.map(t => (
+                    <option key={t.value} value={t.value}>{t.label}</option>
+                  ))}
+                </select>
+                {replayTable === 'telesales_calls' && (
+                  <p className="text-xs text-muted-foreground">
+                    Will scan both <code className="bg-muted px-1 rounded">telesales/</code> (CSV uploads) and <code className="bg-muted px-1 rounded">leads-activity/</code> (Apps Script)
+                  </p>
+                )}
+              </div>
+
+              <button
+                onClick={startReplay}
+                disabled={replayLoading}
+                className="flex items-center gap-2 px-5 py-2 rounded-lg bg-[#003DA6] text-white text-sm font-medium hover:bg-[#002d80] transition-colors disabled:opacity-50"
+              >
+                {replayLoading && <RefreshCw className="h-4 w-4 animate-spin" />}
+                {replayLoading ? 'Replaying…' : 'Start Replay'}
+              </button>
+
+              {replayResult && (
+                <div className={cn(
+                  'rounded-lg border p-4 space-y-2',
+                  replayResult.ok ? 'border-green-200 bg-green-50' : 'border-red-200 bg-red-50',
+                )}>
+                  <div className="flex items-center gap-2">
+                    {replayResult.ok
+                      ? <CheckCircle className="h-4 w-4 text-green-600 shrink-0" />
+                      : <XCircle className="h-4 w-4 text-red-500 shrink-0" />}
+                    <p className="text-sm font-medium">
+                      {replayResult.ok ? 'Replay complete' : 'Replay completed with errors'}
+                    </p>
+                  </div>
+                  <div className="grid grid-cols-2 gap-2 text-sm">
+                    <div className="rounded bg-white/60 border px-3 py-2 text-center">
+                      <p className="text-xl font-bold tabular-nums">{replayResult.replayed_files}</p>
+                      <p className="text-xs text-muted-foreground">Files replayed</p>
+                    </div>
+                    <div className="rounded bg-white/60 border px-3 py-2 text-center">
+                      <p className="text-xl font-bold tabular-nums">{replayResult.inserted.toLocaleString()}</p>
+                      <p className="text-xs text-muted-foreground">Rows upserted</p>
+                    </div>
+                  </div>
+                  {(replayResult.errors?.length ?? 0) > 0 && (
+                    <div className="space-y-1 pt-1 border-t border-dashed border-red-200">
+                      {replayResult.errors!.map((e, i) => (
+                        <p key={i} className="text-xs text-red-600 break-all">{e}</p>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        </TabsContent>
+
       </Tabs>
     </div>
   )
