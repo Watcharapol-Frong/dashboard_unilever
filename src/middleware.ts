@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server'
 import type { NextRequest } from 'next/server'
 
 // Routes that require role = 'admin'
-export const ADMIN_PATHS = ['/leads', '/upload']
+export const ADMIN_PATHS = ['/leads', '/data-hub']
 
 export function middleware(request: NextRequest) {
   // TODO [AUTH]: Uncomment and implement when Supabase Auth is enabled

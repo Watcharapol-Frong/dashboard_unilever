@@ -12,7 +12,7 @@ import { SidebarTrigger } from '@/components/ui/sidebar'
 import { useDateRange, type PeriodMode } from '@/context/DateRangeContext'
 import { startOfWeek, endOfWeek } from 'date-fns'
 
-const HIDE_CONTROLS_PATHS = ['/upload', '/leads']
+const HIDE_CONTROLS_PATHS = ['/data-hub', '/leads']
 
 const PAGE_LABELS: Record<string, string> = {
   '/overview':   'Overview',
@@ -21,7 +21,7 @@ const PAGE_LABELS: Record<string, string> = {
   '/products':   'Products',
   '/leads':      'Leads',
   '/incentives': 'Incentives',
-  '/upload':     'Upload Data',
+  '/data-hub':   'Data Hub',
 }
 
 function getPageLabel(pathname: string) {

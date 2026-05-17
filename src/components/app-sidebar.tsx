@@ -39,7 +39,7 @@ const NAV_ITEMS = [
 
 const ADMIN_ITEMS = [
   { href: '/leads',      label: 'Leads',       icon: Users },
-  { href: '/upload',     label: 'Upload Data', icon: Upload },
+  { href: '/data-hub',   label: 'Data Hub',    icon: Upload },
 ]
 
 export function AppSidebar() {
