@@ -1,6 +1,9 @@
 import { NextResponse } from 'next/server'
 import type { NextRequest } from 'next/server'
-import { query } from '@/lib/db'
+import { randomBytes } from 'crypto'
+import { query, queryOne } from '@/lib/db'
+import { uploadToR2 } from '@/lib/storage/r2'
+import { encrypt } from '@/lib/utils/crypto'
 
 function isAuthorized(request: NextRequest) {
   const auth = request.headers.get('Authorization') ?? ''
@@ -48,7 +51,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'records must be a non-empty array' }, { status: 400 })
   }
 
-  // Transform + validate
+  // ── 1. Transform + validate (PDPA enforced here) ──────────
   const rows = records.flatMap(r => {
     const mmid = padMmid(r.mmid ?? '')
     if (!mmid) return []
@@ -65,12 +68,45 @@ export async function POST(request: NextRequest) {
     }]
   })
 
+  const skipped = records.length - rows.length
   if (rows.length === 0) {
-    return NextResponse.json({ ok: true, inserted: 0, skipped: records.length })
+    return NextResponse.json({ ok: true, inserted: 0, skipped })
   }
 
-  // Chunked upsert — 500 rows per chunk
+  // ── 2. Encrypt + upload raw payload to R2 (disaster recovery) ──
+  const encryptionKey = process.env.STORAGE_ENCRYPTION_KEY
+  if (!encryptionKey) {
+    return NextResponse.json({ error: 'Server configuration error (encryption)' }, { status: 500 })
+  }
+
+  const datePart  = new Date().toISOString().slice(0, 10)
+  const token     = randomBytes(8).toString('hex')
+  const r2Key     = `leads-activity/${datePart}_${token}.json`
+  const payload   = JSON.stringify({ ingested_at: new Date().toISOString(), records })
+  const encrypted = encrypt(payload, encryptionKey)
+
+  try {
+    await uploadToR2(r2Key, encrypted)
+  } catch (err) {
+    console.error('[ingest/telesales-activity] R2 upload failed:', err)
+    return NextResponse.json({ error: 'Storage backup failed' }, { status: 500 })
+  }
+
+  // ── 3. Create upload_batch record ─────────────────────────
+  const batch = await queryOne<{ id: string }>(
+    `INSERT INTO upload_batches (table_name, filename, storage_path, status)
+     VALUES ('telesales_calls', $1, $2, 'processing')
+     RETURNING id`,
+    [`gas_${datePart}_${token}.json`, r2Key],
+  )
+  if (!batch) {
+    return NextResponse.json({ error: 'Failed to create batch record' }, { status: 500 })
+  }
+
+  // ── 4. Chunked upsert → telesales_calls ──────────────────
   const CHUNK = 500
+  let dbError: string | null = null
+
   for (let i = 0; i < rows.length; i += CHUNK) {
     const chunk = rows.slice(i, i + CHUNK)
     const placeholders = chunk.map((_, j) => {
@@ -81,24 +117,40 @@ export async function POST(request: NextRequest) {
       r.mmid, r.mobile, r.first_connected_date, r.call_status,
       r.reason_group, r.reason_subgroup, r.contact_note, r.agent, r.lead_customers,
     ])
-    await query(
-      `INSERT INTO telesales_calls
-         (mmid, mobile, first_connected_date, call_status, reason_group,
-          reason_subgroup, contact_note, agent, lead_customers, updated_at)
-       VALUES ${placeholders}
-       ON CONFLICT (mmid) DO UPDATE SET
-         mobile               = EXCLUDED.mobile,
-         first_connected_date = EXCLUDED.first_connected_date,
-         call_status          = EXCLUDED.call_status,
-         reason_group         = EXCLUDED.reason_group,
-         reason_subgroup      = EXCLUDED.reason_subgroup,
-         contact_note         = EXCLUDED.contact_note,
-         agent                = EXCLUDED.agent,
-         lead_customers       = EXCLUDED.lead_customers,
-         updated_at           = NOW()`,
-      values
-    )
+    try {
+      await query(
+        `INSERT INTO telesales_calls
+           (mmid, mobile, first_connected_date, call_status, reason_group,
+            reason_subgroup, contact_note, agent, lead_customers, updated_at)
+         VALUES ${placeholders}
+         ON CONFLICT (mmid) DO UPDATE SET
+           mobile               = EXCLUDED.mobile,
+           first_connected_date = EXCLUDED.first_connected_date,
+           call_status          = EXCLUDED.call_status,
+           reason_group         = EXCLUDED.reason_group,
+           reason_subgroup      = EXCLUDED.reason_subgroup,
+           contact_note         = EXCLUDED.contact_note,
+           agent                = EXCLUDED.agent,
+           lead_customers       = EXCLUDED.lead_customers,
+           updated_at           = NOW()`,
+        values,
+      )
+    } catch (err) {
+      dbError = String(err)
+      break
+    }
   }
 
-  return NextResponse.json({ ok: true, inserted: rows.length, skipped: records.length - rows.length })
+  // ── 5. Update batch status ────────────────────────────────
+  await query(
+    `UPDATE upload_batches SET row_count = $1, status = $2 WHERE id = $3`,
+    [rows.length, dbError ? 'failed' : 'success', batch.id],
+  )
+
+  if (dbError) {
+    console.error('[ingest/telesales-activity] DB upsert failed:', dbError)
+    return NextResponse.json({ error: 'DB upsert failed', detail: dbError }, { status: 500 })
+  }
+
+  return NextResponse.json({ ok: true, inserted: rows.length, skipped, storage_path: r2Key })
 }
