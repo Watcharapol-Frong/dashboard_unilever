@@ -7,20 +7,22 @@ import { NivoLine } from '@/components/charts/NivoLine'
 import { NivoBar } from '@/components/charts/NivoBar'
 import { TargetGaugeBar } from '@/components/dashboard/TargetGaugeBar'
 import { Badge } from '@/components/ui/badge'
-import { formatTHB, formatNumber, formatDate } from '@/lib/utils'
+import { formatTHB, formatNumber, formatDate, formatPeriodLabel } from '@/lib/utils'
+import { useDateRange } from '@/context/DateRangeContext'
 import { TrendingUp, Users, ShoppingBag, DollarSign } from 'lucide-react'
 import type { SalesKpi, RecentOrder } from '@/types'
 
 export default function SalesPage() {
   const { data, isLoading } = useKpi<SalesKpi>('/api/kpi/sales')
+  const { groupBy } = useDateRange()
 
-  const lineData = data?.by_date?.length ? [
-    { id: 'Online',  data: data.by_date.map(d => ({ x: d.date, y: d.online })) },
-    { id: 'Offline', data: data.by_date.map(d => ({ x: d.date, y: d.offline })) },
+  const lineData = data?.by_period?.length ? [
+    { id: 'Online',  data: data.by_period.map(d => ({ x: formatPeriodLabel(d.period, groupBy), y: d.online })) },
+    { id: 'Offline', data: data.by_period.map(d => ({ x: formatPeriodLabel(d.period, groupBy), y: d.offline })) },
   ] : []
 
-  const barData = (data?.by_date?.slice(-14) ?? []).map(d => ({
-    date:    d.date.slice(5),   // MM-DD
+  const barData = (data?.by_period ?? []).map(d => ({
+    period:  formatPeriodLabel(d.period, groupBy),
     Online:  d.online,
     Offline: d.offline,
   }))
@@ -110,7 +112,7 @@ export default function SalesPage() {
 
       {/* Trend Chart */}
       <Card>
-        <CardHeader><CardTitle className="text-base">Daily Sales Trend (THB)</CardTitle></CardHeader>
+        <CardHeader><CardTitle className="text-base">Sales Trend (THB)</CardTitle></CardHeader>
         <CardContent>
           {lineData.length > 0 ? (
             <NivoLine data={lineData} height={300} enableArea />
@@ -122,15 +124,15 @@ export default function SalesPage() {
         </CardContent>
       </Card>
 
-      {/* Bar Chart — last 14 days */}
+      {/* Bar Chart */}
       {barData.length > 0 && (
         <Card>
-          <CardHeader><CardTitle className="text-base">Last 14 Days — Online vs Offline</CardTitle></CardHeader>
+          <CardHeader><CardTitle className="text-base">Online vs Offline Sales</CardTitle></CardHeader>
           <CardContent>
             <NivoBar
               data={barData}
               keys={['Online', 'Offline']}
-              indexBy="date"
+              indexBy="period"
               height={260}
               colors={['#003DA6', '#EE2737']}
               valueFormat={v => formatTHB(Number(v))}

@@ -6,7 +6,7 @@ import { RadialGauge } from '@/components/dashboard/RadialGauge'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { NivoBar } from '@/components/charts/NivoBar'
 import { NivoPie } from '@/components/charts/NivoPie'
-import { formatTHB, formatNumber, formatPct, getProgressColor } from '@/lib/utils'
+import { formatTHB, formatNumber, formatPct, getProgressColor, formatPeriodLabel } from '@/lib/utils'
 import { cn } from '@/lib/utils'
 import type { OverviewKpi, SalesKpi } from '@/types'
 
@@ -42,7 +42,7 @@ function StackedBar({
 }
 
 export default function OverviewPage() {
-  const { mode } = useDateRange()
+  const { mode, groupBy } = useDateRange()
   const { data: kpi, isLoading } = useKpi<OverviewKpi>('/api/kpi/overview')
   const { data: sales } = useKpi<SalesKpi>('/api/kpi/sales')
 
@@ -50,25 +50,11 @@ export default function OverviewPage() {
     mode === 'month' ? 'vs last month' :
     mode === 'week'  ? 'vs last week'  : 'vs prev period'
 
-  // Aggregate daily sales → weekly for bar chart
-  const barData = (() => {
-    const days = sales?.by_date ?? []
-    if (days.length <= 14) {
-      return days.map(d => ({ date: d.date.slice(5), Online: d.online, Offline: d.offline }))
-    }
-    const weekMap = new Map<string, { Online: number; Offline: number }>()
-    for (const d of days) {
-      const dt = new Date(d.date)
-      const day = dt.getDay()
-      const diff = (day === 0 ? -6 : 1) - day
-      const mon = new Date(dt)
-      mon.setDate(dt.getDate() + diff)
-      const key = `${String(mon.getMonth() + 1).padStart(2, '0')}/${String(mon.getDate()).padStart(2, '0')}`
-      const existing = weekMap.get(key) ?? { Online: 0, Offline: 0 }
-      weekMap.set(key, { Online: existing.Online + d.online, Offline: existing.Offline + d.offline })
-    }
-    return [...weekMap.entries()].map(([date, v]) => ({ date, ...v }))
-  })()
+  const barData = (sales?.by_period ?? []).map(d => ({
+    period:  formatPeriodLabel(d.period, groupBy),
+    Online:  d.online,
+    Offline: d.offline,
+  }))
 
   // Call status pie from real Thai statuses
   const callPie = Object.entries(kpi?.callStatusMap ?? {})
@@ -244,7 +230,7 @@ export default function OverviewPage() {
             <NivoBar
               data={barData}
               keys={['Online', 'Offline']}
-              indexBy="date"
+              indexBy="period"
               groupMode="stacked"
               height={280}
               colors={['#003DA6', '#EE2737']}

@@ -7,12 +7,14 @@ import { NivoLine } from '@/components/charts/NivoLine'
 import { NivoBar } from '@/components/charts/NivoBar'
 import { SankeyFunnel } from '@/components/charts/SankeyFunnel'
 import { Badge } from '@/components/ui/badge'
-import { formatNumber, formatPct } from '@/lib/utils'
+import { formatNumber, formatPct, formatPeriodLabel } from '@/lib/utils'
+import { useDateRange } from '@/context/DateRangeContext'
 import { Phone, UserCheck, Users, BarChart2 } from 'lucide-react'
 import type { TelesalesKpi, AgentPerformance } from '@/types'
 
 export default function TelesalesPage() {
   const { data, isLoading } = useKpi<TelesalesKpi>('/api/kpi/telesales')
+  const { groupBy } = useDateRange()
 
   const summary = data?.summary
 
@@ -30,9 +32,9 @@ export default function TelesalesPage() {
     .map(([status, count]) => ({ status, count }))
 
   // Trend chart
-  const trendData = data?.by_date?.length ? [
-    { id: 'Total Calls', data: data.by_date.map(d => ({ x: d.date, y: d.total_calls })) },
-    { id: 'Reached',     data: data.by_date.map(d => ({ x: d.date, y: d.reached })) },
+  const trendData = data?.by_period?.length ? [
+    { id: 'Total Calls', data: data.by_period.map(d => ({ x: formatPeriodLabel(d.period, groupBy), y: d.total_calls })) },
+    { id: 'Reached',     data: data.by_period.map(d => ({ x: formatPeriodLabel(d.period, groupBy), y: d.reached })) },
   ] : []
 
   const agentColumns = [

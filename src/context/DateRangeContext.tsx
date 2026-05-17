@@ -10,11 +10,13 @@ import {
 import type { DateRange } from '@/types'
 
 export type PeriodMode = 'month' | 'week' | 'custom'
+export type GroupBy = 'month' | 'week' | 'day'
 
 interface PeriodContextValue {
   mode: PeriodMode
   setMode: (m: PeriodMode) => void
   anchor: Date
+  groupBy: GroupBy
   range: DateRange
   prevRange: DateRange
   navigatePrev: () => void
@@ -70,6 +72,15 @@ export function DateRangeProvider({ children }: { children: React.ReactNode }) {
     [mode, anchor, customRange]
   )
 
+  const groupBy = useMemo((): GroupBy => {
+    if (mode === 'month') return 'month'
+    if (mode === 'week')  return 'week'
+    const days = Math.round((customRange.to.getTime() - customRange.from.getTime()) / 86_400_000)
+    if (days <= 14)  return 'day'
+    if (days <= 90)  return 'week'
+    return 'month'
+  }, [mode, customRange])
+
   const canNavigateNext = useMemo(() => {
     if (mode === 'custom') return false
     const today = new Date()
@@ -94,7 +105,7 @@ export function DateRangeProvider({ children }: { children: React.ReactNode }) {
 
   return (
     <PeriodContext.Provider value={{
-      mode, setMode, anchor, range, prevRange,
+      mode, setMode, anchor, groupBy, range, prevRange,
       navigatePrev, navigateNext, canNavigateNext,
       customRange, setCustomRange,
     }}>

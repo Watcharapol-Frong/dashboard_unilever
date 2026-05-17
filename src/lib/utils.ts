@@ -45,3 +45,24 @@ export function getProgressColor(pct: number): string {
 export function toISODateString(date: Date): string {
   return date.toISOString().split('T')[0]
 }
+
+const MONTHS_SHORT = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec']
+
+export function formatPeriodLabel(period: string, groupBy: 'month' | 'week' | 'day'): string {
+  // Parse as local date (avoid UTC shift)
+  const [y, m, d] = period.split('-').map(Number)
+  const date = new Date(y, m - 1, d)
+
+  if (groupBy === 'month') {
+    return `${MONTHS_SHORT[date.getMonth()]} ${date.getFullYear()}`
+  }
+  if (groupBy === 'week') {
+    const end = new Date(date)
+    end.setDate(date.getDate() + 6)
+    const startStr = `${date.getDate()} ${MONTHS_SHORT[date.getMonth()]}`
+    const endStr   = `${end.getDate()} ${MONTHS_SHORT[end.getMonth()]}`
+    return `${startStr}–${endStr}`
+  }
+  // day
+  return `${date.getDate()} ${MONTHS_SHORT[date.getMonth()]}`
+}

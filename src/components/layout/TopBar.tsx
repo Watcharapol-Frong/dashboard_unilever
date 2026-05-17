@@ -1,7 +1,7 @@
 'use client'
 import { useState, useRef, useEffect } from 'react'
 import { usePathname } from 'next/navigation'
-import { ChevronLeft, ChevronRight, PrinterIcon, CalendarDays } from 'lucide-react'
+import { CalendarDays } from 'lucide-react'
 import { format } from 'date-fns'
 import { Button } from '@/components/ui/button'
 import { Separator } from '@/components/ui/separator'
@@ -56,7 +56,6 @@ const MODES: { mode: PeriodMode; label: string }[] = [
 export function TopBar({ title }: { title?: string }) {
   const {
     mode, setMode, anchor,
-    navigatePrev, navigateNext, canNavigateNext,
     customRange, setCustomRange,
   } = useDateRange()
 
@@ -140,10 +139,9 @@ export function TopBar({ title }: { title?: string }) {
             ))}
           </div>
 
-          {/* Navigation / Custom picker trigger */}
+          {/* Period label / Custom picker trigger */}
           <div className="relative" ref={pickerRef}>
             {mode === 'custom' ? (
-              /* Custom: show range label as button → opens picker */
               <button
                 onClick={() => setShowPicker(v => !v)}
                 className="flex items-center gap-2 px-3 py-1.5 h-8 border rounded-lg text-sm font-medium hover:bg-muted transition-colors"
@@ -152,27 +150,9 @@ export function TopBar({ title }: { title?: string }) {
                 {customLabel}
               </button>
             ) : (
-              /* Month / Week: ◀ label ▶ */
-              <div className="flex items-center gap-1">
-                <button
-                  onClick={navigatePrev}
-                  className="h-8 w-8 flex items-center justify-center rounded-md border hover:bg-muted transition-colors"
-                  aria-label="Previous period"
-                >
-                  <ChevronLeft className="h-4 w-4" />
-                </button>
-                <span className="min-w-[160px] text-center text-sm font-medium">
-                  {getPeriodLabel(mode, anchor)}
-                </span>
-                <button
-                  onClick={navigateNext}
-                  disabled={!canNavigateNext}
-                  className="h-8 w-8 flex items-center justify-center rounded-md border hover:bg-muted transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
-                  aria-label="Next period"
-                >
-                  <ChevronRight className="h-4 w-4" />
-                </button>
-              </div>
+              <span className="px-3 py-1.5 text-sm font-medium text-muted-foreground">
+                {getPeriodLabel(mode, anchor)}
+              </span>
             )}
 
             {/* Custom date picker popover */}
@@ -211,10 +191,6 @@ export function TopBar({ title }: { title?: string }) {
             )}
           </div>
 
-          <Button variant="outline" size="sm" onClick={() => window.print()} className="gap-2">
-            <PrinterIcon className="h-4 w-4" />
-            Print
-          </Button>
         </div>
       )}
     </header>

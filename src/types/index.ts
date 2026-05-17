@@ -76,7 +76,7 @@ export interface TelesalesKpi {
     call_status_breakdown: Record<string, number>
   }
   by_agent: AgentPerformance[]
-  by_date: { date: string; total_calls: number; reached: number }[]
+  by_period: { period: string; total_calls: number; reached: number }[]
   sankey: {
     nodes: { id: string }[]
     links: { source: string; target: string; value: number }[]
@@ -93,7 +93,7 @@ export interface SalesKpi {
   target_pct: number
   new_customers: number
   avg_order_value: number
-  by_date: { date: string; online: number; offline: number }[]
+  by_period: { period: string; online: number; offline: number }[]
   recent_orders: RecentOrder[]
 }
 

@@ -8,12 +8,13 @@ const fetcher = (url: string) => fetch(url).then((r) => {
 })
 
 export function useKpi<T>(path: string, extra?: Record<string, string>) {
-  const { range, prevRange } = useDateRange()
+  const { range, prevRange, groupBy } = useDateRange()
   const params = new URLSearchParams({
     from: toISODateString(range.from),
     to: toISODateString(range.to),
     prev_from: toISODateString(prevRange.from),
     prev_to: toISODateString(prevRange.to),
+    groupBy,
     ...extra,
   })
   return useSWR<T>(`${path}?${params}`, fetcher, { revalidateOnFocus: false })

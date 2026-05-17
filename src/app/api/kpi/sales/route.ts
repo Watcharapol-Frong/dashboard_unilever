@@ -2,24 +2,35 @@ import { NextResponse } from 'next/server'
 import type { NextRequest } from 'next/server'
 import { query, queryOne } from '@/lib/db'
 
+const ALLOWED_GROUP_BY = ['month', 'week', 'day'] as const
+type GroupBy = typeof ALLOWED_GROUP_BY[number]
+
 export async function GET(request: NextRequest) {
   const { searchParams } = new URL(request.url)
   const today      = new Date().toISOString().split('T')[0]
   const monthStart = new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString().split('T')[0]
   const from = searchParams.get('from') ?? monthStart
   const to   = searchParams.get('to')   ?? today
+  const groupBy: GroupBy = ALLOWED_GROUP_BY.includes(searchParams.get('groupBy') as GroupBy)
+    ? (searchParams.get('groupBy') as GroupBy)
+    : 'month'
 
-  const [totalsRows, byDateRows, targetRow, newCustRow, recentOnline, recentOffline] = await Promise.all([
+  // Chart query: no date filter for month/week (show all data), filter only for day
+  const periodExpr = `DATE_TRUNC('${groupBy}', order_date)::date`
+  const chartFilter = groupBy === 'day' ? 'WHERE order_date BETWEEN $1 AND $2' : ''
+  const chartParams = groupBy === 'day' ? [from, to] : []
+
+  const [totalsRows, byPeriodRows, targetRow, newCustRow, recentOnline, recentOffline] = await Promise.all([
     query<{ channel: string; total_sales: string; order_count: string }>(
       `SELECT 'Online' AS channel, COALESCE(SUM(sales_in_vat),0) AS total_sales, COUNT(DISTINCT order_number) AS order_count FROM online_sales WHERE order_date BETWEEN $1 AND $2
        UNION ALL SELECT 'Offline', COALESCE(SUM(sales_in_vat),0), COUNT(DISTINCT order_number) FROM offline_sales WHERE order_date BETWEEN $1 AND $2`,
       [from, to]
     ),
-    query<{ order_date: string; channel: string; total_sales: string }>(
-      `SELECT order_date::text, 'Online' AS channel, COALESCE(SUM(sales_in_vat),0) AS total_sales FROM online_sales WHERE order_date BETWEEN $1 AND $2 GROUP BY order_date
-       UNION ALL SELECT order_date::text, 'Offline', COALESCE(SUM(sales_in_vat),0) FROM offline_sales WHERE order_date BETWEEN $1 AND $2 GROUP BY order_date
-       ORDER BY order_date`,
-      [from, to]
+    query<{ period: string; channel: string; total_sales: string }>(
+      `SELECT ${periodExpr} AS period, 'Online' AS channel, COALESCE(SUM(sales_in_vat),0) AS total_sales FROM online_sales ${chartFilter} GROUP BY period
+       UNION ALL SELECT ${periodExpr}, 'Offline', COALESCE(SUM(sales_in_vat),0) FROM offline_sales ${chartFilter} GROUP BY period
+       ORDER BY period`,
+      chartParams
     ),
     queryOne<{ total: string }>(
       `SELECT COALESCE(SUM(sales_target),0) AS total FROM targets WHERE month BETWEEN date_trunc('month',$1::date)::date AND date_trunc('month',$2::date)::date`,
@@ -46,14 +57,15 @@ export async function GET(request: NextRequest) {
   const total_sales   = total_sales_online + total_sales_offline
   const total_orders  = Number(onlineRow?.order_count ?? 0) + Number(offlineRow?.order_count ?? 0)
 
-  const dateMap = new Map<string, { date: string; online: number; offline: number }>()
-  for (const r of byDateRows) {
-    if (!dateMap.has(r.order_date)) dateMap.set(r.order_date, { date: r.order_date, online: 0, offline: 0 })
-    const e = dateMap.get(r.order_date)!
+  const periodMap = new Map<string, { period: string; online: number; offline: number }>()
+  for (const r of byPeriodRows) {
+    const key = r.period
+    if (!periodMap.has(key)) periodMap.set(key, { period: key, online: 0, offline: 0 })
+    const e = periodMap.get(key)!
     if (r.channel === 'Online')  e.online  += Number(r.total_sales)
     if (r.channel === 'Offline') e.offline += Number(r.total_sales)
   }
-  const by_date = [...dateMap.values()].sort((a, b) => a.date.localeCompare(b.date))
+  const by_period = [...periodMap.values()].sort((a, b) => a.period.localeCompare(b.period))
 
   const recent_orders = [
     ...recentOnline.map(r => ({ ...r, channel: 'Online' })),
@@ -68,6 +80,6 @@ export async function GET(request: NextRequest) {
     target, target_pct,
     avg_order_value: total_orders > 0 ? total_sales / total_orders : 0,
     new_customers: Number(newCustRow?.cnt ?? 0),
-    by_date, recent_orders,
+    by_period, recent_orders,
   })
 }
