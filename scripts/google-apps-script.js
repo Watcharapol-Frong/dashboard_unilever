@@ -89,14 +89,15 @@ function exportIncrementalToStorage() {
 function postToAPI_(records) {
   const url = `${APP_URL}/api/ingest/telesales-activity`;
   const options = {
-    method: "post",
-    headers: {
-      "Authorization": `Bearer ${API_SECRET}`,
-      "Content-Type": "application/json",
-    },
-    payload: JSON.stringify({ records }),
-    muteHttpExceptions: true,
-  };
+  method: "post",
+  headers: {
+    "Authorization": `Bearer ${API_SECRET}`,
+    "Content-Type": "application/json",
+    "ngrok-skip-browser-warning": "true",
+  },
+  payload: JSON.stringify({ records }),
+  muteHttpExceptions: true,
+  }
 
   try {
     const response = UrlFetchApp.fetch(url, options);
@@ -117,11 +118,13 @@ function postToAPI_(records) {
 /* ================= ดึง Threshold Date จาก API ================= */
 function getThresholdDate_() {
   const url = `${APP_URL}/api/ingest/threshold`;
-  const options = {
-    method: "get",
-    headers: { "Authorization": `Bearer ${API_SECRET}` },
-    muteHttpExceptions: true,
-  };
+  const options = {method: "get",
+  headers: {
+    "Authorization": `Bearer ${API_SECRET}`,
+    "ngrok-skip-browser-warning": "true",
+  },
+  muteHttpExceptions: true,
+  }
 
   try {
     const response = UrlFetchApp.fetch(url, options);
