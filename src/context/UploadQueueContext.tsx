@@ -58,15 +58,15 @@ export function UploadQueueProvider({ children }: { children: React.ReactNode })
       setJobs(prev => prev.map(j =>
         j.id === job.id ? { ...j, status: result.ok ? 'done' : 'failed', progress: 100, result } : j
       ))
-      swrMutate('/api/upload/history')
-      swrMutate('/api/upload/status')
+      swrMutate('/api/data/history')
+      swrMutate('/api/data/status')
     }
     xhr.onerror = () => {
       setJobs(prev => prev.map(j =>
         j.id === job.id ? { ...j, status: 'failed', result: { ok: false, error: 'Network error' } } : j
       ))
     }
-    xhr.open('POST', `/api/upload/${job.fileType}`)
+    xhr.open('POST', `/api/data/upload/${job.fileType}`)
     xhr.send(form)
   }, [])
 

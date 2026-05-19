@@ -45,7 +45,7 @@ export function CsvUploader({ onUploaded }: { onUploaded?: () => void }) {
     const formData = new FormData()
     formData.append('file', file)
 
-    const res = await fetch(`/api/upload/${fileType}`, { method: 'POST', body: formData })
+    const res = await fetch(`/api/data/upload/${fileType}`, { method: 'POST', body: formData })
     const data: UploadResult = await res.json()
     setResult(data)
     setUploading(false)

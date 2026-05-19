@@ -13,7 +13,7 @@ import { Phone, UserCheck, Users, BarChart2 } from 'lucide-react'
 import type { TelesalesKpi, AgentPerformance } from '@/types'
 
 export default function TelesalesPage() {
-  const { data, isLoading } = useKpi<TelesalesKpi>('/api/kpi/telesales')
+  const { data, isLoading } = useKpi<TelesalesKpi>('/api/analytics/telesales')
   const { groupBy } = useDateRange()
 
   const summary = data?.summary

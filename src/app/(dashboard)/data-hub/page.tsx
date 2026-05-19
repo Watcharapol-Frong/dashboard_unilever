@@ -136,7 +136,7 @@ export default function UploadPage() {
     setReplayLoading(true)
     setReplayResult(null)
     try {
-      const res = await fetch('/api/admin/replay', {
+      const res = await fetch('/api/system/replay', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ table: replayTable }),
@@ -160,11 +160,11 @@ export default function UploadPage() {
 
   const inputRef = useRef<HTMLInputElement>(null)
 
-  const { data: batches, mutate, isValidating: batchesValidating } = useSWR<UploadBatch[]>('/api/upload/history', fetcher, { 
+  const { data: batches, mutate, isValidating: batchesValidating } = useSWR<UploadBatch[]>('/api/data/history', fetcher, { 
     revalidateOnFocus: false,
     revalidateOnReconnect: false 
   })
-  const { data: status, mutate: mutateStatus, isValidating: statusValidating } = useSWR<DataStatus>('/api/upload/status', fetcher, { 
+  const { data: status, mutate: mutateStatus, isValidating: statusValidating } = useSWR<DataStatus>('/api/data/status', fetcher, { 
     revalidateOnFocus: false,
     revalidateOnReconnect: false 
   })

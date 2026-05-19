@@ -13,7 +13,7 @@ import { TrendingUp, Users, ShoppingBag, DollarSign } from 'lucide-react'
 import type { SalesKpi, RecentOrder } from '@/types'
 
 export default function SalesPage() {
-  const { data, isLoading } = useKpi<SalesKpi>('/api/kpi/sales')
+  const { data, isLoading } = useKpi<SalesKpi>('/api/analytics/sales')
   const { groupBy } = useDateRange()
 
   const lineData = data?.by_period?.length ? [

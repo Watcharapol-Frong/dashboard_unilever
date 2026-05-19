@@ -10,7 +10,7 @@ import { formatTHB, formatNumber, formatPct } from '@/lib/utils'
 import type { ProductKpi, ProductRow } from '@/types'
 
 export default function ProductsPage() {
-  const { data, isLoading } = useKpi<ProductKpi>('/api/kpi/products')
+  const { data, isLoading } = useKpi<ProductKpi>('/api/analytics/products')
   const [brandFilter, setBrandFilter] = useState('')
   const [showUniOnly, setShowUniOnly] = useState(false)
 

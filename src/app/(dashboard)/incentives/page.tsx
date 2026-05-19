@@ -19,7 +19,7 @@ interface Incentive {
 }
 
 export default function IncentivesPage() {
-  const { data, isLoading } = useSWR<Incentive[]>('/api/incentives', fetcher)
+  const { data, isLoading } = useSWR<Incentive[]>('/api/master/incentives', fetcher)
 
   const columns = [
     { key: 'period_start', header: 'Period Start', render: (r: Incentive) => formatDate(r.period_start), sortable: true },
