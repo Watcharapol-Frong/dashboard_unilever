@@ -160,8 +160,19 @@ export default function UploadPage() {
 
   const inputRef = useRef<HTMLInputElement>(null)
 
-  const { data: batches, mutate, isValidating: batchesValidating } = useSWR<UploadBatch[]>('/api/upload/history', fetcher, { revalidateOnFocus: true })
-  const { data: status, mutate: mutateStatus, isValidating: statusValidating } = useSWR<DataStatus>('/api/upload/status', fetcher, { revalidateOnFocus: true })
+  const { data: batches, mutate, isValidating: batchesValidating } = useSWR<UploadBatch[]>('/api/upload/history', fetcher, { 
+    revalidateOnFocus: false,
+    revalidateOnReconnect: false 
+  })
+  const { data: status, mutate: mutateStatus, isValidating: statusValidating } = useSWR<DataStatus>('/api/upload/status', fetcher, { 
+    revalidateOnFocus: false,
+    revalidateOnReconnect: false 
+  })
+
+  const handleManualRefresh = () => {
+    mutate()
+    mutateStatus()
+  }
 
   // ── File processing ────────────────────────────────────────
   const processFile = useCallback((f: File) => {
