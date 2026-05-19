@@ -3,7 +3,6 @@ import { useState, useRef } from 'react'
 import { Button } from '@/components/ui/button'
 import { Select } from '@/components/ui/select'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import { Badge } from '@/components/ui/badge'
 import { FILE_TYPE_LABELS, SCHEMAS } from '@/lib/schemas'
 import { Upload, CheckCircle, XCircle, AlertCircle } from 'lucide-react'
 import type { FileType } from '@/types'
@@ -14,7 +13,6 @@ export function CsvUploader({ onUploaded }: { onUploaded?: () => void }) {
   const [fileType, setFileType] = useState<FileType>('online_sales')
   const [file, setFile] = useState<File | null>(null)
   const [preview, setPreview] = useState<Record<string, string>[]>([])
-  const [columnMap, setColumnMap] = useState<Record<string, string>>({})
   const [uploading, setUploading] = useState(false)
   const [result, setResult] = useState<UploadResult | null>(null)
   const inputRef = useRef<HTMLInputElement>(null)
@@ -27,14 +25,6 @@ export function CsvUploader({ onUploaded }: { onUploaded?: () => void }) {
     const text = await f.text()
     const lines = text.split('\n').filter(Boolean)
     const headers = lines[0]?.split(',').map(h => h.replace(/"/g, '').trim()) ?? []
-
-    // Auto-map columns (case-insensitive match)
-    const autoMap: Record<string, string> = {}
-    for (const field of schema) {
-      const match = headers.find(h => h.toLowerCase() === field.key.toLowerCase() || h.toLowerCase() === field.label.toLowerCase())
-      if (match) autoMap[field.key] = match
-    }
-    setColumnMap(autoMap)
 
     // Parse first 5 rows for preview
     const rows: Record<string, string>[] = []
@@ -54,7 +44,6 @@ export function CsvUploader({ onUploaded }: { onUploaded?: () => void }) {
 
     const formData = new FormData()
     formData.append('file', file)
-    formData.append('columnMap', JSON.stringify(columnMap))
 
     const res = await fetch(`/api/upload/${fileType}`, { method: 'POST', body: formData })
     const data: UploadResult = await res.json()
@@ -108,28 +97,6 @@ export function CsvUploader({ onUploaded }: { onUploaded?: () => void }) {
           )}
           <input ref={inputRef} type="file" accept=".csv" className="hidden" onChange={e => { const f = e.target.files?.[0]; if (f) handleFile(f) }} />
         </div>
-
-        {/* Column Mapping */}
-        {preview.length > 0 && (
-          <div className="space-y-2">
-            <p className="text-sm font-medium">Column Mapping</p>
-            <div className="grid grid-cols-2 gap-2">
-              {schema.map(field => (
-                <div key={field.key} className="flex items-center gap-2">
-                  <span className="text-xs w-32 truncate text-muted-foreground">{field.label}{field.required ? ' *' : ''}</span>
-                  <Select
-                    value={columnMap[field.key] ?? ''}
-                    onChange={e => setColumnMap(m => ({ ...m, [field.key]: e.target.value }))}
-                    className="text-xs flex-1"
-                  >
-                    <option value="">— skip —</option>
-                    {csvHeaders.map(h => <option key={h} value={h}>{h}</option>)}
-                  </Select>
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
 
         {/* Preview Table */}
         {preview.length > 0 && (
