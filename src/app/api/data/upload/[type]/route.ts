@@ -1,18 +1,21 @@
+import { auth } from '@clerk/nextjs/server'
 import { NextResponse } from 'next/server'
 import type { NextRequest } from 'next/server'
 import { processUpload } from '@/lib/services/upload-service'
 import { FILE_TYPE_CONFIGS } from '@/lib/upload/config'
 import type { UploadFileType } from '@/lib/upload/config'
 
-/**
- * Clean route handler that delegates logic to UploadService
- */
 export async function POST(
   request: NextRequest,
   { params }: { params: { type: string } },
 ) {
+  const { userId, sessionClaims } = await auth()
+  if (!userId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  if (sessionClaims?.publicMetadata?.role !== 'admin')
+    return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+
   const type = params.type as UploadFileType
-  
+
   // Basic validation
   if (!FILE_TYPE_CONFIGS[type]) {
     return NextResponse.json({ error: 'Unknown file type' }, { status: 400 })
