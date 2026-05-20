@@ -2,6 +2,7 @@
 const nextConfig = {
   experimental: {
     serverComponentsExternalPackages: ['papaparse'],
+    bodySizeLimit: '10mb',
   },
 }
 
