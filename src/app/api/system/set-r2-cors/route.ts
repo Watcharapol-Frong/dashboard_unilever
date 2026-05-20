@@ -21,18 +21,22 @@ export async function POST() {
   const bucket = process.env.R2_BUCKET_NAME ?? 'dashboard-unilever'
   const origin = process.env.NEXT_PUBLIC_APP_URL ?? ''
 
-  await r2.send(new PutBucketCorsCommand({
-    Bucket: bucket,
-    CORSConfiguration: {
-      CORSRules: [{
-        AllowedOrigins: [origin],
-        AllowedMethods: ['PUT'],
-        AllowedHeaders: ['Content-Type'],
-        MaxAgeSeconds: 3600,
-      }],
-    },
-  }))
+  try {
+    await r2.send(new PutBucketCorsCommand({
+      Bucket: bucket,
+      CORSConfiguration: {
+        CORSRules: [{
+          AllowedOrigins: [origin],
+          AllowedMethods: ['PUT'],
+          AllowedHeaders: ['Content-Type'],
+          MaxAgeSeconds: 3600,
+        }],
+      },
+    }))
 
-  const result = await r2.send(new GetBucketCorsCommand({ Bucket: bucket }))
-  return NextResponse.json({ ok: true, corsRules: result.CORSRules })
+    const result = await r2.send(new GetBucketCorsCommand({ Bucket: bucket }))
+    return NextResponse.json({ ok: true, corsRules: result.CORSRules })
+  } catch (err) {
+    return NextResponse.json({ error: (err as Error).message, stack: (err as Error).stack }, { status: 500 })
+  }
 }
