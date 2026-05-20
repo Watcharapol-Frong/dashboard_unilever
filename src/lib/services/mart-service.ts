@@ -46,6 +46,7 @@ export async function buildMartTelesalesOrders(): Promise<number> {
       DATE_TRUNC('month', a.order_date)::date
     FROM attributed a
     LEFT JOIN products p ON p.prod_num = a.prod_num
+    WHERE p.product_name_en IS NOT NULL
     ON CONFLICT (mmid, order_number, prod_num) DO UPDATE SET
       sales_qty            = EXCLUDED.sales_qty,
       sales_in_vat         = EXCLUDED.sales_in_vat,
