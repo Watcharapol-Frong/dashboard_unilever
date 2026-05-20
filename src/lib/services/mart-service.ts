@@ -64,27 +64,35 @@ export async function buildMartCostIncentive(): Promise<number> {
 
   await query(`
     INSERT INTO mart_cost_incentive (
-      month, lead_customers, total_calls, reached, ordered,
+      month, lead_customers, dynamic_cmg, total_calls, reached, ordered,
       new_customers, retention, hoc_orders, hoc_sales, total_sales,
       incentive_per_head, total_incentive, cost_per_agent
     )
     SELECT
       t.month,
       t.lead_customers,
+      t.dynamic_cmg,
       tc.total_calls,
       tc.reached,
       COUNT(DISTINCT m.mmid)                                                  AS ordered,
       COUNT(DISTINCT m.mmid) FILTER (WHERE m.customer_type = 'new_customer') AS new_customers,
       COUNT(DISTINCT m.mmid) FILTER (WHERE m.customer_type = 'retention')    AS retention,
-      COUNT(DISTINCT m.order_number) FILTER (WHERE m.is_hoc_unilever)        AS hoc_orders,
-      COALESCE(SUM(m.sales_in_vat) FILTER (WHERE m.is_hoc_unilever), 0)      AS hoc_sales,
+      COUNT(DISTINCT m.order_number)                                          AS hoc_orders,
+      COALESCE(SUM(m.sales_in_vat), 0)                                        AS hoc_sales,
       COALESCE(SUM(m.sales_in_vat), 0)                                        AS total_sales,
       iv.incentive_per_head,
       COUNT(DISTINCT m.mmid) * COALESCE(iv.incentive_per_head, 0)            AS total_incentive,
       co.cost_per_agent
     FROM (
-      SELECT DISTINCT DATE_TRUNC('month', first_connected_date)::date AS month, lead_customers
-      FROM telesales_calls WHERE first_connected_date IS NOT NULL
+      SELECT DISTINCT
+        DATE_TRUNC('month', first_connected_date)::date AS month,
+        lead_customers,
+        COALESCE(m.dynamic_cmg, 'unknown') AS dynamic_cmg
+      FROM telesales_calls tc2
+      LEFT JOIN mart_telesales_orders m
+        ON m.mmid = tc2.mmid
+        AND DATE_TRUNC('month', m.order_date)::date = DATE_TRUNC('month', tc2.first_connected_date)::date
+      WHERE tc2.first_connected_date IS NOT NULL
     ) t
     LEFT JOIN (
       SELECT
@@ -96,11 +104,11 @@ export async function buildMartCostIncentive(): Promise<number> {
       GROUP BY 1, 2
     ) tc ON tc.month = t.month AND tc.lead_customers = t.lead_customers
     LEFT JOIN mart_telesales_orders m
-      ON m.month = t.month AND m.lead_customers = t.lead_customers
+      ON m.month = t.month AND m.lead_customers = t.lead_customers AND m.dynamic_cmg = t.dynamic_cmg
     LEFT JOIN incentives iv ON iv.tier::text = t.lead_customers
     LEFT JOIN costs co ON co.month = t.month
-    GROUP BY t.month, t.lead_customers, tc.total_calls, tc.reached, iv.incentive_per_head, co.cost_per_agent
-    ON CONFLICT (month, lead_customers) DO UPDATE SET
+    GROUP BY t.month, t.lead_customers, t.dynamic_cmg, tc.total_calls, tc.reached, iv.incentive_per_head, co.cost_per_agent
+    ON CONFLICT (month, lead_customers, dynamic_cmg) DO UPDATE SET
       total_calls        = EXCLUDED.total_calls,
       reached            = EXCLUDED.reached,
       ordered            = EXCLUDED.ordered,

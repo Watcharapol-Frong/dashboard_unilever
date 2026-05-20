@@ -36,6 +36,7 @@ CREATE INDEX IF NOT EXISTS idx_mto_ctype      ON mart_telesales_orders (customer
 CREATE TABLE IF NOT EXISTS mart_cost_incentive (
   month              DATE NOT NULL,
   lead_customers     TEXT NOT NULL,
+  dynamic_cmg        TEXT NOT NULL,
   total_calls        INTEGER,
   reached            INTEGER,
   ordered            INTEGER,
@@ -48,5 +49,5 @@ CREATE TABLE IF NOT EXISTS mart_cost_incentive (
   total_incentive    NUMERIC,
   cost_per_agent     NUMERIC,
   refreshed_at       TIMESTAMPTZ DEFAULT NOW(),
-  PRIMARY KEY (month, lead_customers)
+  PRIMARY KEY (month, lead_customers, dynamic_cmg)
 );
