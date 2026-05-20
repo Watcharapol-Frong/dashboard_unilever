@@ -69,11 +69,11 @@ export async function buildMartCostIncentive(): Promise<number> {
       incentive_per_head, total_incentive, cost_per_agent
     )
     SELECT
-      t.month,
-      t.lead_customers,
-      t.dynamic_cmg,
-      tc.total_calls,
-      tc.reached,
+      tg.month,
+      tc_tier.lead_customers,
+      tg.dynamic_cmg,
+      tc_tier.total_calls,
+      tc_tier.reached,
       COUNT(DISTINCT m.mmid)                                                  AS ordered,
       COUNT(DISTINCT m.mmid) FILTER (WHERE m.customer_type = 'new_customer') AS new_customers,
       COUNT(DISTINCT m.mmid) FILTER (WHERE m.customer_type = 'retention')    AS retention,
@@ -84,30 +84,28 @@ export async function buildMartCostIncentive(): Promise<number> {
       COUNT(DISTINCT m.mmid) * COALESCE(iv.incentive_per_head, 0)            AS total_incentive,
       co.cost_per_agent
     FROM (
+      SELECT DISTINCT DATE_TRUNC('month', order_date)::date AS month, dynamic_cmg FROM online_sales WHERE dynamic_cmg IS NOT NULL
+      UNION
+      SELECT DISTINCT DATE_TRUNC('month', order_date)::date AS month, dynamic_cmg FROM offline_sales WHERE dynamic_cmg IS NOT NULL
+    ) tg
+    CROSS JOIN (
       SELECT DISTINCT
-        DATE_TRUNC('month', first_connected_date)::date AS month,
-        lead_customers,
-        COALESCE(m.dynamic_cmg, 'unknown') AS dynamic_cmg
-      FROM telesales_calls tc2
-      LEFT JOIN mart_telesales_orders m
-        ON m.mmid = tc2.mmid
-        AND DATE_TRUNC('month', m.order_date)::date = DATE_TRUNC('month', tc2.first_connected_date)::date
-      WHERE tc2.first_connected_date IS NOT NULL
-    ) t
-    LEFT JOIN (
-      SELECT
         DATE_TRUNC('month', first_connected_date)::date AS month,
         lead_customers,
         COUNT(*) AS total_calls,
         COUNT(*) FILTER (WHERE call_status = 'รับสาย') AS reached
-      FROM telesales_calls WHERE first_connected_date IS NOT NULL
+      FROM telesales_calls
+      WHERE first_connected_date IS NOT NULL
       GROUP BY 1, 2
-    ) tc ON tc.month = t.month AND tc.lead_customers = t.lead_customers
+    ) tc_tier ON tc_tier.month = tg.month
     LEFT JOIN mart_telesales_orders m
-      ON m.month = t.month AND m.lead_customers = t.lead_customers AND m.dynamic_cmg = t.dynamic_cmg
-    LEFT JOIN incentives iv ON iv.tier::text = t.lead_customers
-    LEFT JOIN costs co ON co.month = t.month
-    GROUP BY t.month, t.lead_customers, t.dynamic_cmg, tc.total_calls, tc.reached, iv.incentive_per_head, co.cost_per_agent
+      ON  m.month         = tg.month
+      AND m.dynamic_cmg   = tg.dynamic_cmg
+      AND m.lead_customers = tc_tier.lead_customers
+    LEFT JOIN incentives iv ON iv.tier::text = tc_tier.lead_customers
+    LEFT JOIN costs co ON co.month = tg.month
+    GROUP BY tg.month, tc_tier.lead_customers, tg.dynamic_cmg,
+             tc_tier.total_calls, tc_tier.reached, iv.incentive_per_head, co.cost_per_agent
     ON CONFLICT (month, lead_customers, dynamic_cmg) DO UPDATE SET
       total_calls        = EXCLUDED.total_calls,
       reached            = EXCLUDED.reached,
