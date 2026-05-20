@@ -42,14 +42,39 @@ export function CsvUploader({ onUploaded }: { onUploaded?: () => void }) {
     setUploading(true)
     setResult(null)
 
-    const formData = new FormData()
-    formData.append('file', file)
+    try {
+      // Step 1: Get presigned URL
+      const presignRes = await fetch('/api/data/upload/presign', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ type: fileType }),
+      })
+      if (!presignRes.ok) {
+        const err = await presignRes.json()
+        setResult({ error: err.error ?? 'Failed to get upload URL' })
+        return
+      }
+      const { url, key } = await presignRes.json()
 
-    const res = await fetch(`/api/data/upload/${fileType}`, { method: 'POST', body: formData })
-    const data: UploadResult = await res.json()
-    setResult(data)
-    setUploading(false)
-    if (data.ok) { setFile(null); setPreview([]); onUploaded?.() }
+      // Step 2: Upload directly to R2
+      const putRes = await fetch(url, { method: 'PUT', body: file, headers: { 'Content-Type': 'text/csv' } })
+      if (!putRes.ok) {
+        setResult({ error: 'Failed to upload file to storage' })
+        return
+      }
+
+      // Step 3: Process from R2
+      const res = await fetch(`/api/data/upload/${fileType}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ key, filename: file.name }),
+      })
+      const data: UploadResult = await res.json()
+      setResult(data)
+      if (data.ok) { setFile(null); setPreview([]); onUploaded?.() }
+    } finally {
+      setUploading(false)
+    }
   }
 
   const csvHeaders = preview.length > 0 ? Object.keys(preview[0]) : []

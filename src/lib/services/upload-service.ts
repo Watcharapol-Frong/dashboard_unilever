@@ -1,6 +1,6 @@
 import Papa from 'papaparse'
 import { query, queryOne } from '@/lib/db'
-import { uploadToR2 } from '@/lib/storage/r2'
+import { uploadToR2, downloadFromR2, deleteFromR2 } from '@/lib/storage/r2'
 import { FILE_TYPE_CONFIGS, generateStoragePath, validateHeaders } from '@/lib/upload/config'
 import { transformRows } from '@/lib/upload/etl'
 import { encrypt } from '@/lib/utils/crypto'
@@ -18,15 +18,19 @@ export interface UploadResult {
   error?: string
 }
 
-/**
- * Service to handle the full upload pipeline:
- * CSV Parse -> Validate -> R2 Store -> ETL -> DB Upsert
- */
 export async function processUpload(type: UploadFileType, file: File): Promise<UploadResult> {
+  return processUploadFromText(type, await file.text(), file.name)
+}
+
+export async function processUploadFromKey(type: UploadFileType, tempKey: string, filename: string): Promise<UploadResult> {
+  const buffer = await downloadFromR2(tempKey)
+  await deleteFromR2(tempKey)
+  return processUploadFromText(type, buffer.toString('utf-8'), filename)
+}
+
+async function processUploadFromText(type: UploadFileType, text: string, filename: string): Promise<UploadResult> {
   const cfg = FILE_TYPE_CONFIGS[type]
   if (!cfg) throw new Error('Unknown file type')
-
-  const text = await file.text()
 
   // 1. Parse CSV
   const { data: rows, errors: parseErrors } = Papa.parse<Record<string, string>>(text, {
@@ -90,7 +94,7 @@ export async function processUpload(type: UploadFileType, file: File): Promise<U
   const batch = await queryOne<{ id: string }>(
     `INSERT INTO upload_batches (table_name, filename, storage_path, status)
      VALUES ($1, $2, $3, 'failed') RETURNING id`,
-    [cfg.table, file.name, storagePath]
+    [cfg.table, filename, storagePath]
   )
   if (!batch) throw new Error('Failed to create batch record')
 

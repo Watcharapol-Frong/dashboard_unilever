@@ -1,4 +1,5 @@
 import { S3Client, PutObjectCommand, DeleteObjectCommand, ListObjectsV2Command, GetObjectCommand } from '@aws-sdk/client-s3'
+import { getSignedUrl } from '@aws-sdk/s3-request-presigner'
 
 export const r2 = new S3Client({
   region: 'auto',
@@ -31,6 +32,14 @@ export async function downloadFromR2(key: string): Promise<Buffer> {
     chunks.push(Buffer.from(chunk))
   }
   return Buffer.concat(chunks)
+}
+
+export async function getPresignedUploadUrl(key: string, expiresIn = 300): Promise<string> {
+  return getSignedUrl(r2, new PutObjectCommand({
+    Bucket: R2_BUCKET,
+    Key: key,
+    ContentType: 'text/csv',
+  }), { expiresIn })
 }
 
 export async function listR2Folder(prefix: string): Promise<string[]> {
