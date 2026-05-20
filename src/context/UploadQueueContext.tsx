@@ -41,33 +41,55 @@ export function UploadQueueProvider({ children }: { children: React.ReactNode })
   const jobsRef = useRef<UploadJob[]>([])
   jobsRef.current = jobs
 
-  const startJob = useCallback((job: UploadJob) => {
-    const form = new FormData()
-    form.append('file', job.file)
-
-    const xhr = new XMLHttpRequest()
-    xhr.upload.onprogress = (e) => {
-      if (!e.lengthComputable) return
-      const pct = Math.round((e.loaded / e.total) * 100)
-      setJobs(prev => prev.map(j => j.id === job.id ? { ...j, progress: pct } : j))
+  const startJob = useCallback(async (job: UploadJob) => {
+    const fail = (error: string) => {
+      setJobs(prev => prev.map(j => j.id === job.id ? { ...j, status: 'failed', progress: 0, result: { ok: false, error } } : j))
     }
-    xhr.onload = () => {
+
+    try {
+      // Step 1: get presigned URL
+      const presignRes = await fetch('/api/data/upload/presign', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ type: job.fileType }),
+      })
+      if (!presignRes.ok) { fail('Failed to get upload URL'); return }
+      const { url, key } = await presignRes.json()
+
+      // Step 2: PUT file directly to R2 with progress tracking
+      await new Promise<void>((resolve, reject) => {
+        const xhr = new XMLHttpRequest()
+        xhr.upload.onprogress = (e) => {
+          if (!e.lengthComputable) return
+          const pct = Math.round((e.loaded / e.total) * 90)
+          setJobs(prev => prev.map(j => j.id === job.id ? { ...j, progress: pct } : j))
+        }
+        xhr.onload = () => xhr.status < 300 ? resolve() : reject(new Error(`R2 upload failed: ${xhr.status}`))
+        xhr.onerror = () => reject(new Error('Network error during upload'))
+        xhr.open('PUT', url)
+        xhr.setRequestHeader('Content-Type', 'text/csv')
+        xhr.send(job.file)
+      })
+
+      // Step 3: process from R2
+      setJobs(prev => prev.map(j => j.id === job.id ? { ...j, progress: 95 } : j))
+      const res = await fetch(`/api/data/upload/${job.fileType}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ key, filename: job.file.name }),
+      })
       let result: UploadResult
-      try { result = JSON.parse(xhr.responseText) }
+      try { result = await res.json() }
       catch { result = { ok: false, error: 'Invalid server response' } }
+
       setJobs(prev => prev.map(j =>
         j.id === job.id ? { ...j, status: result.ok ? 'done' : 'failed', progress: 100, result } : j
       ))
       swrMutate('/api/data/history')
       swrMutate('/api/data/status')
+    } catch (err) {
+      fail((err as Error).message ?? 'Upload failed')
     }
-    xhr.onerror = () => {
-      setJobs(prev => prev.map(j =>
-        j.id === job.id ? { ...j, status: 'failed', result: { ok: false, error: 'Network error' } } : j
-      ))
-    }
-    xhr.open('POST', `/api/data/upload/${job.fileType}`)
-    xhr.send(form)
   }, [])
 
   const tryStartQueued = useCallback(() => {
