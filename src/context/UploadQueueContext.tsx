@@ -41,33 +41,86 @@ export function UploadQueueProvider({ children }: { children: React.ReactNode })
   const jobsRef = useRef<UploadJob[]>([])
   jobsRef.current = jobs
 
-  const startJob = useCallback((job: UploadJob) => {
-    const form = new FormData()
-    form.append('file', job.file)
-
-    const xhr = new XMLHttpRequest()
-    xhr.upload.onprogress = (e) => {
-      if (!e.lengthComputable) return
-      const pct = Math.round((e.loaded / e.total) * 100)
-      setJobs(prev => prev.map(j => j.id === job.id ? { ...j, progress: pct } : j))
+  const startJob = useCallback(async (job: UploadJob) => {
+    const fail = (error: string) => {
+      setJobs(prev => prev.map(j => j.id === job.id ? { ...j, status: 'failed', progress: 0, result: { ok: false, error } } : j))
     }
-    xhr.onload = () => {
+
+    const PART_SIZE = 10 * 1024 * 1024 // 10MB per part
+
+    let uploadId: string | null = null
+    let key: string | null = null
+
+    try {
+      // Phase 1: Initiate multipart upload + get presigned URLs for all parts
+      setJobs(prev => prev.map(j => j.id === job.id ? { ...j, progress: 2 } : j))
+      const initRes = await fetch('/api/data/upload/multipart/init', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ type: job.fileType, fileSize: job.file.size }),
+      })
+      if (!initRes.ok) {
+        const { error } = await initRes.json().catch(() => ({ error: 'Init failed' }))
+        fail(error ?? 'Failed to initiate upload')
+        return
+      }
+      const { uploadId: uid, key: k, presignedUrls, partSize } = await initRes.json()
+      uploadId = uid
+      key = k
+
+      // Phase 2: Upload all parts in parallel directly to R2
+      const partCount = presignedUrls.length
+      const completedParts: { PartNumber: number; ETag: string }[] = new Array(partCount)
+      let completedCount = 0
+
+      await Promise.all(
+        presignedUrls.map(async (url: string, idx: number) => {
+          const start = idx * partSize
+          const slice = job.file.slice(start, start + partSize)
+
+          const res = await fetch(url, { method: 'PUT', body: slice })
+          if (!res.ok) throw new Error(`Part ${idx + 1} upload failed (${res.status})`)
+
+          const etag = res.headers.get('ETag')
+          if (!etag) throw new Error(`Part ${idx + 1} missing ETag`)
+
+          completedParts[idx] = { PartNumber: idx + 1, ETag: etag }
+          completedCount++
+
+          const pct = 5 + Math.round((completedCount / partCount) * 80)
+          setJobs(prev => prev.map(j => j.id === job.id ? { ...j, progress: pct } : j))
+        })
+      )
+
+      // Phase 3: Complete multipart + process from R2
+      setJobs(prev => prev.map(j => j.id === job.id ? { ...j, progress: 90 } : j))
+      const completeRes = await fetch('/api/data/upload/multipart/complete', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ uploadId, key, parts: completedParts, type: job.fileType, filename: job.file.name }),
+      })
+      setJobs(prev => prev.map(j => j.id === job.id ? { ...j, progress: 95 } : j))
+
       let result: UploadResult
-      try { result = JSON.parse(xhr.responseText) }
+      try { result = await completeRes.json() }
       catch { result = { ok: false, error: 'Invalid server response' } }
+
       setJobs(prev => prev.map(j =>
         j.id === job.id ? { ...j, status: result.ok ? 'done' : 'failed', progress: 100, result } : j
       ))
-      swrMutate('/api/upload/history')
-      swrMutate('/api/upload/status')
+      swrMutate('/api/data/history')
+      swrMutate('/api/data/status')
+
+    } catch (err) {
+      if (uploadId && key) {
+        fetch('/api/data/upload/multipart/abort', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ uploadId, key }),
+        }).catch(e => console.warn('[upload] abort failed:', e))
+      }
+      fail((err as Error).message ?? 'Upload failed')
     }
-    xhr.onerror = () => {
-      setJobs(prev => prev.map(j =>
-        j.id === job.id ? { ...j, status: 'failed', result: { ok: false, error: 'Network error' } } : j
-      ))
-    }
-    xhr.open('POST', `/api/upload/${job.fileType}`)
-    xhr.send(form)
   }, [])
 
   const tryStartQueued = useCallback(() => {
