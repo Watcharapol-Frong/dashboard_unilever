@@ -88,7 +88,7 @@ export async function buildMartCostIncentive(): Promise<number> {
       UNION
       SELECT DISTINCT DATE_TRUNC('month', order_date)::date AS month, dynamic_cmg FROM offline_sales WHERE dynamic_cmg IS NOT NULL
     ) tg
-    CROSS JOIN (
+    JOIN (
       SELECT DISTINCT
         DATE_TRUNC('month', first_connected_date)::date AS month,
         lead_customers,
