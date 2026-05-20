@@ -60,4 +60,28 @@ export const columns: ColumnDef<AgentPerformance>[] = [
       </div>
     ),
   },
+  {
+    accessorKey: "conversion_rate",
+    header: ({ column }) => (
+      <DataTableColumnHeader column={column} title="Conversion" className="justify-end" />
+    ),
+    cell: ({ row }) => (
+      <div className="flex justify-end">
+        <Badge variant={row.original.conversion_rate >= 0.15 ? 'success' : row.original.conversion_rate >= 0.08 ? 'warning' : 'destructive'}>
+          {formatPct(row.original.conversion_rate)}
+        </Badge>
+      </div>
+    ),
+  },
+  {
+    accessorKey: "calls_per_day",
+    header: ({ column }) => (
+      <DataTableColumnHeader column={column} title="Calls/Day" className="justify-end" />
+    ),
+    cell: ({ row }) => (
+      <div className="text-right text-sm tabular-nums">
+        {row.original.calls_per_day.toFixed(1)}
+      </div>
+    ),
+  },
 ]

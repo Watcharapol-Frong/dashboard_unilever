@@ -97,7 +97,7 @@ const agentChartConfig = {
 
 export default function LeadsPage() {
   const [page, setPage]     = useState(1)
-  const [filter, setFilter] = useState<Filter>('all')
+  const [filter, setFilter] = useState<Filter>('retry')
   const LIMIT = 50
 
   const { data, isLoading } = useSWR<LeadsData>(
@@ -127,6 +127,14 @@ export default function LeadsPage() {
 
   return (
     <div className="space-y-8">
+
+      {/* ── RETRY ALERT ───────────────────────────────────────────────────── */}
+      {!isLoading && retryCount > 20 && (
+        <div className="flex items-center gap-3 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800">
+          <RefreshCw className="h-4 w-4 shrink-0 text-red-600" />
+          <span>มี <strong>{formatNumber(retryCount)}</strong> leads รอ retry วันนี้ — กรุณาตามติดก่อนหมดวัน</span>
+        </div>
+      )}
 
       {/* ── PROBLEMS ──────────────────────────────────────────────────────── */}
       <section className="space-y-3">
@@ -295,8 +303,8 @@ export default function LeadsPage() {
                   >
                     {FILTER_LABELS[f]}
                     {f === 'retry' && retryCount > 0 && (
-                      <span className={`ml-1.5 text-xs rounded-full px-1.5 py-0.5 ${
-                        filter === f ? 'bg-white/20 text-white' : 'bg-yellow-100 text-yellow-800'
+                      <span className={`ml-1.5 text-xs rounded-full px-1.5 py-0.5 font-semibold ${
+                        filter === f ? 'bg-white/20 text-white' : 'bg-red-100 text-red-700'
                       }`}>
                         {formatNumber(retryCount)}
                       </span>

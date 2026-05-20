@@ -97,6 +97,9 @@ export default function OverviewPage() {
           value={formatTHB(kpi?.total_sales ?? 0)}
           comparison={cmp(kpi?.total_sales ?? 0, kpi?.prev_total_sales ?? 0)}
           comparisonLabel={comparisonLabel}
+          subtitle={kpi?.sales_target && kpi.sales_target > 0
+            ? `${formatPct(kpi.target_pct ?? 0)} of target`
+            : undefined}
           extras={[
             { label: 'Orders', value: formatNumber(kpi?.order_count ?? 0) },
             { label: 'AOV', value: formatTHB(kpi?.aov ?? 0) },

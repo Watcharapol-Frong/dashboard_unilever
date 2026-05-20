@@ -30,6 +30,10 @@ export default function TelesalesPage() {
     { id: 'Reached',     data: data.by_period.map(d => ({ x: formatPeriodLabel(d.period, groupBy), y: d.reached })) },
   ] : []
 
+  const avgConversionRate = data?.by_agent?.length
+    ? data.by_agent.reduce((s, a) => s + a.conversion_rate, 0) / data.by_agent.length
+    : 0
+
   return (
     <div className="space-y-6">
       <div>
@@ -60,9 +64,9 @@ export default function TelesalesPage() {
           loading={isLoading}
         />
         <KpiCard
-          title="Status Types"
-          value={String(Object.keys(data?.callStatusMap ?? {}).length)}
-          subtitle="Distinct call outcomes"
+          title="Avg Conversion Rate"
+          value={formatPct(avgConversionRate)}
+          subtitle="Calls → Orders (avg per agent)"
           icon={BarChart2}
           loading={isLoading}
         />
