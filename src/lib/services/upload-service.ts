@@ -163,29 +163,33 @@ async function processUploadFromText(type: UploadFileType, text: string, filenam
     [upsertRows.length, etlErrors.length, finalStatus, batch.id]
   )
 
-  // ── 8. Update table_summaries for fast Dashboard Status ──
-  if (!dbError && upsertRows.length > 0) {
+  // ── 8. Update table_summaries — recount from DB to stay accurate after UPSERT dedup ──
+  if (!dbError) {
     try {
+      const tableName = type === 'telesales' ? 'telesales_calls' : type
       if (type === 'online_sales' || type === 'offline_sales') {
-        const sumSales = upsertRows.reduce((acc, r) => acc + Number((r as any).sales_in_vat || 0), 0)
+        const [countRes, salesRes] = await Promise.all([
+          queryOne<{ cnt: string }>(`SELECT COUNT(*) AS cnt FROM ${tableName}`),
+          queryOne<{ total: string }>(`SELECT COALESCE(SUM(sales_in_vat), 0) AS total FROM ${tableName}`),
+        ])
         await query(
           `INSERT INTO table_summaries (table_name, total_rows, total_sales)
            VALUES ($1, $2, $3)
-           ON CONFLICT (table_name) DO UPDATE SET 
-             total_rows = table_summaries.total_rows + EXCLUDED.total_rows,
-             total_sales = table_summaries.total_sales + EXCLUDED.total_sales,
+           ON CONFLICT (table_name) DO UPDATE SET
+             total_rows   = EXCLUDED.total_rows,
+             total_sales  = EXCLUDED.total_sales,
              last_updated = NOW()`,
-          [type, upsertRows.length, sumSales]
+          [type, Number(countRes?.cnt ?? 0), Number(salesRes?.total ?? 0)]
         )
       } else {
-        const tableName = type === 'telesales' ? 'telesales_calls' : type
+        const countRes = await queryOne<{ cnt: string }>(`SELECT COUNT(*) AS cnt FROM ${tableName}`)
         await query(
           `INSERT INTO table_summaries (table_name, total_rows)
            VALUES ($1, $2)
-           ON CONFLICT (table_name) DO UPDATE SET 
-             total_rows = table_summaries.total_rows + EXCLUDED.total_rows,
+           ON CONFLICT (table_name) DO UPDATE SET
+             total_rows   = EXCLUDED.total_rows,
              last_updated = NOW()`,
-          [tableName, upsertRows.length]
+          [tableName, Number(countRes?.cnt ?? 0)]
         )
       }
     } catch (err) {
