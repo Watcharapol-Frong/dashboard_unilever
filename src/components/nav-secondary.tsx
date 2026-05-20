@@ -1,7 +1,8 @@
 "use client"
 
 import * as React from "react"
-import { LucideIcon } from "lucide-react"
+import type { ComponentType } from "react"
+type LucideIcon = ComponentType<{ className?: string }>
 
 import {
   SidebarGroup,
