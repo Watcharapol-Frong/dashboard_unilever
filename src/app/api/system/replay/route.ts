@@ -6,6 +6,7 @@ import { transformRows } from '@/lib/upload/etl'
 import { FILE_TYPE_CONFIGS } from '@/lib/upload/config'
 import type { UploadFileType } from '@/lib/upload/config'
 import { query } from '@/lib/db'
+import { withAdmin } from '@/lib/auth'
 
 const ALLOWED_TABLES = [
   'online_sales', 'offline_sales', 'leads', 'products',
@@ -71,6 +72,7 @@ async function upsertChunked(
 }
 
 export async function POST(request: Request) {
+  return withAdmin(async () => {
   const body = await request.json().catch(() => ({}))
   const table = body?.table as string
 
@@ -142,4 +144,5 @@ export async function POST(request: Request) {
     inserted:       totalInserted,
     errors:         errors.length > 0 ? errors : undefined,
   })
+  }) // withAdmin
 }
