@@ -1,10 +1,13 @@
 import { NextResponse } from 'next/server'
 import type { NextRequest } from 'next/server'
+import { timingSafeEqual } from 'crypto'
 import { queryOne } from '@/lib/db'
 
 function isAuthorized(request: NextRequest) {
-  const auth = request.headers.get('Authorization') ?? ''
-  return auth === `Bearer ${process.env.INGEST_API_SECRET}`
+  const provided = request.headers.get('Authorization') ?? ''
+  const expected = `Bearer ${process.env.INGEST_API_SECRET ?? ''}`
+  if (provided.length !== expected.length) return false
+  return timingSafeEqual(Buffer.from(provided), Buffer.from(expected))
 }
 
 export async function GET(request: NextRequest) {

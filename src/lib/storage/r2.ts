@@ -1,4 +1,4 @@
-import { S3Client, PutObjectCommand, DeleteObjectCommand, ListObjectsV2Command, GetObjectCommand } from '@aws-sdk/client-s3'
+import { S3Client, PutObjectCommand, DeleteObjectCommand, ListObjectsV2Command, GetObjectCommand, PutBucketLifecycleConfigurationCommand } from '@aws-sdk/client-s3'
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner'
 
 export const r2 = new S3Client({
@@ -45,10 +45,33 @@ export async function getPresignedUploadUrl(key: string, expiresIn = 300): Promi
 }
 
 export async function listR2Folder(prefix: string): Promise<string[]> {
-  const res = await r2.send(new ListObjectsV2Command({
+  const keys: string[] = []
+  let token: string | undefined
+  do {
+    const res = await r2.send(new ListObjectsV2Command({
+      Bucket: R2_BUCKET,
+      Prefix: prefix,
+      MaxKeys: 1000,
+      ContinuationToken: token,
+    }))
+    for (const obj of res.Contents ?? []) {
+      if (obj.Key) keys.push(obj.Key)
+    }
+    token = res.IsTruncated ? res.NextContinuationToken : undefined
+  } while (token)
+  return keys
+}
+
+export async function setTmpLifecycle(expireDays = 1): Promise<void> {
+  await r2.send(new PutBucketLifecycleConfigurationCommand({
     Bucket: R2_BUCKET,
-    Prefix: prefix,
-    MaxKeys: 1000,
+    LifecycleConfiguration: {
+      Rules: [{
+        ID: 'expire-tmp',
+        Status: 'Enabled',
+        Filter: { Prefix: 'tmp/' },
+        Expiration: { Days: expireDays },
+      }],
+    },
   }))
-  return (res.Contents ?? []).map(o => o.Key!).filter(Boolean)
 }

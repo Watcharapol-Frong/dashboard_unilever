@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { S3Client, PutBucketCorsCommand, GetBucketCorsCommand } from '@aws-sdk/client-s3'
 import { withAdmin } from '@/lib/auth'
+import { setTmpLifecycle } from '@/lib/storage/r2'
 
 export async function POST() {
   return withAdmin(async () => {
@@ -32,7 +33,8 @@ export async function POST() {
       }))
 
       const result = await r2.send(new GetBucketCorsCommand({ Bucket: bucket }))
-      return NextResponse.json({ ok: true, corsRules: result.CORSRules })
+      await setTmpLifecycle(1)
+      return NextResponse.json({ ok: true, corsRules: result.CORSRules, tmpLifecycleDays: 1 })
     } catch (err) {
       console.error('[set-r2-cors]', err)
       return NextResponse.json({ error: 'Failed to set CORS policy' }, { status: 500 })
