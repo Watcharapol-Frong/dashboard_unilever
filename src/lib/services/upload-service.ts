@@ -1,6 +1,6 @@
 import Papa from 'papaparse'
 import { query, queryOne } from '@/lib/db'
-import { uploadToR2, downloadFromR2, deleteFromR2 } from '@/lib/storage/r2'
+import { uploadToR2, downloadFromR2, deleteFromR2, listR2Folder } from '@/lib/storage/r2'
 import { FILE_TYPE_CONFIGS, generateStoragePath, validateHeaders } from '@/lib/upload/config'
 import { transformRows } from '@/lib/upload/etl'
 import { encrypt } from '@/lib/utils/crypto'
@@ -26,6 +26,14 @@ export async function processUploadFromKey(type: UploadFileType, tempKey: string
   const buffer = await downloadFromR2(tempKey)
   await deleteFromR2(tempKey)
   return processUploadFromText(type, buffer.toString('utf-8'), filename)
+}
+
+export async function processUploadFromChunks(type: UploadFileType, uploadId: string, filename: string): Promise<UploadResult> {
+  const keys = (await listR2Folder(`tmp/${uploadId}/`)).sort()
+  if (keys.length === 0) throw new Error('No chunks found for upload')
+  const buffers = await Promise.all(keys.map(k => downloadFromR2(k)))
+  await Promise.all(keys.map(k => deleteFromR2(k)))
+  return processUploadFromText(type, Buffer.concat(buffers).toString('utf-8'), filename)
 }
 
 async function processUploadFromText(type: UploadFileType, text: string, filename: string): Promise<UploadResult> {

@@ -46,37 +46,35 @@ export function UploadQueueProvider({ children }: { children: React.ReactNode })
       setJobs(prev => prev.map(j => j.id === job.id ? { ...j, status: 'failed', progress: 0, result: { ok: false, error } } : j))
     }
 
+    const CHUNK_SIZE = 3 * 1024 * 1024 // 3MB per chunk — stays under Vercel's 4.5MB limit
+
     try {
-      // Step 1: get presigned URL
-      const presignRes = await fetch('/api/data/upload/presign', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ type: job.fileType }),
-      })
-      if (!presignRes.ok) { fail('Failed to get upload URL'); return }
-      const { url, key } = await presignRes.json()
+      const uploadId = crypto.randomUUID()
+      const totalChunks = Math.ceil(job.file.size / CHUNK_SIZE)
 
-      // Step 2: PUT file directly to R2 with progress tracking
-      await new Promise<void>((resolve, reject) => {
-        const xhr = new XMLHttpRequest()
-        xhr.upload.onprogress = (e) => {
-          if (!e.lengthComputable) return
-          const pct = Math.round((e.loaded / e.total) * 90)
-          setJobs(prev => prev.map(j => j.id === job.id ? { ...j, progress: pct } : j))
-        }
-        xhr.onload = () => xhr.status < 300 ? resolve() : reject(new Error(`R2 upload failed: ${xhr.status}`))
-        xhr.onerror = () => reject(new Error('Network error during upload'))
-        xhr.open('PUT', url)
-        xhr.setRequestHeader('Content-Type', 'text/csv')
-        xhr.send(job.file)
-      })
+      // Upload chunks sequentially
+      for (let i = 0; i < totalChunks; i++) {
+        const start = i * CHUNK_SIZE
+        const chunk = job.file.slice(start, start + CHUNK_SIZE)
+        const form = new FormData()
+        form.append('chunk', chunk)
+        form.append('uploadId', uploadId)
+        form.append('index', String(i))
+        form.append('total', String(totalChunks))
 
-      // Step 3: process from R2
+        const res = await fetch('/api/data/upload/chunk', { method: 'POST', body: form })
+        if (!res.ok) { fail('Chunk upload failed'); return }
+
+        const pct = Math.round(((i + 1) / totalChunks) * 90)
+        setJobs(prev => prev.map(j => j.id === job.id ? { ...j, progress: pct } : j))
+      }
+
+      // Process assembled file
       setJobs(prev => prev.map(j => j.id === job.id ? { ...j, progress: 95 } : j))
       const res = await fetch(`/api/data/upload/${job.fileType}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ key, filename: job.file.name }),
+        body: JSON.stringify({ uploadId, filename: job.file.name }),
       })
       let result: UploadResult
       try { result = await res.json() }

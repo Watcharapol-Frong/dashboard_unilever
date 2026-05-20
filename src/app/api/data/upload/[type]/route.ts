@@ -1,7 +1,7 @@
 import { auth } from '@clerk/nextjs/server'
 import { NextResponse } from 'next/server'
 import type { NextRequest } from 'next/server'
-import { processUploadFromKey } from '@/lib/services/upload-service'
+import { processUploadFromKey, processUploadFromChunks } from '@/lib/services/upload-service'
 import { FILE_TYPE_CONFIGS } from '@/lib/upload/config'
 import type { UploadFileType } from '@/lib/upload/config'
 
@@ -19,11 +19,13 @@ export async function POST(
     return NextResponse.json({ error: 'Unknown file type' }, { status: 400 })
 
   try {
-    const { key, filename } = await request.json() as { key: string; filename: string }
-    if (!key || !filename)
-      return NextResponse.json({ error: 'key and filename are required' }, { status: 400 })
+    const { key, uploadId, filename } = await request.json() as { key?: string; uploadId?: string; filename: string }
+    if (!filename || (!key && !uploadId))
+      return NextResponse.json({ error: 'filename and either key or uploadId are required' }, { status: 400 })
 
-    const result = await processUploadFromKey(type, key, filename)
+    const result = uploadId
+      ? await processUploadFromChunks(type, uploadId, filename)
+      : await processUploadFromKey(type, key!, filename)
 
     if (!result.ok) {
       const isClientError = result.error?.includes('CSV') ||
