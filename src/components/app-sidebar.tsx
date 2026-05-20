@@ -5,11 +5,7 @@ import { usePathname } from "next/navigation"
 import {
   IconChartBar,
   IconDashboard,
-  IconDatabase,
   IconHelp,
-  IconListDetails,
-  IconReport,
-  IconPackage,
   IconGift,
   IconUsers,
   IconUpload,

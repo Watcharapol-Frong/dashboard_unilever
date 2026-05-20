@@ -46,8 +46,6 @@ export function UploadQueueProvider({ children }: { children: React.ReactNode })
       setJobs(prev => prev.map(j => j.id === job.id ? { ...j, status: 'failed', progress: 0, result: { ok: false, error } } : j))
     }
 
-    const PART_SIZE = 10 * 1024 * 1024 // 10MB per part
-
     let uploadId: string | null = null
     let key: string | null = null
 

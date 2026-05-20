@@ -9,11 +9,11 @@ export function createServiceClient() {
   throw new Error('Auth not configured')
 }
 
-export async function getSessionUserId(_request: NextRequest): Promise<string | null> {
+export async function getSessionUserId(_request: NextRequest): Promise<string | null> { // eslint-disable-line @typescript-eslint/no-unused-vars
   return null
 }
 
-export async function writeAuditLog(_args: {
+export async function writeAuditLog(_args: { // eslint-disable-line @typescript-eslint/no-unused-vars
   userId: string | null
   action: string
   entityType?: string

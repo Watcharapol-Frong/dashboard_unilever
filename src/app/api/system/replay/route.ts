@@ -48,6 +48,7 @@ async function upsertChunked(
   if (rows.length === 0) return
   // Drop batch_id (FK to upload_batches — no valid batch for replay)
   // and updated_at (will use NOW() in SQL)
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const cleanRows = rows.map(({ batch_id: _b, updated_at: _u, ...rest }) => rest)
   const cols = Object.keys(cleanRows[0])
   const conflictCols = conflictKey.split(',').map(k => k.trim())

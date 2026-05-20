@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server'
-import { query, queryOne, queryCount } from '@/lib/db'
+import { query, queryCount } from '@/lib/db'
 
 export async function GET(req: Request) {
   const { searchParams } = new URL(req.url)

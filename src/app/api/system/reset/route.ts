@@ -22,7 +22,7 @@ export async function DELETE() {
     // Also reset the summary table if it exists
     try {
       await query(`TRUNCATE TABLE table_summaries`)
-    } catch (e) {
+    } catch {
       // ignore if table doesn't exist yet
     }
     
