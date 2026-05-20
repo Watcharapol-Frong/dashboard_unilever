@@ -11,11 +11,22 @@ export async function DELETE() {
 
   const errors: string[] = []
 
-  // ── 1. Delete all rows (CockroachDB doesn't support TRUNCATE CASCADE across tables) ──
+  // ── 1. Clear all tables ───────────────────────────────────
   const tables = ['online_sales','offline_sales','leads','products','telesales_calls','targets','costs','incentives','upload_batches']
   try {
-    for (const t of tables) await query(`DELETE FROM ${t}`)
-    console.log('[reset] all tables cleared')
+    for (const t of tables) {
+      // Use TRUNCATE for speed and to avoid lock memory limits
+      await query(`TRUNCATE TABLE ${t} CASCADE`)
+    }
+    
+    // Also reset the summary table if it exists
+    try {
+      await query(`TRUNCATE TABLE table_summaries`)
+    } catch (e) {
+      // ignore if table doesn't exist yet
+    }
+    
+    console.log('[reset] all tables truncated')
   } catch (err) {
     errors.push(`DB clear: ${(err as Error).message}`)
     console.error('[reset] clear error:', err)

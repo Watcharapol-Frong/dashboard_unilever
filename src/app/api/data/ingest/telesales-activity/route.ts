@@ -1,13 +1,15 @@
 import { NextResponse } from 'next/server'
 import type { NextRequest } from 'next/server'
-import { randomBytes } from 'crypto'
+import { randomBytes, timingSafeEqual } from 'crypto'
 import { query, queryOne } from '@/lib/db'
 import { uploadToR2 } from '@/lib/storage/r2'
 import { encrypt } from '@/lib/utils/crypto'
 
 function isAuthorized(request: NextRequest) {
-  const auth = request.headers.get('Authorization') ?? ''
-  return auth === `Bearer ${process.env.INGEST_API_SECRET}`
+  const provided = request.headers.get('Authorization') ?? ''
+  const expected = `Bearer ${process.env.INGEST_API_SECRET ?? ''}`
+  if (provided.length !== expected.length) return false
+  return timingSafeEqual(Buffer.from(provided), Buffer.from(expected))
 }
 
 function padMmid(val: string): string | null {

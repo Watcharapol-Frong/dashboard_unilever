@@ -2,6 +2,7 @@
 
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
+import { useAuth } from '@clerk/nextjs'
 import {
   LayoutDashboard, Phone, ShoppingCart, Package,
   Gift, Upload, Users,
@@ -23,12 +24,6 @@ import {
 } from '@/components/ui/sidebar'
 import { NavUser } from '@/components/nav-user'
 
-const PLACEHOLDER_USER = {
-  name: 'Makro Admin',
-  email: 'admin@makro.co.th',
-  avatar: '',
-}
-
 const NAV_ITEMS = [
   { href: '/overview',   label: 'Overview',   icon: LayoutDashboard },
   { href: '/telesales',  label: 'Telesales',  icon: Phone },
@@ -44,6 +39,8 @@ const ADMIN_ITEMS = [
 
 export function AppSidebar() {
   const pathname = usePathname()
+  const { sessionClaims } = useAuth()
+  const isAdmin = sessionClaims?.publicMetadata?.role === 'admin'
 
   return (
     <Sidebar collapsible="icon">
@@ -88,37 +85,39 @@ export function AppSidebar() {
           </SidebarGroupContent>
         </SidebarGroup>
 
-        <SidebarSeparator />
-
-        {/* Admin group */}
-        <SidebarGroup>
-          <SidebarGroupLabel>Admin</SidebarGroupLabel>
-          <SidebarGroupContent>
-            <SidebarMenu>
-              {ADMIN_ITEMS.map(({ href, label, icon: Icon }) => {
-                const active = pathname === href
-                return (
-                  <SidebarMenuItem key={href}>
-                    <SidebarMenuButton
-                      asChild
-                      isActive={active}
-                      tooltip={label}
-                    >
-                      <Link href={href}>
-                        <Icon />
-                        <span>{label}</span>
-                      </Link>
-                    </SidebarMenuButton>
-                  </SidebarMenuItem>
-                )
-              })}
-            </SidebarMenu>
-          </SidebarGroupContent>
-        </SidebarGroup>
+        {isAdmin && (
+          <>
+            <SidebarSeparator />
+            <SidebarGroup>
+              <SidebarGroupLabel>Admin</SidebarGroupLabel>
+              <SidebarGroupContent>
+                <SidebarMenu>
+                  {ADMIN_ITEMS.map(({ href, label, icon: Icon }) => {
+                    const active = pathname === href
+                    return (
+                      <SidebarMenuItem key={href}>
+                        <SidebarMenuButton
+                          asChild
+                          isActive={active}
+                          tooltip={label}
+                        >
+                          <Link href={href}>
+                            <Icon />
+                            <span>{label}</span>
+                          </Link>
+                        </SidebarMenuButton>
+                      </SidebarMenuItem>
+                    )
+                  })}
+                </SidebarMenu>
+              </SidebarGroupContent>
+            </SidebarGroup>
+          </>
+        )}
       </SidebarContent>
 
       <SidebarFooter>
-        <NavUser user={PLACEHOLDER_USER} />
+        <NavUser />
       </SidebarFooter>
       <SidebarRail />
     </Sidebar>

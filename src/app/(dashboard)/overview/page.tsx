@@ -43,8 +43,8 @@ function StackedBar({
 
 export default function OverviewPage() {
   const { mode, groupBy } = useDateRange()
-  const { data: kpi, isLoading } = useKpi<OverviewKpi>('/api/kpi/overview')
-  const { data: sales } = useKpi<SalesKpi>('/api/kpi/sales')
+  const { data: kpi, isLoading } = useKpi<OverviewKpi>('/api/analytics/overview')
+  const { data: sales } = useKpi<SalesKpi>('/api/analytics/sales')
 
   const comparisonLabel =
     mode === 'month' ? 'vs last month' :

@@ -101,7 +101,7 @@ export default function LeadsPage() {
   const LIMIT = 50
 
   const { data, isLoading } = useSWR<LeadsData>(
-    `/api/kpi/leads?page=${page}&limit=${LIMIT}&filter=${filter}`,
+    `/api/analytics/leads?page=${page}&limit=${LIMIT}&filter=${filter}`,
     fetcher
   )
 

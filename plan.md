@@ -43,16 +43,17 @@ CSV File (Admin upload)
         ▼
 [Storage] Cloudflare R2: bucket "dashboard-unilever" (private)
           ⚠️ ไฟล์ถูก AES-256-GCM Encrypt ก่อน upload
-          ชื่อไฟล์: {folder}/{timestamp}_{6-char-token}_{type}.csv
+           ชื่อไฟล์: {folder}/{timestamp}_{6-char-token}_{type}.csv
         │
-        ▼ ETL ใน /api/upload/[type]
+        ▼ ETL ใน /api/data/upload/[type]
 [Silver] CockroachDB tables
          online_sales, offline_sales
+
          leads, telesales_calls, products
          targets, costs, incentives, upload_batches
         │
-        ▼ inline SQL ใน API routes
-[API]   /api/kpi/* — UNION ALL + aggregation ใน SQL โดยตรง (ไม่มี VIEW/RPC)
+        ▼ inline SQL in API routes
+[API]   /api/analytics/* — UNION ALL + aggregation in SQL โดยตรง (ไม่มี VIEW/RPC)
 ```
 
 ---
@@ -93,7 +94,7 @@ Schema อยู่ที่: `db/schema.sql` (run บน CockroachDB Console)
 | costs | month PK | |
 | incentives | tier PK | |
 
-> ⚠️ **ไม่มี DB Trigger** — ETL ใน `/api/upload/[type]` จัดการ normalize เอง
+> ⚠️ **ไม่มี DB Trigger** — ETL ใน `/api/data/upload/[type]` จัดการ normalize เอง
 > ⚠️ **ไม่มี VIEW/RPC** — API routes ใช้ inline SQL + UNION ALL โดยตรง
 
 ---
@@ -137,19 +138,23 @@ Schema อยู่ที่: `db/schema.sql` (run บน CockroachDB Console)
 
 | method | path | description |
 |---|---|---|
-| POST | `/api/upload/[type]` | CSV → validate → R2 → ETL → upsert Silver |
-| GET | `/api/upload/history` | upload_batches 50 รายการล่าสุด |
-| GET | `/api/upload/status` | Silver table summaries |
-| DELETE | `/api/dev/reset` | DEV ONLY — delete all rows + clear R2 |
-| GET | `/api/kpi/overview` | KPI cards + daily trend + period comparison |
-| GET | `/api/kpi/sales` | Sales performance + recent orders |
-| GET | `/api/kpi/telesales` | Call stats + Sankey funnel |
-| GET | `/api/kpi/products` | Top SKUs + brand breakdown |
-| GET | `/api/kpi/leads` | Leads KPI + agent performance + sankey |
-| GET | `/api/targets` | Targets per month/CMG |
-| POST | `/api/targets` | Upsert target |
-| DELETE | `/api/targets` | Delete target |
-| GET | `/api/incentives` | Incentive tiers |
+| POST | `/api/data/upload/[type]` | CSV → validate → R2 → ETL → upsert Silver |
+| GET | `/api/data/history` | upload_batches 50 รายการล่าสุด |
+| GET | `/api/data/status` | Silver table summaries |
+| POST | `/api/data/ingest/telesales-activity` | Ingest telesales activity from external source |
+| GET | `/api/analytics/overview` | KPI cards + daily trend + period comparison |
+| GET | `/api/analytics/sales` | Sales performance + recent orders |
+| GET | `/api/analytics/telesales` | Call stats + Sankey funnel |
+| GET | `/api/analytics/products` | Top SKUs + brand breakdown |
+| GET | `/api/analytics/leads` | Leads KPI + agent performance + sankey |
+| GET | `/api/master/targets` | Targets per month/CMG |
+| POST | `/api/master/targets` | Upsert target |
+| DELETE | `/api/master/targets` | Delete target |
+| GET | `/api/master/incentives` | Incentive tiers |
+| POST | `/api/master/invite` | Invite new users (stub) |
+| DELETE | `/api/system/reset` | DEV ONLY — delete all rows + clear R2 |
+| GET | `/api/system/check-sales` | System check for sales data consistency |
+| POST | `/api/system/replay` | Replay ETL for specific batches |
 
 ---
 
@@ -174,14 +179,19 @@ dashboard-unilever/
 │   │   │   └── upload/page.tsx
 │   │   ├── auth/callback/route.ts         # placeholder redirect → /overview
 │   │   └── api/
-│   │       ├── upload/[type]/route.ts
-│   │       ├── upload/history/route.ts
-│   │       ├── upload/status/route.ts
-│   │       ├── kpi/{overview,sales,telesales,products,leads}/route.ts
-│   │       ├── targets/route.ts
-│   │       ├── incentives/route.ts
-│   │       ├── invite/route.ts            # stub 501
-│   │       └── dev/{reset,check-sales}/route.ts
+│   │       ├── analytics/
+│   │       │   └── {overview,sales,telesales,products,leads}/route.ts
+│   │       ├── data/
+│   │       │   ├── upload/[type]/route.ts
+│   │       │   ├── history/route.ts
+│   │       │   ├── status/route.ts
+│   │       │   └── ingest/telesales-activity/route.ts
+│   │       ├── master/
+│   │       │   ├── targets/route.ts
+│   │       │   ├── incentives/route.ts
+│   │       │   └── invite/route.ts
+│   │       └── system/
+│   │           └── {reset,check-sales,replay}/route.ts
 │   │
 │   ├── components/
 │   │   ├── app-sidebar.tsx
@@ -235,10 +245,10 @@ dashboard-unilever/
 - [x] ย้ายออกจาก Supabase → CockroachDB (10 GB free) + Cloudflare R2 (10 GB free)
 - [x] `src/lib/db/index.ts` — pg Pool + SSL สำหรับ CockroachDB
 - [x] `src/lib/storage/r2.ts` — S3Client Cloudflare R2
-- [x] API routes ทั้งหมด (11 routes) ใช้ inline SQL ผ่าน pg แทน Supabase JS client
+- [x] API routes ทั้งหมด ใช้ inline SQL ผ่าน pg แทน Supabase JS client
 - [x] Upload pipeline: R2 + CockroachDB upsert
 - [x] Fix double-upload bug (React StrictMode double-invoke ใน `enqueueJob`)
-- [x] Fix dev/reset: ใช้ `DELETE FROM` แทน `TRUNCATE CASCADE` (CockroachDB compat)
+- [x] Fix system/reset: ใช้ `DELETE FROM` แทน `TRUNCATE CASCADE` (CockroachDB compat)
 - [x] CockroachDB tables ถูก create แล้ว (`db/schema.sql` run แล้ว)
 - [x] TypeScript clean (ไม่มี error)
 - [x] ลบ Supabase packages + config + migrations ทั้งหมด
@@ -263,7 +273,7 @@ dashboard-unilever/
 #### Phase 3 — Deploy ❌
 - [ ] Push to GitHub → connect Vercel
 - [ ] Add env vars ใน Vercel Dashboard
-- [ ] ตรวจสอบ `NODE_ENV=production` → `/api/dev/reset` ถูกบล็อก
+- [ ] ตรวจสอบ `NODE_ENV=production` → `/api/system/reset` ถูกบล็อก
 - [ ] Test จาก public URL
 
 ---
@@ -275,7 +285,7 @@ npm install
 npm run dev        # http://localhost:3000
 
 # DEV: reset all data (CockroachDB + R2)
-curl -X DELETE http://localhost:3000/api/dev/reset
+curl -X DELETE http://localhost:3000/api/system/reset
 ```
 
 > **CockroachDB Connection:** `postgresql://USER:PASS@HOST:26257/defaultdb?sslmode=verify-full`
