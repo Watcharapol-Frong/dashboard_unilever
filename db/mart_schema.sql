@@ -35,19 +35,21 @@ CREATE INDEX IF NOT EXISTS idx_mto_ctype      ON mart_telesales_orders (customer
 
 CREATE TABLE IF NOT EXISTS mart_cost_incentive (
   month              DATE NOT NULL,
-  lead_customers     TEXT NOT NULL,
-  dynamic_cmg        TEXT NOT NULL,
+  lead_customers     TEXT NOT NULL,    -- tier category จาก telesales_calls
+  dynamic_cmg        TEXT NOT NULL,    -- org unit จาก online/offline_sales
   total_calls        INTEGER,
   reached            INTEGER,
-  ordered            INTEGER,
+  ordered            INTEGER,          -- distinct mmid ที่สั่ง HOC ใน 14 วัน
   new_customers      INTEGER,
   retention          INTEGER,
-  hoc_orders         INTEGER,
-  hoc_sales          NUMERIC,
-  total_sales        NUMERIC,
-  incentive_per_head NUMERIC,
-  total_incentive    NUMERIC,
-  cost_per_agent     NUMERIC,
+  hoc_orders         INTEGER,          -- distinct order_number HOC Unilever
+  hoc_sales          NUMERIC,          -- ยอดขาย HOC Unilever (บาท)
+  actual_sales       NUMERIC,          -- ยอดขายรวมทุก product ของ CMG (online+offline)
+  sales_target       NUMERIC,          -- เป้าจาก targets table
+  achievement_ratio  NUMERIC,          -- actual_sales / sales_target
+  incentive_per_head NUMERIC,          -- lookup จาก incentives WHERE tier <= achievement_ratio
+  total_incentive    NUMERIC,          -- ordered * incentive_per_head
+  cost_per_agent     NUMERIC,          -- จาก costs table
   refreshed_at       TIMESTAMPTZ DEFAULT NOW(),
   PRIMARY KEY (month, lead_customers, dynamic_cmg)
 );
