@@ -2,15 +2,15 @@
 import { useKpi } from '@/hooks/useKpi'
 import { KpiCard } from '@/components/dashboard/KpiCard'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import { DataTable } from '@/components/dashboard/DataTable'
+import { DataTable } from '@/components/ui/data-table'
+import { columns } from './columns'
 import { NivoLine } from '@/components/charts/NivoLine'
 import { NivoBar } from '@/components/charts/NivoBar'
 import { TargetGaugeBar } from '@/components/dashboard/TargetGaugeBar'
-import { Badge } from '@/components/ui/badge'
-import { formatTHB, formatNumber, formatDate, formatPeriodLabel } from '@/lib/utils'
+import { formatTHB, formatNumber, formatPeriodLabel } from '@/lib/utils'
 import { useDateRange } from '@/context/DateRangeContext'
 import { TrendingUp, Users, ShoppingBag, DollarSign } from 'lucide-react'
-import type { SalesKpi, RecentOrder } from '@/types'
+import type { SalesKpi } from '@/types'
 
 export default function SalesPage() {
   const { data, isLoading } = useKpi<SalesKpi>('/api/analytics/sales')
@@ -27,47 +27,9 @@ export default function SalesPage() {
     Offline: d.offline,
   }))
 
-  const orderColumns = [
-    {
-      key: 'order_date', header: 'Date', sortable: true,
-      render: (r: RecentOrder) => formatDate(r.order_date),
-    },
-    { key: 'order_number', header: 'Order #' },
-    {
-      key: 'mmid', header: 'MMID',
-      render: (r: RecentOrder) => r.mmid ?? '-',
-    },
-    {
-      key: 'prod_num', header: 'Product #',
-      render: (r: RecentOrder) => r.prod_num ?? '-',
-    },
-    {
-      key: 'dynamic_cmg', header: 'CMG',
-      render: (r: RecentOrder) => r.dynamic_cmg ?? '-',
-    },
-    {
-      key: 'sales_qty', header: 'Qty', align: 'right' as const,
-      render: (r: RecentOrder) => formatNumber(r.sales_qty),
-    },
-    {
-      key: 'sales_in_vat', header: 'Amount (incl. VAT)', sortable: true, align: 'right' as const,
-      render: (r: RecentOrder) => formatTHB(r.sales_in_vat),
-    },
-    {
-      key: 'channel', header: 'Channel', align: 'center' as const,
-      render: (r: RecentOrder) => (
-        <Badge variant={r.channel === 'Online' ? 'default' : 'secondary'}>{r.channel}</Badge>
-      ),
-    },
-  ]
-
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold">Sales Performance</h1>
-        <p className="text-muted-foreground text-sm mt-1">Revenue tracking, target achievement, and order details</p>
-      </div>
-
+      {/* 4 KPI Cards */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         <KpiCard
           title="Total Sales"
@@ -147,9 +109,9 @@ export default function SalesPage() {
         <CardHeader><CardTitle className="text-base">Recent Orders</CardTitle></CardHeader>
         <CardContent>
           <DataTable
-            data={(data?.recent_orders ?? []) as unknown as Record<string, unknown>[]}
-            columns={orderColumns as never}
-            pageSize={15}
+            data={data?.recent_orders ?? []}
+            columns={columns}
+            searchKey="order_number"
           />
         </CardContent>
       </Card>

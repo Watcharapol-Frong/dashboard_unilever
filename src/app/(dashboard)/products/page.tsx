@@ -2,12 +2,12 @@
 import { useState } from 'react'
 import { useKpi } from '@/hooks/useKpi'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import { DataTable } from '@/components/dashboard/DataTable'
+import { DataTable } from '@/components/ui/data-table'
+import { columns } from './columns'
 import { NivoBar } from '@/components/charts/NivoBar'
 import { NivoPie } from '@/components/charts/NivoPie'
-import { Badge } from '@/components/ui/badge'
 import { formatTHB, formatNumber, formatPct } from '@/lib/utils'
-import type { ProductKpi, ProductRow } from '@/types'
+import type { ProductKpi } from '@/types'
 
 export default function ProductsPage() {
   const { data, isLoading } = useKpi<ProductKpi>('/api/analytics/products')
@@ -35,40 +35,6 @@ export default function ProductsPage() {
     .filter(b => !brandFilter || b.brands === brandFilter)
     .slice(0, 8)
     .map(b => ({ id: b.brands, label: b.brands, value: b.total_sales }))
-
-  const columns = [
-    {
-      key: 'prod_num', header: 'Product #', sortable: true,
-    },
-    {
-      key: 'brands', header: 'Brand',
-      render: (r: ProductRow) => r.brands ?? '-',
-      sortable: true,
-    },
-    {
-      key: 'product_name_th', header: 'Product Name (TH)',
-      render: (r: ProductRow) => r.product_name_th ?? '-',
-    },
-    {
-      key: 'is_uni_hoc_pd', header: 'Unilever HOC',
-      align: 'center' as const,
-      render: (r: ProductRow) => r.is_uni_hoc_pd
-        ? <Badge variant="default" className="text-xs">Unilever</Badge>
-        : <span className="text-muted-foreground text-xs">—</span>,
-    },
-    {
-      key: 'total_qty', header: 'Qty Sold', sortable: true, align: 'right' as const,
-      render: (r: ProductRow) => formatNumber(r.total_qty),
-    },
-    {
-      key: 'total_sales', header: 'Revenue (THB)', sortable: true, align: 'right' as const,
-      render: (r: ProductRow) => formatTHB(r.total_sales),
-    },
-    {
-      key: 'pct_of_total', header: '% of Total', sortable: true, align: 'right' as const,
-      render: (r: ProductRow) => formatPct(r.pct_of_total),
-    },
-  ]
 
   return (
     <div className="space-y-6">
@@ -175,9 +141,9 @@ export default function ProductsPage() {
         </CardHeader>
         <CardContent>
           <DataTable
-            data={filtered as unknown as Record<string, unknown>[]}
-            columns={columns as never}
-            pageSize={20}
+            data={filtered}
+            columns={columns}
+            searchKey="product_name_th"
           />
         </CardContent>
       </Card>

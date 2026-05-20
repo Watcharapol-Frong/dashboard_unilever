@@ -2,15 +2,15 @@
 import { useKpi } from '@/hooks/useKpi'
 import { KpiCard } from '@/components/dashboard/KpiCard'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import { DataTable } from '@/components/dashboard/DataTable'
+import { DataTable } from '@/components/ui/data-table'
+import { columns } from './columns'
 import { NivoLine } from '@/components/charts/NivoLine'
 import { NivoBar } from '@/components/charts/NivoBar'
 import { SankeyFunnel } from '@/components/charts/SankeyFunnel'
-import { Badge } from '@/components/ui/badge'
 import { formatNumber, formatPct, formatPeriodLabel } from '@/lib/utils'
 import { useDateRange } from '@/context/DateRangeContext'
 import { Phone, UserCheck, Users, BarChart2 } from 'lucide-react'
-import type { TelesalesKpi, AgentPerformance } from '@/types'
+import type { TelesalesKpi } from '@/types'
 
 export default function TelesalesPage() {
   const { data, isLoading } = useKpi<TelesalesKpi>('/api/analytics/telesales')
@@ -18,14 +18,7 @@ export default function TelesalesPage() {
 
   const summary = data?.summary
 
-  // Call status pie — use real Thai statuses from API
-  const callStatusPie = Object.entries(data?.callStatusMap ?? {})
-    .filter(([, v]) => v > 0)
-    .sort((a, b) => b[1] - a[1])
-    .slice(0, 8)
-    .map(([status, value]) => ({ id: status, label: status, value }))
-
-  // Status bar chart data
+  // Call status bar chart data
   const callStatusBar = Object.entries(data?.callStatusMap ?? {})
     .sort((a, b) => b[1] - a[1])
     .slice(0, 10)
@@ -36,33 +29,6 @@ export default function TelesalesPage() {
     { id: 'Total Calls', data: data.by_period.map(d => ({ x: formatPeriodLabel(d.period, groupBy), y: d.total_calls })) },
     { id: 'Reached',     data: data.by_period.map(d => ({ x: formatPeriodLabel(d.period, groupBy), y: d.reached })) },
   ] : []
-
-  const agentColumns = [
-    {
-      key: 'agent', header: 'Agent', sortable: true,
-      render: (r: AgentPerformance) => r.agent ?? '-',
-    },
-    {
-      key: 'total_calls', header: 'Total Calls', sortable: true, align: 'right' as const,
-      render: (r: AgentPerformance) => formatNumber(r.total_calls),
-    },
-    {
-      key: 'reached', header: 'Reached', sortable: true, align: 'right' as const,
-      render: (r: AgentPerformance) => formatNumber(r.reached),
-    },
-    {
-      key: 'not_reached', header: 'Not Reached', align: 'right' as const,
-      render: (r: AgentPerformance) => formatNumber(r.not_reached),
-    },
-    {
-      key: 'reach_rate', header: 'Reach Rate', sortable: true, align: 'right' as const,
-      render: (r: AgentPerformance) => (
-        <Badge variant={r.reach_rate >= 0.7 ? 'success' : r.reach_rate >= 0.5 ? 'warning' : 'destructive'}>
-          {formatPct(r.reach_rate)}
-        </Badge>
-      ),
-    },
-  ]
 
   return (
     <div className="space-y-6">
@@ -163,8 +129,9 @@ export default function TelesalesPage() {
         <CardHeader><CardTitle className="text-base">Agent Performance</CardTitle></CardHeader>
         <CardContent>
           <DataTable
-            data={(data?.by_agent ?? []) as unknown as Record<string, unknown>[]}
-            columns={agentColumns as never}
+            data={data?.by_agent ?? []}
+            columns={columns}
+            searchKey="agent"
           />
         </CardContent>
       </Card>

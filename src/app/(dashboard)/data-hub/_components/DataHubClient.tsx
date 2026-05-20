@@ -5,6 +5,8 @@ import useSWR from 'swr'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
+import { DataTable } from '@/components/ui/data-table'
+import { columns } from './columns'
 import { CheckCircle, XCircle, AlertCircle, Upload, FileText, Clock, RefreshCw } from 'lucide-react'
 import { Skeleton } from '@/components/ui/skeleton'
 import { FILE_TYPE_CONFIGS, validateHeaders } from '@/lib/upload/config'
@@ -49,31 +51,6 @@ function StatusRow({ label, value }: StatusRowProps) {
       <span className="text-xs text-muted-foreground">{label}</span>
       <span className="text-xs font-medium text-right">{value}</span>
     </div>
-  )
-}
-
-function EmptyStatus() {
-  return <p className="text-xs text-muted-foreground text-center py-4">No data available</p>
-}
-
-function StatusCard({ title, badge, lastUploaded, empty, children }: {
-  title: string; badge?: string; lastUploaded: string | null; empty: boolean; children?: React.ReactNode
-}) {
-  return (
-    <Card className="flex flex-col">
-      <CardHeader className="pb-2 flex-row items-center justify-between space-y-0">
-        <CardTitle className="text-sm font-semibold">{title}</CardTitle>
-        {badge && <Badge variant="secondary" className="text-xs">{badge}</Badge>}
-      </CardHeader>
-      <CardContent className="flex-1 space-y-0">
-        {empty ? <EmptyStatus /> : children}
-        {lastUploaded && (
-          <p className="text-[10px] text-muted-foreground mt-3 pt-2 border-t">
-            Last updated: {lastUploaded}
-          </p>
-        )}
-      </CardContent>
-    </Card>
   )
 }
 
@@ -151,13 +128,6 @@ export function DataHubClient() {
     }
   }
 
-  // ── History pagination ─────────────────────────────────────
-  const HISTORY_PAGE_SIZE = 10
-  const [historyPage, setHistoryPage] = useState(1)
-  const [historySearch, setHistorySearch] = useState('')
-  const [historyTypeFilter, setHistoryTypeFilter] = useState<string>('all')
-  const [historyStatusFilter, setHistoryStatusFilter] = useState<string>('all')
-
   const inputRef = useRef<HTMLInputElement>(null)
 
   const { data: batches, mutate, isValidating: batchesValidating } = useSWR<UploadBatch[]>('/api/data/history', fetcher, { 
@@ -168,11 +138,6 @@ export function DataHubClient() {
     revalidateOnFocus: false,
     revalidateOnReconnect: false 
   })
-
-  const handleManualRefresh = () => {
-    mutate()
-    mutateStatus()
-  }
 
   // ── File processing ────────────────────────────────────────
   const processFile = useCallback((f: File) => {
@@ -286,13 +251,6 @@ export function DataHubClient() {
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold">Data Hub</h1>
-        <p className="text-muted-foreground text-sm mt-1">
-          Upload CSV — Automated header validation before importing to database
-        </p>
-      </div>
-
       <Card>
         <CardHeader><CardTitle className="text-base">Upload CSV</CardTitle></CardHeader>
         <CardContent className="space-y-5">
@@ -880,7 +838,6 @@ export function DataHubClient() {
           )}
         </TabsContent>
 
-        {/* Tab: History */}
         <TabsContent value="history">
           {batchesValidating && !batches ? (
             <div className="rounded-lg border overflow-hidden">
@@ -903,193 +860,13 @@ export function DataHubClient() {
             </div>
           ) : !batches || batches.length === 0 ? (
             <p className="text-muted-foreground text-sm text-center py-8">No upload history</p>
-          ) : (() => {
-            const filteredBatches = batches.filter(b => {
-              const matchesSearch = !historySearch || 
-                (b.filename?.toLowerCase().includes(historySearch.toLowerCase()) || 
-                 b.table_name.toLowerCase().includes(historySearch.toLowerCase()))
-              const matchesType = historyTypeFilter === 'all' || b.table_name === historyTypeFilter
-              const matchesStatus = historyStatusFilter === 'all' || b.status === historyStatusFilter
-              return matchesSearch && matchesType && matchesStatus
-            })
-
-            const totalPages = Math.ceil(filteredBatches.length / HISTORY_PAGE_SIZE)
-            const pageRows  = filteredBatches.slice((historyPage - 1) * HISTORY_PAGE_SIZE, historyPage * HISTORY_PAGE_SIZE)
-
-            return (
-              <div className="space-y-4">
-                {/* Filters */}
-                <div className="flex flex-wrap items-center gap-3 bg-muted/30 p-3 rounded-lg border border-dashed">
-                  <div className="flex-1 min-w-[200px]">
-                    <input 
-                      type="text" 
-                      placeholder="Search filename or type..." 
-                      value={historySearch}
-                      onChange={e => { setHistorySearch(e.target.value); setHistoryPage(1) }}
-                      className="w-full text-xs px-3 py-1.5 border rounded-md focus:outline-none focus:ring-1 focus:ring-[#003DA6]"
-                    />
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <span className="text-xs text-muted-foreground">Type:</span>
-                    <select 
-                      value={historyTypeFilter}
-                      onChange={e => { setHistoryTypeFilter(e.target.value); setHistoryPage(1) }}
-                      className="text-xs border rounded-md px-2 py-1.5 bg-background focus:outline-none"
-                    >
-                      <option value="all">All Types</option>
-                      {Array.from(new Set(batches.map(b => b.table_name))).map(type => (
-                        <option key={type} value={type}>
-                          {FILE_TYPE_CONFIGS[type as UploadFileType]?.label ?? type}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <span className="text-xs text-muted-foreground">Status:</span>
-                    <select 
-                      value={historyStatusFilter}
-                      onChange={e => { setHistoryStatusFilter(e.target.value); setHistoryPage(1) }}
-                      className="text-xs border rounded-md px-2 py-1.5 bg-background focus:outline-none"
-                    >
-                      <option value="all">All Status</option>
-                      <option value="success">Success</option>
-                      <option value="partial">Partial</option>
-                      <option value="failed">Failed</option>
-                    </select>
-                  </div>
-                  {(historySearch || historyTypeFilter !== 'all' || historyStatusFilter !== 'all') && (
-                    <button 
-                      onClick={() => {
-                        setHistorySearch('');
-                        setHistoryTypeFilter('all');
-                        setHistoryStatusFilter('all');
-                        setHistoryPage(1);
-                      }}
-                      className="text-[10px] text-[#003DA6] hover:underline"
-                    >
-                      Reset Filters
-                    </button>
-                  )}
-                </div>
-
-                {filteredBatches.length === 0 ? (
-                  <div className="rounded-lg border border-dashed p-10 text-center">
-                    <p className="text-sm text-muted-foreground">No matches found for your filters</p>
-                  </div>
-                ) : (
-                  <>
-                    <div className="rounded-lg border overflow-auto">
-                      <table className="w-full text-sm">
-                        <thead>
-                          <tr className="border-b bg-muted/50">
-                            <th className="px-4 py-3 text-left font-medium text-muted-foreground">Date</th>
-                            <th className="px-4 py-3 text-left font-medium text-muted-foreground">Type</th>
-                            <th className="px-4 py-3 text-left font-medium text-muted-foreground">File</th>
-                            <th className="px-4 py-3 text-left font-medium text-muted-foreground">Uploaded By</th>
-                            <th className="px-4 py-3 text-right font-medium text-muted-foreground">Rows</th>
-                            <th className="px-4 py-3 text-right font-medium text-muted-foreground">Errors</th>
-                            <th className="px-4 py-3 text-center font-medium text-muted-foreground">Status</th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {pageRows.map(b => (
-                            <tr key={b.id} className="border-b last:border-0 hover:bg-muted/30">
-                              <td className="px-4 py-2.5 text-xs text-muted-foreground">
-                                {new Date(b.uploaded_at).toLocaleString('en-US', { dateStyle: 'short', timeStyle: 'short' })}
-                              </td>
-                              <td className="px-4 py-2.5">
-                                <Badge variant="secondary">
-                                  {FILE_TYPE_CONFIGS[b.table_name as UploadFileType]?.label ?? b.table_name}
-                                </Badge>
-                              </td>
-                              <td className="px-4 py-2.5 text-sm max-w-[200px] truncate">{b.filename ?? '-'}</td>
-                              <td className="px-4 py-2.5 text-xs text-muted-foreground">
-                                {b.user_profiles
-                                  ? (b.user_profiles.full_name || b.user_profiles.email)
-                                  : <span className="italic">— (ยังไม่มี Auth)</span>}
-                              </td>
-                              <td className="px-4 py-2.5 text-right">{b.row_count ?? 0}</td>
-                              <td className="px-4 py-2.5 text-right">
-                                {b.error_count > 0 ? <span className="text-amber-500">{b.error_count}</span> : 0}
-                              </td>
-                              <td className="px-4 py-2.5 text-center">
-                                <span className={cn(
-                                  'text-xs font-semibold',
-                                  b.status === 'success' ? 'text-green-600'
-                                  : b.status === 'partial' ? 'text-amber-500'
-                                  : b.status === 'failed'  ? 'text-red-500'
-                                  : 'text-gray-400',
-                                )}>
-                                  {b.status === 'success' ? 'Success'
-                                   : b.status === 'partial' ? 'Partial'
-                                   : b.status === 'failed'  ? 'Failed'
-                                   : 'Processing'}
-                                </span>
-                              </td>
-                            </tr>
-                          ))}
-                        </tbody>
-                      </table>
-                    </div>
-
-                    {/* Pagination */}
-                    <div className="flex items-center justify-between text-sm">
-                      <p className="text-xs text-muted-foreground">
-                        Showing {(historyPage - 1) * HISTORY_PAGE_SIZE + 1}–{Math.min(historyPage * HISTORY_PAGE_SIZE, filteredBatches.length)} of {filteredBatches.length}
-                      </p>
-                      <div className="flex items-center gap-1">
-                        <button
-                          onClick={() => setHistoryPage(1)}
-                          disabled={historyPage === 1}
-                          className="px-2 py-1 rounded border text-xs disabled:opacity-40 hover:bg-muted transition-colors"
-                        >«</button>
-                        <button
-                          onClick={() => setHistoryPage(p => Math.max(1, p - 1))}
-                          disabled={historyPage === 1}
-                          className="px-2.5 py-1 rounded border text-xs disabled:opacity-40 hover:bg-muted transition-colors"
-                        >‹</button>
-
-                        {Array.from({ length: totalPages }, (_, i) => i + 1)
-                          .filter(p => p === 1 || p === totalPages || Math.abs(p - historyPage) <= 1)
-                          .reduce<(number | '…')[]>((acc, p, idx, arr) => {
-                            if (idx > 0 && p - (arr[idx - 1] as number) > 1) acc.push('…')
-                            acc.push(p)
-                            return acc
-                          }, [])
-                          .map((p, idx) =>
-                            p === '…' ? (
-                              <span key={`ellipsis-${idx}`} className="px-2 py-1 text-xs text-muted-foreground">…</span>
-                            ) : (
-                              <button
-                                key={p}
-                                onClick={() => setHistoryPage(p as number)}
-                                className={cn(
-                                  'px-2.5 py-1 rounded border text-xs transition-colors',
-                                  historyPage === p
-                                    ? 'bg-[#003DA6] text-white border-[#003DA6]'
-                                    : 'hover:bg-muted',
-                                )}
-                              >{p}</button>
-                            )
-                          )}
-
-                        <button
-                          onClick={() => setHistoryPage(p => Math.min(totalPages, p + 1))}
-                          disabled={historyPage === totalPages}
-                          className="px-2.5 py-1 rounded border text-xs disabled:opacity-40 hover:bg-muted transition-colors"
-                        >›</button>
-                        <button
-                          onClick={() => setHistoryPage(totalPages)}
-                          disabled={historyPage === totalPages}
-                          className="px-2 py-1 rounded border text-xs disabled:opacity-40 hover:bg-muted transition-colors"
-                        >»</button>
-                      </div>
-                    </div>
-                  </>
-                )}
-              </div>
-            )
-          })()}
+          ) : (
+            <DataTable
+              columns={columns}
+              data={batches}
+              searchKey="filename"
+            />
+          )}
         </TabsContent>
         {/* Tab: Recovery */}
         <TabsContent value="recovery">

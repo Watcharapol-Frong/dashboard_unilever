@@ -9,6 +9,8 @@ export default function LoginPage() {
           <p className="text-white/60 mt-2">Sign in to continue</p>
         </div>
         <SignIn
+          path="/login"
+          routing="path"
           appearance={{
             elements: {
               rootBox: 'w-full',

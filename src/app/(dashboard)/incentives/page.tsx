@@ -1,8 +1,8 @@
 'use client'
 import useSWR from 'swr'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import { DataTable } from '@/components/dashboard/DataTable'
-import { formatTHB, formatDate } from '@/lib/utils'
+import { DataTable } from '@/components/ui/data-table'
+import { columns } from './columns'
 import { Gift } from 'lucide-react'
 
 const fetcher = (url: string) => fetch(url).then(r => r.json())
@@ -19,17 +19,7 @@ interface Incentive {
 }
 
 export default function IncentivesPage() {
-  const { data, isLoading } = useSWR<Incentive[]>('/api/config/incentives', fetcher)
-
-  const columns = [
-    { key: 'period_start', header: 'Period Start', render: (r: Incentive) => formatDate(r.period_start), sortable: true },
-    { key: 'period_end', header: 'Period End', render: (r: Incentive) => formatDate(r.period_end) },
-    { key: 'product_brand', header: 'Brand', render: (r: Incentive) => r.product_brand ?? 'All Unilever' },
-    { key: 'product_sku', header: 'SKU', render: (r: Incentive) => r.product_sku ?? 'All SKUs' },
-    { key: 'incentive_type', header: 'Type', render: (r: Incentive) => r.incentive_type ?? '-' },
-    { key: 'incentive_value', header: 'Value (THB)', align: 'right' as const, render: (r: Incentive) => r.incentive_value ? formatTHB(r.incentive_value) : '-' },
-    { key: 'description', header: 'Description', render: (r: Incentive) => r.description ?? '-' },
-  ]
+  const { data } = useSWR<Incentive[]>('/api/config/incentives', fetcher)
 
   return (
     <div className="space-y-6">
@@ -44,15 +34,11 @@ export default function IncentivesPage() {
       <Card>
         <CardHeader><CardTitle className="text-base">Active Incentive Programs</CardTitle></CardHeader>
         <CardContent>
-          {isLoading ? (
-            <div className="h-40 flex items-center justify-center text-muted-foreground text-sm">Loading...</div>
-          ) : (
-            <DataTable
-              data={(data ?? []) as unknown as Record<string, unknown>[]}
-              columns={columns as never}
-              pageSize={20}
-            />
-          )}
+          <DataTable
+            data={data ?? []}
+            columns={columns}
+            searchKey="product_brand"
+          />
         </CardContent>
       </Card>
 

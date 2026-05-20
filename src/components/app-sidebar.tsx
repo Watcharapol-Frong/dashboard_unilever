@@ -1,123 +1,136 @@
-'use client'
+"use client"
 
-import Link from 'next/link'
-import { usePathname } from 'next/navigation'
-import { useAuth } from '@clerk/nextjs'
+import * as React from "react"
+import { usePathname } from "next/navigation"
 import {
-  LayoutDashboard, Phone, ShoppingCart, Package,
-  Gift, Upload, Users,
-} from 'lucide-react'
+  IconChartBar,
+  IconDashboard,
+  IconDatabase,
+  IconHelp,
+  IconListDetails,
+  IconReport,
+  IconPackage,
+  IconGift,
+  IconUsers,
+  IconUpload,
+} from "@tabler/icons-react"
 
+import { NavDocuments } from "@/components/nav-documents"
+import { NavMain } from "@/components/nav-main"
+import { NavSecondary } from "@/components/nav-secondary"
+import { NavUser } from "@/components/nav-user"
 import {
   Sidebar,
   SidebarContent,
   SidebarFooter,
-  SidebarGroup,
-  SidebarGroupContent,
-  SidebarGroupLabel,
   SidebarHeader,
   SidebarMenu,
   SidebarMenuButton,
   SidebarMenuItem,
   SidebarRail,
-  SidebarSeparator,
-} from '@/components/ui/sidebar'
-import { NavUser } from '@/components/nav-user'
+} from "@/components/ui/sidebar"
 
-const NAV_ITEMS = [
-  { href: '/overview',   label: 'Overview',   icon: LayoutDashboard },
-  { href: '/telesales',  label: 'Telesales',  icon: Phone },
-  { href: '/sales',      label: 'Sales',      icon: ShoppingCart },
-  { href: '/products',   label: 'Products',   icon: Package },
-  { href: '/incentives', label: 'Incentives', icon: Gift },
-]
+const data = {
+  user: {
+    name: "Makro Admin",
+    email: "admin@makro.co.th",
+    avatar: "",
+  },
+  navMain: [
+    {
+      title: "Dashboard",
+      url: "/overview",
+      icon: IconDashboard,
+    },
+    {
+      title: "Performance",
+      url: "#",
+      icon: IconChartBar,
+      isActive: true,
+      items: [
+        {
+          title: "Sales Performance",
+          url: "/sales",
+        },
+        {
+          title: "Telesales",
+          url: "/telesales",
+        },
+        {
+          title: "Product Performance",
+          url: "/products",
+        },
+      ],
+    },
+    {
+      title: "Programs",
+      url: "#",
+      icon: IconGift,
+      items: [
+        {
+          title: "Incentives & Bonuses",
+          url: "/incentives",
+        },
+      ],
+    },
+  ],
+  navSecondary: [
+    {
+      title: "Get Help",
+      url: "#",
+      icon: IconHelp,
+    },
+  ],
+  documents: [
+    {
+      name: "Leads Management",
+      url: "/leads",
+      icon: IconUsers,
+    },
+    {
+      name: "Data Hub",
+      url: "/data-hub",
+      icon: IconUpload,
+    },
+  ],
+}
 
-const ADMIN_ITEMS = [
-  { href: '/leads',      label: 'Leads',       icon: Users },
-  { href: '/data-hub',   label: 'Data Hub',    icon: Upload },
-]
-
-export function AppSidebar() {
+export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
   const pathname = usePathname()
-  const { sessionClaims } = useAuth()
-  const isAdmin = sessionClaims?.publicMetadata?.role === 'admin'
+
+  // Update isActive based on pathname
+  const navMain = data.navMain.map(item => {
+    const hasActiveSubItem = item.items?.some(sub => pathname === sub.url)
+    return {
+      ...item,
+      isActive: hasActiveSubItem || pathname === item.url,
+    }
+  })
 
   return (
-    <Sidebar collapsible="icon">
-      {/* Header / Brand */}
-      <SidebarHeader className="px-3 py-4">
-        <div className="flex items-center gap-2 overflow-hidden">
-          <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-white/20 font-bold text-white">
-            U
-          </div>
-          <div className="flex flex-col overflow-hidden group-data-[collapsible=icon]:hidden justify-center">
-            <span className="truncate text-sm font-bold text-white leading-tight">
-              Unilever Project
-            </span>
-          </div>
-        </div>
+    <Sidebar collapsible="icon" {...props}>
+      <SidebarHeader>
+        <SidebarMenu>
+          <SidebarMenuItem>
+            <SidebarMenuButton
+              asChild
+              tooltip="Unilever Project"
+              className="data-[slot=sidebar-menu-button]:p-1.5!"
+            >
+              <a href="/overview">
+                <span className="text-base font-semibold">Unilever Project</span>
+              </a>
+            </SidebarMenuButton>
+          </SidebarMenuItem>
+        </SidebarMenu>
       </SidebarHeader>
-
       <SidebarContent>
-        {/* Dashboard group */}
-        <SidebarGroup>
-          <SidebarGroupLabel>Dashboard</SidebarGroupLabel>
-          <SidebarGroupContent>
-            <SidebarMenu>
-              {NAV_ITEMS.map(({ href, label, icon: Icon }) => {
-                const active = pathname === href || pathname.startsWith(href + '/')
-                return (
-                  <SidebarMenuItem key={href}>
-                    <SidebarMenuButton
-                      asChild
-                      isActive={active}
-                      tooltip={label}
-                    >
-                      <Link href={href}>
-                        <Icon />
-                        <span>{label}</span>
-                      </Link>
-                    </SidebarMenuButton>
-                  </SidebarMenuItem>
-                )
-              })}
-            </SidebarMenu>
-          </SidebarGroupContent>
-        </SidebarGroup>
-
-        {isAdmin && (
-          <>
-            <SidebarSeparator />
-            <SidebarGroup>
-              <SidebarGroupLabel>Admin</SidebarGroupLabel>
-              <SidebarGroupContent>
-                <SidebarMenu>
-                  {ADMIN_ITEMS.map(({ href, label, icon: Icon }) => {
-                    const active = pathname === href
-                    return (
-                      <SidebarMenuItem key={href}>
-                        <SidebarMenuButton
-                          asChild
-                          isActive={active}
-                          tooltip={label}
-                        >
-                          <Link href={href}>
-                            <Icon />
-                            <span>{label}</span>
-                          </Link>
-                        </SidebarMenuButton>
-                      </SidebarMenuItem>
-                    )
-                  })}
-                </SidebarMenu>
-              </SidebarGroupContent>
-            </SidebarGroup>
-          </>
-        )}
+        <NavMain items={navMain} />
+        <NavDocuments items={data.documents} />
+        <NavSecondary items={data.navSecondary} className="mt-auto" />
       </SidebarContent>
-
       <SidebarFooter>
-        <NavUser />
+        <NavUser user={data.user} />
       </SidebarFooter>
       <SidebarRail />
     </Sidebar>
