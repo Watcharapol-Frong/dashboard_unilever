@@ -46,38 +46,63 @@ export function UploadQueueProvider({ children }: { children: React.ReactNode })
       setJobs(prev => prev.map(j => j.id === job.id ? { ...j, status: 'failed', progress: 0, result: { ok: false, error } } : j))
     }
 
-    const CHUNK_SIZE = 3 * 1024 * 1024 // 3MB per chunk — stays under Vercel's 4.5MB limit
+    const PART_SIZE = 10 * 1024 * 1024 // 10MB per part
+
+    let uploadId: string | null = null
+    let key: string | null = null
 
     try {
-      const uploadId = crypto.randomUUID()
-      const totalChunks = Math.ceil(job.file.size / CHUNK_SIZE)
-
-      // Upload chunks sequentially
-      for (let i = 0; i < totalChunks; i++) {
-        const start = i * CHUNK_SIZE
-        const chunk = job.file.slice(start, start + CHUNK_SIZE)
-        const form = new FormData()
-        form.append('chunk', chunk)
-        form.append('uploadId', uploadId)
-        form.append('index', String(i))
-        form.append('total', String(totalChunks))
-
-        const res = await fetch('/api/data/upload/chunk', { method: 'POST', body: form })
-        if (!res.ok) { fail('Chunk upload failed'); return }
-
-        const pct = Math.round(((i + 1) / totalChunks) * 90)
-        setJobs(prev => prev.map(j => j.id === job.id ? { ...j, progress: pct } : j))
-      }
-
-      // Process assembled file
-      setJobs(prev => prev.map(j => j.id === job.id ? { ...j, progress: 95 } : j))
-      const res = await fetch(`/api/data/upload/${job.fileType}`, {
+      // Phase 1: Initiate multipart upload + get presigned URLs for all parts
+      setJobs(prev => prev.map(j => j.id === job.id ? { ...j, progress: 2 } : j))
+      const initRes = await fetch('/api/data/upload/multipart/init', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ uploadId, filename: job.file.name }),
+        body: JSON.stringify({ type: job.fileType, fileSize: job.file.size }),
       })
+      if (!initRes.ok) {
+        const { error } = await initRes.json().catch(() => ({ error: 'Init failed' }))
+        fail(error ?? 'Failed to initiate upload')
+        return
+      }
+      const { uploadId: uid, key: k, presignedUrls, partSize } = await initRes.json()
+      uploadId = uid
+      key = k
+
+      // Phase 2: Upload all parts in parallel directly to R2
+      const partCount = presignedUrls.length
+      const completedParts: { PartNumber: number; ETag: string }[] = new Array(partCount)
+      let completedCount = 0
+
+      await Promise.all(
+        presignedUrls.map(async (url: string, idx: number) => {
+          const start = idx * partSize
+          const slice = job.file.slice(start, start + partSize)
+
+          const res = await fetch(url, { method: 'PUT', body: slice })
+          if (!res.ok) throw new Error(`Part ${idx + 1} upload failed (${res.status})`)
+
+          const etag = res.headers.get('ETag')
+          if (!etag) throw new Error(`Part ${idx + 1} missing ETag`)
+
+          completedParts[idx] = { PartNumber: idx + 1, ETag: etag }
+          completedCount++
+
+          const pct = 5 + Math.round((completedCount / partCount) * 80)
+          setJobs(prev => prev.map(j => j.id === job.id ? { ...j, progress: pct } : j))
+        })
+      )
+
+      // Phase 3: Complete multipart + process from R2
+      setJobs(prev => prev.map(j => j.id === job.id ? { ...j, progress: 90 } : j))
+      const completeRes = await fetch('/api/data/upload/multipart/complete', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ uploadId, key, parts: completedParts, type: job.fileType, filename: job.file.name }),
+      })
+      setJobs(prev => prev.map(j => j.id === job.id ? { ...j, progress: 95 } : j))
+
       let result: UploadResult
-      try { result = await res.json() }
+      try { result = await completeRes.json() }
       catch { result = { ok: false, error: 'Invalid server response' } }
 
       setJobs(prev => prev.map(j =>
@@ -85,7 +110,15 @@ export function UploadQueueProvider({ children }: { children: React.ReactNode })
       ))
       swrMutate('/api/data/history')
       swrMutate('/api/data/status')
+
     } catch (err) {
+      if (uploadId && key) {
+        fetch('/api/data/upload/multipart/abort', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ uploadId, key }),
+        }).catch(e => console.warn('[upload] abort failed:', e))
+      }
       fail((err as Error).message ?? 'Upload failed')
     }
   }, [])
