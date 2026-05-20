@@ -15,7 +15,7 @@ export interface UploadResult {
   ok: boolean
   row_count: number
   error_count: number
-  errors: any[]
+  errors: string[]
   storage_path: string
   extra_columns?: string[]
   error?: string

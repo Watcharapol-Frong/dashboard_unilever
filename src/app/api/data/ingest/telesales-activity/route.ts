@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server'
 import type { NextRequest } from 'next/server'
 import { randomBytes, timingSafeEqual } from 'crypto'
-import { query, queryOne } from '@/lib/db'
+import { query } from '@/lib/db'
 import { uploadToR2 } from '@/lib/storage/r2'
 import { encrypt } from '@/lib/utils/crypto'
 

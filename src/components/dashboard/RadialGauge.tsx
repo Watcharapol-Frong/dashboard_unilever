@@ -2,7 +2,7 @@
 
 import { Label, PolarGrid, PolarRadiusAxis, RadialBar, RadialBarChart } from "recharts"
 import { ChartContainer, ChartTooltip, ChartTooltipContent, type ChartConfig } from "@/components/ui/chart"
-import { formatTHB, formatPct } from "@/lib/utils"
+import { formatTHB } from "@/lib/utils"
 
 interface RadialGaugeProps {
   online: number
@@ -22,10 +22,6 @@ export function RadialGauge({ online, offline, target }: RadialGaugeProps) {
 
   // Recharts RadialBarChart with endAngle=180 (half-donut) stacked
   // Scale values proportionally to fill the half-circle based on target
-  const scale = target > 0 ? 180 / target : 0
-  const onlineAngle = online * scale
-  const offlineAngle = offline * scale
-
   const chartData = [
     {
       name: "achievement",
