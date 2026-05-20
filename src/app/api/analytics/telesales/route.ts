@@ -26,13 +26,16 @@ export async function GET(request: NextRequest) {
        WHERE first_connected_date BETWEEN $1 AND $2 GROUP BY call_status ORDER BY total DESC`,
       [from, to]
     ),
-    // Agent performance
-    query<{ agent: string; total_calls: string; reached: string; not_reached: string }>(
-      `SELECT agent, COUNT(*) AS total_calls,
-         COUNT(*) FILTER (WHERE call_status = 'รับสาย') AS reached,
-         COUNT(*) FILTER (WHERE call_status != 'รับสาย') AS not_reached
-       FROM telesales_calls WHERE first_connected_date BETWEEN $1 AND $2 AND agent IS NOT NULL
-       GROUP BY agent ORDER BY total_calls DESC`,
+    // Agent performance with conversion rate
+    query<{ agent: string; total_calls: string; reached: string; not_reached: string; converted_orders: string }>(
+      `SELECT tc.agent, COUNT(*) AS total_calls,
+         COUNT(*) FILTER (WHERE tc.call_status = 'รับสาย') AS reached,
+         COUNT(*) FILTER (WHERE tc.call_status != 'รับสาย') AS not_reached,
+         COUNT(DISTINCT m.mmid) AS converted_orders
+       FROM telesales_calls tc
+       LEFT JOIN mart_telesales_orders m ON tc.mmid = m.mmid AND m.first_connected_date BETWEEN $1 AND $2
+       WHERE tc.first_connected_date BETWEEN $1 AND $2 AND tc.agent IS NOT NULL
+       GROUP BY tc.agent ORDER BY total_calls DESC`,
       [from, to]
     ),
     // Trend by period
@@ -73,12 +76,16 @@ export async function GET(request: NextRequest) {
   const reached       = callStatusMap['รับสาย'] ?? 0
   const not_reached   = total_calls - reached
 
+  const daysElapsed = Math.max(1, Math.round((new Date(to).getTime() - new Date(from).getTime()) / (1000 * 60 * 60 * 24)) + 1)
+
   const by_agent = agentRows.map(r => ({
-    agent:        r.agent,
-    total_calls:  Number(r.total_calls),
-    reached:      Number(r.reached),
-    not_reached:  Number(r.not_reached),
-    reach_rate:   Number(r.total_calls) > 0 ? Number(r.reached) / Number(r.total_calls) : 0,
+    agent:           r.agent,
+    total_calls:     Number(r.total_calls),
+    reached:         Number(r.reached),
+    not_reached:     Number(r.not_reached),
+    reach_rate:      Number(r.total_calls) > 0 ? Number(r.reached) / Number(r.total_calls) : 0,
+    conversion_rate: Number(r.total_calls) > 0 ? Number(r.converted_orders) / Number(r.total_calls) : 0,
+    calls_per_day:   Number(r.total_calls) / daysElapsed,
   }))
 
   const by_period = byPeriodRows.map(r => ({

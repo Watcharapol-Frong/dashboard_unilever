@@ -66,6 +66,8 @@ export interface AgentPerformance {
   reached: number
   not_reached: number
   reach_rate: number
+  conversion_rate: number
+  calls_per_day: number
 }
 
 export interface TelesalesKpi {
@@ -95,6 +97,12 @@ export interface SalesKpi {
   avg_order_value: number
   by_period: { period: string; online: number; offline: number }[]
   recent_orders: RecentOrder[]
+  mtd_sales: number
+  forecast: number
+  forecast_vs_target_pct: number
+  days_elapsed: number
+  days_in_month: number
+  month_target: number
 }
 
 export interface RecentOrder {

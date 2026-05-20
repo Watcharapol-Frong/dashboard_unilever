@@ -20,7 +20,15 @@ export async function GET(request: NextRequest) {
   const chartFilter = groupBy === 'day' ? 'WHERE order_date BETWEEN $1 AND $2' : ''
   const chartParams = groupBy === 'day' ? [from, to] : []
 
-  const [totalsRows, byPeriodRows, targetRow, newCustRow, recentOnline, recentOffline] = await Promise.all([
+  // Forecast: always computed for the current calendar month (Run Rate MTD)
+  const now = new Date()
+  const monthStartDate = new Date(now.getFullYear(), now.getMonth(), 1)
+  const daysInMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate()
+  const daysElapsed = Math.max(1, now.getDate())
+  const monthStartStr = monthStartDate.toISOString().split('T')[0]
+  const todayStr = now.toISOString().split('T')[0]
+
+  const [totalsRows, byPeriodRows, targetRow, newCustRow, recentOnline, recentOffline, mtdRow] = await Promise.all([
     query<{ channel: string; total_sales: string; order_count: string }>(
       `SELECT 'Online' AS channel, COALESCE(SUM(sales_in_vat),0) AS total_sales, COUNT(DISTINCT order_number) AS order_count FROM online_sales WHERE order_date BETWEEN $1 AND $2
        UNION ALL SELECT 'Offline', COALESCE(SUM(sales_in_vat),0), COUNT(DISTINCT order_number) FROM offline_sales WHERE order_date BETWEEN $1 AND $2`,
@@ -47,6 +55,13 @@ export async function GET(request: NextRequest) {
     query<{ order_number: string; order_date: string; mmid: string; prod_num: string; sales_qty: number; sales_in_vat: number; dynamic_cmg: string }>(
       `SELECT order_number, order_date::text AS order_date, mmid, prod_num, sales_qty, sales_in_vat, dynamic_cmg FROM offline_sales WHERE order_date BETWEEN $1 AND $2 ORDER BY order_date DESC LIMIT 25`,
       [from, to]
+    ),
+    queryOne<{ mtd_online: string; mtd_offline: string; month_target: string }>(
+      `SELECT
+         COALESCE((SELECT SUM(sales_in_vat) FROM online_sales  WHERE order_date BETWEEN $1 AND $2), 0) AS mtd_online,
+         COALESCE((SELECT SUM(sales_in_vat) FROM offline_sales WHERE order_date BETWEEN $1 AND $2), 0) AS mtd_offline,
+         COALESCE((SELECT SUM(sales_target) FROM targets WHERE month = date_trunc('month', $1::date)::date), 0) AS month_target`,
+      [monthStartStr, todayStr]
     ),
   ])
 
@@ -75,11 +90,18 @@ export async function GET(request: NextRequest) {
   const target     = Number(targetRow?.total ?? 0)
   const target_pct = target > 0 ? total_sales / target : 0
 
+  const mtd_sales = Number(mtdRow?.mtd_online ?? 0) + Number(mtdRow?.mtd_offline ?? 0)
+  const month_target = Number(mtdRow?.month_target ?? 0)
+  const forecast = daysElapsed > 0 ? (mtd_sales / daysElapsed) * daysInMonth : 0
+  const forecast_vs_target_pct = month_target > 0 ? forecast / month_target : 0
+
   return NextResponse.json({
     total_sales, total_sales_online, total_sales_offline, total_orders,
     target, target_pct,
     avg_order_value: total_orders > 0 ? total_sales / total_orders : 0,
     new_customers: Number(newCustRow?.cnt ?? 0),
     by_period, recent_orders,
+    mtd_sales, forecast, forecast_vs_target_pct,
+    days_elapsed: daysElapsed, days_in_month: daysInMonth, month_target,
   })
 }
