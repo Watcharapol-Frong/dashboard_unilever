@@ -128,6 +128,7 @@ export function DataHubClient() {
       })
       const data = await res.json()
       setBuildResult(data)
+      if (data.ok) mutateMart()
     } catch {
       setBuildResult({ ok: false, error: 'Network error' })
     } finally {
@@ -166,6 +167,16 @@ export function DataHubClient() {
   const mutateStatus    = mutate
   const statusValidating   = isValidating
   const batchesValidating  = isValidating
+
+  interface MartStatus {
+    telesales_orders: { row_count: number; min_date: string | null; max_date: string | null; last_refreshed: string | null }
+    cost_incentive:   { row_count: number; min_month: string | null; max_month: string | null; last_refreshed: string | null }
+  }
+  const { data: martStatus, isValidating: martValidating, mutate: mutateMart } = useSWR<MartStatus>(
+    '/api/system/mart-status',
+    fetcher,
+    { revalidateOnFocus: false, revalidateOnReconnect: false }
+  )
 
   // ── File processing ────────────────────────────────────────
   const processFile = useCallback((f: File) => {
@@ -898,7 +909,84 @@ export function DataHubClient() {
           )}
         </TabsContent>
         {/* Tab: Build */}
-        <TabsContent value="build">
+        <TabsContent value="build" className="space-y-4">
+          {/* Mart Status Card */}
+          <Card>
+            <CardHeader className="pb-2">
+              <div className="flex items-center justify-between">
+                <CardTitle className="text-sm font-semibold">Current Mart Status</CardTitle>
+                <button
+                  onClick={() => mutateMart()}
+                  disabled={martValidating}
+                  className="text-xs text-muted-foreground hover:text-foreground flex items-center gap-1 transition-colors disabled:opacity-50"
+                >
+                  <RefreshCw className={cn('h-3 w-3', martValidating && 'animate-spin')} />
+                  Refresh
+                </button>
+              </div>
+            </CardHeader>
+            <CardContent>
+              {martValidating && !martStatus ? (
+                <div className="grid grid-cols-2 gap-3">
+                  {[0, 1].map(i => (
+                    <div key={i} className="rounded-lg border p-3 space-y-2">
+                      <Skeleton className="h-3 w-32" />
+                      <Skeleton className="h-6 w-20" />
+                      <Skeleton className="h-3 w-24" />
+                      <Skeleton className="h-3 w-28" />
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="grid grid-cols-2 gap-3">
+                  {/* mart_telesales_orders */}
+                  <div className={cn(
+                    'rounded-lg border p-3 space-y-1',
+                    (martStatus?.telesales_orders.row_count ?? 0) > 0 ? 'border-green-200 bg-green-50/40' : 'border-gray-200 bg-muted/30',
+                  )}>
+                    <p className="text-xs font-medium text-muted-foreground">mart_telesales_orders</p>
+                    <p className="text-2xl font-bold tabular-nums">
+                      {formatNumber(martStatus?.telesales_orders.row_count ?? 0)}
+                      <span className="text-xs font-normal text-muted-foreground ml-1">rows</span>
+                    </p>
+                    <p className="text-xs text-muted-foreground">
+                      {martStatus?.telesales_orders.min_date && martStatus?.telesales_orders.max_date
+                        ? `${fmtDate(martStatus.telesales_orders.min_date)} – ${fmtDate(martStatus.telesales_orders.max_date)}`
+                        : '—'}
+                    </p>
+                    <p className="text-xs text-muted-foreground">
+                      Built: {martStatus?.telesales_orders.last_refreshed
+                        ? fmtUpload(martStatus.telesales_orders.last_refreshed)
+                        : '—'}
+                    </p>
+                  </div>
+                  {/* mart_cost_incentive */}
+                  <div className={cn(
+                    'rounded-lg border p-3 space-y-1',
+                    (martStatus?.cost_incentive.row_count ?? 0) > 0 ? 'border-green-200 bg-green-50/40' : 'border-gray-200 bg-muted/30',
+                  )}>
+                    <p className="text-xs font-medium text-muted-foreground">mart_cost_incentive</p>
+                    <p className="text-2xl font-bold tabular-nums">
+                      {formatNumber(martStatus?.cost_incentive.row_count ?? 0)}
+                      <span className="text-xs font-normal text-muted-foreground ml-1">rows</span>
+                    </p>
+                    <p className="text-xs text-muted-foreground">
+                      {martStatus?.cost_incentive.min_month && martStatus?.cost_incentive.max_month
+                        ? `${fmtMonth(martStatus.cost_incentive.min_month)} – ${fmtMonth(martStatus.cost_incentive.max_month)}`
+                        : '—'}
+                    </p>
+                    <p className="text-xs text-muted-foreground">
+                      Built: {martStatus?.cost_incentive.last_refreshed
+                        ? fmtUpload(martStatus.cost_incentive.last_refreshed)
+                        : '—'}
+                    </p>
+                  </div>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+
+          {/* Build Card */}
           <Card>
             <CardHeader>
               <CardTitle className="text-base">Build Mart Tables</CardTitle>
