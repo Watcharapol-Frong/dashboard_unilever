@@ -112,7 +112,7 @@ function postToAPI_(records) {
   };
 
   try {
-    const response = UrlFetchApp.fetch(`${url}/api/data/ingest/telesales-activity`, options);
+    const response = UrlFetchApp.fetch(`${url}/api/data/upload/ingest/telesales-activity`, options);
     const code     = response.getResponseCode();
     if (code === 200) {
       const body = JSON.parse(response.getContentText());
@@ -138,7 +138,7 @@ function getThresholdDate_() {
   };
 
   try {
-    const response = UrlFetchApp.fetch(`${url}/api/data/ingest/threshold`, options);
+    const response = UrlFetchApp.fetch(`${url}/api/data/upload/ingest/threshold`, options);
     if (response.getResponseCode() === 200) {
       const data = JSON.parse(response.getContentText());
       if (data.date) {
