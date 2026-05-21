@@ -100,23 +100,66 @@ function martCTE(attributionDays: number) {
 }
 
 export async function buildMartMain(attributionDays = 14): Promise<number> {
+  // Phase 1: Clear both tables
   await query(`TRUNCATE TABLE mart_table_main`)
+  await query(`TRUNCATE TABLE _mart_build_staging`)
 
-  // Fetch distinct months to batch inserts — keeps each transaction
-  // small enough to stay within CockroachDB's lock-tracking budget.
+  // Phase 2: Compute CTE ONCE and write to staging (no unique constraint → pure Puts, no lock budget issue)
+  await query(`
+    ${martCTE(attributionDays)}
+    INSERT INTO _mart_build_staging (
+      mmid, order_number, prod_num,
+      first_connected_date, agent, call_status,
+      reason_group, reason_subgroup, contact_note, lead_customers,
+      days_to_order, flag_attr,
+      order_date, channel, dynamic_cmg,
+      sales_qty, sales_in_vat,
+      product_name_th, product_name_en, brands,
+      senior_buyer_name, buyer_name, class_name, subclass,
+      flag_hoc_unilever, flag_first_order, flag_retention, customer_type,
+      first_order_date,
+      month, attribution_days
+    )
+    SELECT
+      c.mmid, c.order_number, c.prod_num,
+      c.first_connected_date, c.agent, c.call_status,
+      c.reason_group, c.reason_subgroup, c.contact_note, c.lead_customers,
+      c.days_to_order, c.flag_attr,
+      c.order_date, c.channel, c.dynamic_cmg,
+      c.sales_qty, c.sales_in_vat,
+      c.product_name_th, c.product_name_en, c.brands,
+      c.senior_buyer_name, c.buyer_name, c.class_name, c.subclass,
+      TRUE,
+      (c.flag_attr = TRUE AND c.order_date = fa.first_attr_date),
+      (fa.first_attr_date IS NOT NULL
+        AND NOT (c.flag_attr = TRUE AND c.order_date = fa.first_attr_date)),
+      CASE
+        WHEN c.flag_attr = TRUE AND c.order_date = fa.first_attr_date
+          THEN 'new_customer'
+        WHEN fa.first_attr_date IS NOT NULL
+          AND NOT (c.flag_attr = TRUE AND c.order_date = fa.first_attr_date)
+          THEN 'retention'
+        WHEN fa.first_attr_date IS NULL AND c.order_date = fn.first_nonattr_date
+          THEN 'first_order_not_con'
+        WHEN fa.first_attr_date IS NULL AND c.order_date > fn.first_nonattr_date
+          THEN 'reten_not_con'
+        ELSE NULL
+      END,
+      fa.first_attr_date,
+      DATE_TRUNC('month', c.order_date)::date,
+      ${attributionDays}
+    FROM combined c
+    LEFT JOIN first_attr_order    fa ON fa.mmid = c.mmid
+    LEFT JOIN first_nonattr_order fn ON fn.mmid = c.mmid
+  `)
+
+  // Phase 3: Batch-copy from staging → mart by month (small transactions, within lock budget)
   const months = await query<{ m: string }>(`
-    SELECT DISTINCT DATE_TRUNC('month', order_date)::date::text AS m
-    FROM (
-      SELECT order_date FROM online_sales
-      UNION ALL
-      SELECT order_date FROM offline_sales
-    ) s
-    ORDER BY m
+    SELECT DISTINCT month::text AS m FROM _mart_build_staging ORDER BY m
   `)
 
   for (const { m } of months) {
     await query(`
-      ${martCTE(attributionDays)}
       INSERT INTO mart_table_main (
         mmid, order_number, prod_num,
         first_connected_date, agent, call_status,
@@ -131,37 +174,19 @@ export async function buildMartMain(attributionDays = 14): Promise<number> {
         month, attribution_days
       )
       SELECT
-        c.mmid, c.order_number, c.prod_num,
-        c.first_connected_date, c.agent, c.call_status,
-        c.reason_group, c.reason_subgroup, c.contact_note, c.lead_customers,
-        c.days_to_order, c.flag_attr,
-        c.order_date, c.channel, c.dynamic_cmg,
-        c.sales_qty, c.sales_in_vat,
-        c.product_name_th, c.product_name_en, c.brands,
-        c.senior_buyer_name, c.buyer_name, c.class_name, c.subclass,
-        TRUE,
-        (c.flag_attr = TRUE AND c.order_date = fa.first_attr_date),
-        (fa.first_attr_date IS NOT NULL
-          AND NOT (c.flag_attr = TRUE AND c.order_date = fa.first_attr_date)),
-        CASE
-          WHEN c.flag_attr = TRUE AND c.order_date = fa.first_attr_date
-            THEN 'new_customer'
-          WHEN fa.first_attr_date IS NOT NULL
-            AND NOT (c.flag_attr = TRUE AND c.order_date = fa.first_attr_date)
-            THEN 'retention'
-          WHEN fa.first_attr_date IS NULL AND c.order_date = fn.first_nonattr_date
-            THEN 'first_order_not_con'
-          WHEN fa.first_attr_date IS NULL AND c.order_date > fn.first_nonattr_date
-            THEN 'reten_not_con'
-          ELSE NULL
-        END,
-        fa.first_attr_date,
-        DATE_TRUNC('month', c.order_date)::date,
-        ${attributionDays}
-      FROM combined c
-      LEFT JOIN first_attr_order    fa ON fa.mmid = c.mmid
-      LEFT JOIN first_nonattr_order fn ON fn.mmid = c.mmid
-      WHERE DATE_TRUNC('month', c.order_date)::date = $1
+        mmid, order_number, prod_num,
+        first_connected_date, agent, call_status,
+        reason_group, reason_subgroup, contact_note, lead_customers,
+        days_to_order, flag_attr,
+        order_date, channel, dynamic_cmg,
+        sales_qty, sales_in_vat,
+        product_name_th, product_name_en, brands,
+        senior_buyer_name, buyer_name, class_name, subclass,
+        flag_hoc_unilever, flag_first_order, flag_retention, customer_type,
+        first_order_date,
+        month, attribution_days
+      FROM _mart_build_staging
+      WHERE month = $1
       ON CONFLICT (mmid, order_number, prod_num) DO NOTHING
     `, [m])
   }

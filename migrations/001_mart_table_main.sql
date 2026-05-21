@@ -62,3 +62,40 @@ CREATE INDEX IF NOT EXISTS idx_mart_main_first_connected   ON mart_table_main (f
 CREATE INDEX IF NOT EXISTS idx_mart_main_dynamic_cmg       ON mart_table_main (dynamic_cmg);
 CREATE INDEX IF NOT EXISTS idx_mart_main_flag_attr         ON mart_table_main (flag_attr);
 CREATE INDEX IF NOT EXISTS idx_mart_main_flag_first_order  ON mart_table_main (flag_first_order);
+
+-- Staging table: same shape as mart_table_main but NO unique constraint and NO indexes.
+-- Used during build to compute CTE once and batch-copy to mart (avoids lock budget overflow).
+DROP TABLE IF EXISTS _mart_build_staging;
+CREATE TABLE IF NOT EXISTS _mart_build_staging (
+  mmid                 TEXT,
+  order_number         TEXT,
+  prod_num             TEXT,
+  first_connected_date DATE,
+  agent                TEXT,
+  call_status          TEXT,
+  reason_group         TEXT,
+  reason_subgroup      TEXT,
+  contact_note         TEXT,
+  lead_customers       TEXT,
+  days_to_order        INTEGER,
+  flag_attr            BOOLEAN,
+  order_date           DATE,
+  channel              TEXT,
+  dynamic_cmg          TEXT,
+  sales_qty            NUMERIC,
+  sales_in_vat         NUMERIC,
+  product_name_th      TEXT,
+  product_name_en      TEXT,
+  brands               TEXT,
+  senior_buyer_name    TEXT,
+  buyer_name           TEXT,
+  class_name           TEXT,
+  subclass             TEXT,
+  flag_hoc_unilever    BOOLEAN,
+  flag_first_order     BOOLEAN,
+  flag_retention       BOOLEAN,
+  customer_type        TEXT,
+  first_order_date     DATE,
+  month                DATE,
+  attribution_days     INTEGER
+);
