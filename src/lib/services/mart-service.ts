@@ -155,11 +155,15 @@ export async function buildMartMain(attributionDays = 14): Promise<number> {
 
   // Phase 3: Batch-copy staging → mart in fixed-size chunks via rownum.
   // Fixed chunk (not month) = safe regardless of attribution window size.
+  // Use actual MIN/MAX rownum — TRUNCATE does not reset BIGSERIAL sequences.
   const CHUNK = 4_000
-  const countRow = await queryOne<{ total: string }>(`SELECT COUNT(*) AS total FROM _mart_build_staging`)
-  const total = Number(countRow?.total ?? 0)
+  const rangeRow = await queryOne<{ lo: string; hi: string }>(`
+    SELECT MIN(rownum) AS lo, MAX(rownum) AS hi FROM _mart_build_staging
+  `)
+  const loRn = Number(rangeRow?.lo ?? 0)
+  const hiRn = Number(rangeRow?.hi ?? -1)
 
-  for (let lo = 1; lo <= total; lo += CHUNK) {
+  for (let offset = loRn; offset <= hiRn; offset += CHUNK) {
     await query(`
       INSERT INTO mart_table_main (
         mmid, order_number, prod_num,
@@ -189,7 +193,7 @@ export async function buildMartMain(attributionDays = 14): Promise<number> {
       FROM _mart_build_staging
       WHERE rownum >= $1 AND rownum < $2
       ON CONFLICT (mmid, order_number, prod_num) DO NOTHING
-    `, [lo, lo + CHUNK])
+    `, [offset, offset + CHUNK])
   }
 
   const row = await queryOne<{ cnt: string }>(`SELECT COUNT(*) AS cnt FROM mart_table_main`)
