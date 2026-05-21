@@ -93,10 +93,16 @@ export async function buildMartMain(attributionDays = 14): Promise<number> {
       UNION ALL
       SELECT * FROM retention_ext
     ),
-    first_in_mart AS (
-      -- First ATTRIBUTED order per mmid (non-attributed rows cannot be first_order)
+    first_attr_order AS (
+      -- First ATTRIBUTED order per mmid
       SELECT mmid, MIN(order_date) AS first_attr_date
         FROM attributed
+        GROUP BY mmid
+    ),
+    first_nonattr_order AS (
+      -- First non-attributed order per mmid (for mmids that have never converted)
+      SELECT mmid, MIN(order_date) AS first_nonattr_date
+        FROM retention_ext
         GROUP BY mmid
     )
     INSERT INTO mart_table_main (
@@ -122,22 +128,27 @@ export async function buildMartMain(attributionDays = 14): Promise<number> {
       c.product_name_th, c.product_name_en, c.brands,
       c.senior_buyer_name, c.buyer_name, c.class_name, c.subclass,
       TRUE,
-      -- flag_first_order: only when this IS the first attributed order
-      (c.flag_attr = TRUE AND c.order_date = f.first_attr_date),
-      -- flag_retention: any order (attr or not) AFTER the first attributed order
-      (f.first_attr_date IS NOT NULL
-        AND NOT (c.flag_attr = TRUE AND c.order_date = f.first_attr_date)),
+      (c.flag_attr = TRUE AND c.order_date = fa.first_attr_date),
+      (fa.first_attr_date IS NOT NULL
+        AND NOT (c.flag_attr = TRUE AND c.order_date = fa.first_attr_date)),
       CASE
-        WHEN c.flag_attr = TRUE AND c.order_date = f.first_attr_date THEN 'new_customer'
-        WHEN f.first_attr_date IS NOT NULL
-          AND NOT (c.flag_attr = TRUE AND c.order_date = f.first_attr_date) THEN 'retention'
-        ELSE NULL  -- non-attributed and no prior conversion yet
+        WHEN c.flag_attr = TRUE AND c.order_date = fa.first_attr_date
+          THEN 'new_customer'
+        WHEN fa.first_attr_date IS NOT NULL
+          AND NOT (c.flag_attr = TRUE AND c.order_date = fa.first_attr_date)
+          THEN 'retention'
+        WHEN fa.first_attr_date IS NULL AND c.order_date = fn.first_nonattr_date
+          THEN 'first_order_not_con'
+        WHEN fa.first_attr_date IS NULL AND c.order_date > fn.first_nonattr_date
+          THEN 'reten_not_con'
+        ELSE NULL
       END,
-      f.first_attr_date,
+      fa.first_attr_date,
       DATE_TRUNC('month', c.order_date)::date,
       ${attributionDays}
     FROM combined c
-    LEFT JOIN first_in_mart f ON f.mmid = c.mmid
+    LEFT JOIN first_attr_order  fa ON fa.mmid = c.mmid
+    LEFT JOIN first_nonattr_order fn ON fn.mmid = c.mmid
     ON CONFLICT (mmid, order_number, prod_num) DO UPDATE SET
       first_connected_date = EXCLUDED.first_connected_date,
       agent                = EXCLUDED.agent,
