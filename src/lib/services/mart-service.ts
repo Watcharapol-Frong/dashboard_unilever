@@ -94,9 +94,9 @@ export async function buildMartMain(attributionDays = 14): Promise<number> {
       SELECT * FROM retention_ext
     ),
     first_in_mart AS (
-      -- First HOC order per mmid across attributed + retention_ext
-      SELECT mmid, MIN(order_date) AS first_order_date
-        FROM combined
+      -- First ATTRIBUTED order per mmid (non-attributed rows cannot be first_order)
+      SELECT mmid, MIN(order_date) AS first_attr_date
+        FROM attributed
         GROUP BY mmid
     )
     INSERT INTO mart_table_main (
@@ -122,10 +122,18 @@ export async function buildMartMain(attributionDays = 14): Promise<number> {
       c.product_name_th, c.product_name_en, c.brands,
       c.senior_buyer_name, c.buyer_name, c.class_name, c.subclass,
       TRUE,
-      (c.order_date = f.first_order_date),
-      (c.order_date IS DISTINCT FROM f.first_order_date),
-      CASE WHEN c.order_date = f.first_order_date THEN 'new_customer' ELSE 'retention' END,
-      f.first_order_date,
+      -- flag_first_order: only when this IS the first attributed order
+      (c.flag_attr = TRUE AND c.order_date = f.first_attr_date),
+      -- flag_retention: any order (attr or not) AFTER the first attributed order
+      (f.first_attr_date IS NOT NULL
+        AND NOT (c.flag_attr = TRUE AND c.order_date = f.first_attr_date)),
+      CASE
+        WHEN c.flag_attr = TRUE AND c.order_date = f.first_attr_date THEN 'new_customer'
+        WHEN f.first_attr_date IS NOT NULL
+          AND NOT (c.flag_attr = TRUE AND c.order_date = f.first_attr_date) THEN 'retention'
+        ELSE NULL  -- non-attributed and no prior conversion yet
+      END,
+      f.first_attr_date,
       DATE_TRUNC('month', c.order_date)::date,
       ${attributionDays}
     FROM combined c
