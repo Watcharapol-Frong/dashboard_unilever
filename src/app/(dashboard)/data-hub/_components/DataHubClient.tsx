@@ -109,7 +109,7 @@ export function DataHubClient() {
   const [replayResult, setReplayResult] = useState<ReplayResult | null>(null)
 
   // ── Build state ────────────────────────────────────────────
-  type BuildResult = { ok: boolean; rows?: { telesales_orders: number; cost_incentive: number }; attribution_days?: number; duration_ms?: number; error?: string }
+  type BuildResult = { ok: boolean; rows?: { mart_main: number; cost_incentive: number }; attribution_days?: number; duration_ms?: number; error?: string }
   const [attributionDays, setAttributionDays] = useState<number | 'custom'>(14)
   const [customDays, setCustomDays]           = useState('')
   const [buildLoading, setBuildLoading]       = useState(false)
@@ -169,8 +169,12 @@ export function DataHubClient() {
   const batchesValidating  = isValidating
 
   interface MartStatus {
-    telesales_orders: { row_count: number; min_date: string | null; max_date: string | null; last_refreshed: string | null }
-    cost_incentive:   { row_count: number; min_month: string | null; max_month: string | null; last_refreshed: string | null }
+    mart_main: {
+      row_count: number; attr_count: number
+      min_date: string | null; max_date: string | null
+      last_refreshed: string | null; attribution_days: number | null
+    }
+    cost_incentive: { row_count: number; min_month: string | null; max_month: string | null; last_refreshed: string | null }
   }
   const { data: martStatus, isValidating: martValidating, mutate: mutateMart } = useSWR<MartStatus>(
     '/api/system/mart-status',
@@ -939,24 +943,34 @@ export function DataHubClient() {
                 </div>
               ) : (
                 <div className="grid grid-cols-2 gap-3">
-                  {/* mart_telesales_orders */}
+                  {/* mart_table_main */}
                   <div className={cn(
                     'rounded-lg border p-3 space-y-1',
-                    (martStatus?.telesales_orders.row_count ?? 0) > 0 ? 'border-green-200 bg-green-50/40' : 'border-gray-200 bg-muted/30',
+                    (martStatus?.mart_main.row_count ?? 0) > 0 ? 'border-green-200 bg-green-50/40' : 'border-gray-200 bg-muted/30',
                   )}>
-                    <p className="text-xs font-medium text-muted-foreground">mart_telesales_orders</p>
-                    <p className="text-2xl font-bold tabular-nums">
-                      {formatNumber(martStatus?.telesales_orders.row_count ?? 0)}
-                      <span className="text-xs font-normal text-muted-foreground ml-1">rows</span>
-                    </p>
+                    <p className="text-xs font-medium text-muted-foreground">mart_table_main</p>
+                    <div className="flex items-baseline gap-2">
+                      <p className="text-2xl font-bold tabular-nums">
+                        {formatNumber(martStatus?.mart_main.row_count ?? 0)}
+                        <span className="text-xs font-normal text-muted-foreground ml-1">rows</span>
+                      </p>
+                      {(martStatus?.mart_main.attr_count ?? 0) > 0 && (
+                        <span className="text-xs text-muted-foreground">
+                          ({formatNumber(martStatus!.mart_main.attr_count)} attributed)
+                        </span>
+                      )}
+                    </div>
                     <p className="text-xs text-muted-foreground">
-                      {martStatus?.telesales_orders.min_date && martStatus?.telesales_orders.max_date
-                        ? `${fmtDate(martStatus.telesales_orders.min_date)} – ${fmtDate(martStatus.telesales_orders.max_date)}`
+                      {martStatus?.mart_main.min_date && martStatus?.mart_main.max_date
+                        ? `${fmtDate(martStatus.mart_main.min_date)} – ${fmtDate(martStatus.mart_main.max_date)}`
                         : '—'}
                     </p>
+                    {martStatus?.mart_main.attribution_days && (
+                      <p className="text-xs text-muted-foreground">Window: {martStatus.mart_main.attribution_days}d</p>
+                    )}
                     <p className="text-xs text-muted-foreground">
-                      Built: {martStatus?.telesales_orders.last_refreshed
-                        ? fmtUpload(martStatus.telesales_orders.last_refreshed)
+                      Built: {martStatus?.mart_main.last_refreshed
+                        ? fmtUpload(martStatus.mart_main.last_refreshed)
                         : '—'}
                     </p>
                   </div>
@@ -991,7 +1005,7 @@ export function DataHubClient() {
             <CardHeader>
               <CardTitle className="text-base">Build Mart Tables</CardTitle>
               <p className="text-sm text-muted-foreground">
-                Rebuild <code className="bg-muted px-1 rounded">mart_telesales_orders</code> and <code className="bg-muted px-1 rounded">mart_cost_incentive</code> from raw tables.
+                Rebuild <code className="bg-muted px-1 rounded">mart_table_main</code> and <code className="bg-muted px-1 rounded">mart_cost_incentive</code> from raw tables.
                 Attribution window controls how many days after a call a purchase counts as telesales-driven.
               </p>
             </CardHeader>
@@ -1086,8 +1100,8 @@ export function DataHubClient() {
                   {buildResult.ok && buildResult.rows && (
                     <div className="grid grid-cols-2 gap-2 text-sm">
                       <div className="rounded bg-white/60 border px-3 py-2 text-center">
-                        <p className="text-xl font-bold tabular-nums">{buildResult.rows.telesales_orders.toLocaleString()}</p>
-                        <p className="text-xs text-muted-foreground">mart_telesales_orders rows</p>
+                        <p className="text-xl font-bold tabular-nums">{buildResult.rows.mart_main.toLocaleString()}</p>
+                        <p className="text-xs text-muted-foreground">mart_table_main rows</p>
                       </div>
                       <div className="rounded bg-white/60 border px-3 py-2 text-center">
                         <p className="text-xl font-bold tabular-nums">{buildResult.rows.cost_incentive.toLocaleString()}</p>

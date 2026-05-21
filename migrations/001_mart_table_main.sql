@@ -1,0 +1,46 @@
+-- Migration: replace mart_telesales_orders with mart_table_main
+-- Run this once before the next Build in Data Hub
+
+DROP TABLE IF EXISTS mart_telesales_orders;
+
+CREATE TABLE IF NOT EXISTS mart_table_main (
+  id                   BIGSERIAL PRIMARY KEY,
+  -- identifiers
+  mmid                 TEXT NOT NULL,
+  order_number         TEXT NOT NULL,
+  prod_num             TEXT NOT NULL,
+  -- sale dimensions
+  order_date           DATE NOT NULL,
+  channel              TEXT,
+  dynamic_cmg          TEXT,
+  -- sale metrics
+  sales_qty            NUMERIC,
+  sales_in_vat         NUMERIC,
+  -- product info
+  product_name_th      TEXT,
+  product_name_en      TEXT,
+  brands               TEXT,
+  class_name           TEXT,
+  -- flags
+  flag_hoc_unilever    BOOLEAN NOT NULL DEFAULT TRUE,
+  flag_attr            BOOLEAN NOT NULL DEFAULT FALSE,
+  flag_first_order     BOOLEAN NOT NULL DEFAULT FALSE,
+  flag_rotation        BOOLEAN NOT NULL DEFAULT FALSE,
+  -- attribution context (NULL when flag_attr = false)
+  first_connected_date DATE,
+  agent                TEXT,
+  call_status          TEXT,
+  lead_customers       TEXT,
+  days_to_order        INTEGER,
+  customer_type        TEXT,
+  -- meta
+  month                DATE,
+  attribution_days     INTEGER,
+  refreshed_at         TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  UNIQUE (mmid, order_number, prod_num)
+);
+
+CREATE INDEX IF NOT EXISTS idx_mart_main_month      ON mart_table_main (month);
+CREATE INDEX IF NOT EXISTS idx_mart_main_mmid       ON mart_table_main (mmid);
+CREATE INDEX IF NOT EXISTS idx_mart_main_flag_attr  ON mart_table_main (flag_attr);
+CREATE INDEX IF NOT EXISTS idx_mart_main_dynamic_cmg ON mart_table_main (dynamic_cmg);
