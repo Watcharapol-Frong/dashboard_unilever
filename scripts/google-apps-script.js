@@ -101,44 +101,31 @@ function exportIncrementalToStorage() {
   }
 }
 
-/* ================= POST ไปยัง Next.js API (chunked) ================= */
-const CHUNK_SIZE_ = 500;
-
+/* ================= POST ไปยัง Next.js API ================= */
 function postToAPI_(records) {
   const { url, secret } = getConfig_();
-  const endpoint = `${url}/api/data/ingest/telesales-activity`;
-  let totalInserted = 0;
-  let totalSkipped  = 0;
+  const options = {
+    method:             "post",
+    headers:            { "Authorization": `Bearer ${secret}`, "Content-Type": "application/json" },
+    payload:            JSON.stringify({ records }),
+    muteHttpExceptions: true,
+  };
 
-  for (let i = 0; i < records.length; i += CHUNK_SIZE_) {
-    const chunk = records.slice(i, i + CHUNK_SIZE_);
-    const options = {
-      method:             "post",
-      headers:            { "Authorization": `Bearer ${secret}`, "Content-Type": "application/json" },
-      payload:            JSON.stringify({ records: chunk }),
-      muteHttpExceptions: true,
-    };
-
-    try {
-      const response = UrlFetchApp.fetch(endpoint, options);
-      const code     = response.getResponseCode();
-      if (code === 200) {
-        const body = JSON.parse(response.getContentText());
-        totalInserted += body.inserted || 0;
-        totalSkipped  += body.skipped  || 0;
-        Logger.log(`[chunk ${Math.floor(i / CHUNK_SIZE_) + 1}] inserted=${body.inserted} skipped=${body.skipped}`);
-      } else {
-        Logger.log(`[API Error] ${code}: ${response.getContentText()}`);
-        return false;
-      }
-    } catch (error) {
-      Logger.log(`[Exception] ${error.message}`);
+  try {
+    const response = UrlFetchApp.fetch(`${url}/api/data/ingest/telesales-activity`, options);
+    const code     = response.getResponseCode();
+    if (code === 200) {
+      const body = JSON.parse(response.getContentText());
+      Logger.log(`✅ inserted=${body.inserted} skipped=${body.skipped}`);
+      return true;
+    } else {
+      Logger.log(`[API Error] ${code}: ${response.getContentText()}`);
       return false;
     }
+  } catch (error) {
+    Logger.log(`[Exception] ${error.message}`);
+    return false;
   }
-
-  Logger.log(`✅ รวม inserted=${totalInserted} skipped=${totalSkipped}`);
-  return true;
 }
 
 /* ================= ดึง Threshold Date จาก API ================= */
