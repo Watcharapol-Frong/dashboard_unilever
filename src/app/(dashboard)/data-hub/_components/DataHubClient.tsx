@@ -170,9 +170,11 @@ export function DataHubClient() {
 
   interface MartStatus {
     mart_main: {
-      row_count: number; attr_count: number
+      row_count: number
       min_date: string | null; max_date: string | null
-      last_refreshed: string | null; attribution_days: number | null
+      last_refreshed: string | null
+      attribution_days: number | null
+      avg_days_to_order: number | null
     }
     cost_incentive: { row_count: number; min_month: string | null; max_month: string | null; last_refreshed: string | null }
   }
@@ -949,24 +951,22 @@ export function DataHubClient() {
                     (martStatus?.mart_main.row_count ?? 0) > 0 ? 'border-green-200 bg-green-50/40' : 'border-gray-200 bg-muted/30',
                   )}>
                     <p className="text-xs font-medium text-muted-foreground">mart_table_main</p>
-                    <div className="flex items-baseline gap-2">
-                      <p className="text-2xl font-bold tabular-nums">
-                        {formatNumber(martStatus?.mart_main.row_count ?? 0)}
-                        <span className="text-xs font-normal text-muted-foreground ml-1">rows</span>
-                      </p>
-                      {(martStatus?.mart_main.attr_count ?? 0) > 0 && (
-                        <span className="text-xs text-muted-foreground">
-                          ({formatNumber(martStatus!.mart_main.attr_count)} attributed)
-                        </span>
-                      )}
-                    </div>
+                    <p className="text-2xl font-bold tabular-nums">
+                      {formatNumber(martStatus?.mart_main.row_count ?? 0)}
+                      <span className="text-xs font-normal text-muted-foreground ml-1">rows</span>
+                    </p>
                     <p className="text-xs text-muted-foreground">
                       {martStatus?.mart_main.min_date && martStatus?.mart_main.max_date
                         ? `${fmtDate(martStatus.mart_main.min_date)} – ${fmtDate(martStatus.mart_main.max_date)}`
                         : '—'}
                     </p>
                     {martStatus?.mart_main.attribution_days && (
-                      <p className="text-xs text-muted-foreground">Window: {martStatus.mart_main.attribution_days}d</p>
+                      <p className="text-xs text-muted-foreground">
+                        Window: {martStatus.mart_main.attribution_days}d
+                        {martStatus.mart_main.avg_days_to_order !== null && (
+                          <> · avg {martStatus.mart_main.avg_days_to_order}d to order</>
+                        )}
+                      </p>
                     )}
                     <p className="text-xs text-muted-foreground">
                       Built: {martStatus?.mart_main.last_refreshed

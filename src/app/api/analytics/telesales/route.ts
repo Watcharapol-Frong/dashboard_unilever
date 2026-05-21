@@ -35,7 +35,6 @@ export async function GET(request: NextRequest) {
        FROM telesales_calls tc
        LEFT JOIN mart_table_main m
          ON  tc.mmid = m.mmid
-         AND m.flag_attr = TRUE
          AND m.first_connected_date BETWEEN $1 AND $2
        WHERE tc.first_connected_date BETWEEN $1 AND $2 AND tc.agent IS NOT NULL
        GROUP BY tc.agent ORDER BY total_calls DESC`,
@@ -60,15 +59,14 @@ export async function GET(request: NextRequest) {
          COUNT(DISTINCT mmid) FILTER (WHERE customer_type = 'new_customer')   AS new_customers,
          COUNT(DISTINCT mmid) FILTER (WHERE customer_type = 'retention')      AS retention
        FROM mart_table_main
-       WHERE flag_attr = TRUE
-         AND first_connected_date BETWEEN $1 AND $2`,
+       WHERE first_connected_date BETWEEN $1 AND $2`,
       [from, to]
     ),
-    // Mart: HOC Unilever breakdown (flag_hoc_unilever always true, flag_attr for attributed)
+    // Mart: Homecare Unilever breakdown (all rows in mart are HOC + attributed)
     query<{ brands: string; orders: string; sales: string }>(
       `SELECT brands, COUNT(DISTINCT order_number) AS orders, COALESCE(SUM(sales_in_vat), 0) AS sales
        FROM mart_table_main
-       WHERE flag_attr = TRUE AND first_connected_date BETWEEN $1 AND $2
+       WHERE first_connected_date BETWEEN $1 AND $2
        GROUP BY brands ORDER BY sales DESC`,
       [from, to]
     ),

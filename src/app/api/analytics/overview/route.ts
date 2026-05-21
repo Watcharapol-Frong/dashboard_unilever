@@ -36,8 +36,7 @@ export async function GET(request: NextRequest) {
          COALESCE(SUM(sales_in_vat), 0) AS attributed_sales,
          COUNT(DISTINCT mmid) FILTER (WHERE customer_type = 'new_customer') AS new_customers_via_call
        FROM mart_table_main
-       WHERE flag_attr = TRUE
-         AND first_connected_date BETWEEN $1 AND $2`,
+       WHERE first_connected_date BETWEEN $1 AND $2`,
       [from, to]
     ),
     queryOne<{ cnt: string }>(

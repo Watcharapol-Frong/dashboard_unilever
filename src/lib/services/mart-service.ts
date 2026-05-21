@@ -5,83 +5,82 @@ export async function buildMartMain(attributionDays = 14): Promise<number> {
 
   await query(`
     WITH all_sales AS (
-      SELECT order_number, order_date, mmid, prod_num, sales_qty, sales_in_vat, dynamic_cmg, 'online' AS channel
+      SELECT mmid, order_number, order_date, prod_num, sales_qty, sales_in_vat, dynamic_cmg, 'online' AS channel
         FROM online_sales
       UNION ALL
-      SELECT order_number, order_date, mmid, prod_num, sales_qty, sales_in_vat, dynamic_cmg, 'offline' AS channel
+      SELECT mmid, order_number, order_date, prod_num, sales_qty, sales_in_vat, dynamic_cmg, 'offline' AS channel
         FROM offline_sales
     ),
-    hoc_sales AS (
-      -- HOC Unilever products only (products table join)
-      SELECT s.*, p.product_name_th, p.product_name_en, p.brands, p.class_name
-        FROM all_sales s
-        INNER JOIN products p ON p.prod_num = s.prod_num
-        WHERE p.product_name_en IS NOT NULL
-    ),
-    first_purchases AS (
-      -- First order date per customer (within HOC Unilever scope)
+    first_orders AS (
+      -- First ever order date per customer across all channels/time
       SELECT mmid, MIN(order_date) AS first_order_date
-        FROM hoc_sales
+        FROM all_sales
         GROUP BY mmid
     ),
-    best_call AS (
-      -- For each (mmid, order_number, prod_num), pick the earliest telesales call
-      -- that falls within the attribution window before the purchase
+    attributed AS (
+      -- Start from telesales_calls, find HOC Unilever orders within attribution window.
+      -- DISTINCT ON (mmid, order_number, prod_num) keeps the closest preceding call per order-line.
       SELECT DISTINCT ON (s.mmid, s.order_number, s.prod_num)
-        s.mmid, s.order_number, s.prod_num,
-        t.first_connected_date,
-        t.agent,
-        t.call_status,
-        t.lead_customers,
-        (s.order_date - t.first_connected_date)::integer AS days_to_order
-      FROM hoc_sales s
-      JOIN telesales_calls t
-        ON  t.mmid = s.mmid
-        AND s.order_date >= t.first_connected_date
-        AND s.order_date <= t.first_connected_date + (${attributionDays} || ' days')::interval
-      ORDER BY s.mmid, s.order_number, s.prod_num, t.first_connected_date ASC
+        tc.first_connected_date,
+        tc.agent,
+        tc.call_status,
+        tc.lead_customers,
+        s.mmid,
+        s.order_number,
+        s.order_date,
+        s.prod_num,
+        s.sales_qty,
+        s.sales_in_vat,
+        s.dynamic_cmg,
+        s.channel,
+        (s.order_date - tc.first_connected_date)::integer AS days_to_order,
+        p.product_name_th,
+        p.product_name_en,
+        p.brands,
+        p.class_name
+      FROM telesales_calls tc
+      JOIN all_sales s
+        ON  s.mmid      = tc.mmid
+        AND s.order_date >= tc.first_connected_date
+        AND s.order_date <= tc.first_connected_date + (${attributionDays} || ' days')::interval
+      JOIN products p
+        ON  p.prod_num        = s.prod_num
+        AND p.product_name_en IS NOT NULL
+      ORDER BY s.mmid, s.order_number, s.prod_num, tc.first_connected_date DESC
     )
     INSERT INTO mart_table_main (
       mmid, order_number, prod_num,
+      first_connected_date, agent, call_status, lead_customers,
+      days_to_order,
       order_date, channel, dynamic_cmg,
       sales_qty, sales_in_vat,
       product_name_th, product_name_en, brands, class_name,
-      flag_hoc_unilever, flag_attr, flag_first_order, flag_rotation,
-      first_connected_date, agent, call_status, lead_customers, days_to_order,
-      customer_type, month, attribution_days
+      flag_hoc_unilever, flag_first_order, flag_rotation, customer_type,
+      month, attribution_days
     )
     SELECT
-      s.mmid, s.order_number, s.prod_num,
-      s.order_date, s.channel, s.dynamic_cmg,
-      s.sales_qty, s.sales_in_vat,
-      s.product_name_th, s.product_name_en, s.brands, s.class_name,
-      TRUE                                                                AS flag_hoc_unilever,
-      (bc.mmid IS NOT NULL)                                               AS flag_attr,
-      (s.order_date = fp.first_order_date)                                AS flag_first_order,
-      (s.order_date IS DISTINCT FROM fp.first_order_date)                 AS flag_rotation,
-      bc.first_connected_date,
-      bc.agent,
-      bc.call_status,
-      bc.lead_customers,
-      bc.days_to_order,
-      CASE WHEN s.order_date = fp.first_order_date THEN 'new_customer' ELSE 'retention' END,
-      DATE_TRUNC('month', s.order_date)::date,
+      a.mmid, a.order_number, a.prod_num,
+      a.first_connected_date, a.agent, a.call_status, a.lead_customers,
+      a.days_to_order,
+      a.order_date, a.channel, a.dynamic_cmg,
+      a.sales_qty, a.sales_in_vat,
+      a.product_name_th, a.product_name_en, a.brands, a.class_name,
+      TRUE,
+      (a.order_date = fo.first_order_date),
+      (a.order_date IS DISTINCT FROM fo.first_order_date),
+      CASE WHEN a.order_date = fo.first_order_date THEN 'new_customer' ELSE 'retention' END,
+      DATE_TRUNC('month', a.order_date)::date,
       ${attributionDays}
-    FROM hoc_sales s
-    LEFT JOIN best_call bc
-      ON  bc.mmid         = s.mmid
-      AND bc.order_number = s.order_number
-      AND bc.prod_num     = s.prod_num
-    LEFT JOIN first_purchases fp ON fp.mmid = s.mmid
+    FROM attributed a
+    LEFT JOIN first_orders fo ON fo.mmid = a.mmid
     ON CONFLICT (mmid, order_number, prod_num) DO UPDATE SET
-      flag_attr            = EXCLUDED.flag_attr,
-      flag_first_order     = EXCLUDED.flag_first_order,
-      flag_rotation        = EXCLUDED.flag_rotation,
       first_connected_date = EXCLUDED.first_connected_date,
       agent                = EXCLUDED.agent,
       call_status          = EXCLUDED.call_status,
       lead_customers       = EXCLUDED.lead_customers,
       days_to_order        = EXCLUDED.days_to_order,
+      flag_first_order     = EXCLUDED.flag_first_order,
+      flag_rotation        = EXCLUDED.flag_rotation,
       customer_type        = EXCLUDED.customer_type,
       attribution_days     = EXCLUDED.attribution_days,
       refreshed_at         = NOW()
@@ -163,7 +162,6 @@ export async function buildMartCostIncentive(): Promise<number> {
       ON  m.month          = b.month
       AND m.dynamic_cmg    = b.dynamic_cmg
       AND m.lead_customers = b.lead_customers
-      AND m.flag_attr      = TRUE
     LEFT JOIN costs co ON co.month = b.month
     GROUP BY b.month, b.lead_customers, b.dynamic_cmg,
              b.total_calls, b.reached, b.actual_sales, b.sales_target, b.achievement_ratio, co.cost_per_agent
