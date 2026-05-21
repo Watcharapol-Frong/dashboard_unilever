@@ -11,9 +11,12 @@ export async function buildMartMain(attributionDays = 14): Promise<number> {
       SELECT mmid, order_number, order_date, prod_num, sales_qty, sales_in_vat, dynamic_cmg, 'offline' AS channel
         FROM offline_sales
     ),
+    telesales_mmids AS (
+      -- All mmids that telesales has actioned (called at least once)
+      SELECT DISTINCT mmid FROM telesales_calls
+    ),
     attributed AS (
-      -- Start from telesales_calls, find HOC Unilever orders within attribution window.
-      -- DISTINCT ON (mmid, order_number, prod_num) keeps the most recent call per order-line.
+      -- HOC orders within attribution window — telesales drove this purchase directly
       SELECT DISTINCT ON (s.mmid, s.order_number, s.prod_num)
         tc.first_connected_date,
         tc.agent,
@@ -31,6 +34,7 @@ export async function buildMartMain(attributionDays = 14): Promise<number> {
         s.dynamic_cmg,
         s.channel,
         (s.order_date - tc.first_connected_date)::integer AS days_to_order,
+        TRUE AS flag_attr,
         p.product_name_th,
         p.product_name_en,
         p.brands,
@@ -48,17 +52,58 @@ export async function buildMartMain(attributionDays = 14): Promise<number> {
         AND p.product_name_en IS NOT NULL
       ORDER BY s.mmid, s.order_number, s.prod_num, tc.first_connected_date DESC
     ),
+    retention_ext AS (
+      -- HOC orders from telesales-actioned mmids that fall outside attribution window
+      SELECT
+        NULL::date  AS first_connected_date,
+        NULL::text  AS agent,
+        NULL::text  AS call_status,
+        NULL::text  AS reason_group,
+        NULL::text  AS reason_subgroup,
+        NULL::text  AS contact_note,
+        NULL::text  AS lead_customers,
+        s.mmid,
+        s.order_number,
+        s.order_date,
+        s.prod_num,
+        s.sales_qty,
+        s.sales_in_vat,
+        s.dynamic_cmg,
+        s.channel,
+        NULL::integer AS days_to_order,
+        FALSE         AS flag_attr,
+        p.product_name_th,
+        p.product_name_en,
+        p.brands,
+        p.senior_buyer_name,
+        p.buyer_name,
+        p.class_name,
+        p.subclass
+      FROM all_sales s
+      JOIN products p        ON  p.prod_num        = s.prod_num
+        AND p.product_name_en IS NOT NULL
+      JOIN telesales_mmids tm ON tm.mmid = s.mmid
+      WHERE NOT EXISTS (
+        SELECT 1 FROM attributed a
+        WHERE a.mmid = s.mmid AND a.order_number = s.order_number AND a.prod_num = s.prod_num
+      )
+    ),
+    combined AS (
+      SELECT * FROM attributed
+      UNION ALL
+      SELECT * FROM retention_ext
+    ),
     first_in_mart AS (
-      -- First attributed HOC order date per mmid (within this mart build only)
+      -- First HOC order per mmid across attributed + retention_ext
       SELECT mmid, MIN(order_date) AS first_order_date
-        FROM attributed
+        FROM combined
         GROUP BY mmid
     )
     INSERT INTO mart_table_main (
       mmid, order_number, prod_num,
       first_connected_date, agent, call_status,
       reason_group, reason_subgroup, contact_note, lead_customers,
-      days_to_order,
+      days_to_order, flag_attr,
       order_date, channel, dynamic_cmg,
       sales_qty, sales_in_vat,
       product_name_th, product_name_en, brands,
@@ -68,23 +113,23 @@ export async function buildMartMain(attributionDays = 14): Promise<number> {
       month, attribution_days
     )
     SELECT
-      a.mmid, a.order_number, a.prod_num,
-      a.first_connected_date, a.agent, a.call_status,
-      a.reason_group, a.reason_subgroup, a.contact_note, a.lead_customers,
-      a.days_to_order,
-      a.order_date, a.channel, a.dynamic_cmg,
-      a.sales_qty, a.sales_in_vat,
-      a.product_name_th, a.product_name_en, a.brands,
-      a.senior_buyer_name, a.buyer_name, a.class_name, a.subclass,
+      c.mmid, c.order_number, c.prod_num,
+      c.first_connected_date, c.agent, c.call_status,
+      c.reason_group, c.reason_subgroup, c.contact_note, c.lead_customers,
+      c.days_to_order, c.flag_attr,
+      c.order_date, c.channel, c.dynamic_cmg,
+      c.sales_qty, c.sales_in_vat,
+      c.product_name_th, c.product_name_en, c.brands,
+      c.senior_buyer_name, c.buyer_name, c.class_name, c.subclass,
       TRUE,
-      (a.order_date = f.first_order_date),
-      (a.order_date IS DISTINCT FROM f.first_order_date),
-      CASE WHEN a.order_date = f.first_order_date THEN 'new_customer' ELSE 'retention' END,
+      (c.order_date = f.first_order_date),
+      (c.order_date IS DISTINCT FROM f.first_order_date),
+      CASE WHEN c.order_date = f.first_order_date THEN 'new_customer' ELSE 'retention' END,
       f.first_order_date,
-      DATE_TRUNC('month', a.order_date)::date,
+      DATE_TRUNC('month', c.order_date)::date,
       ${attributionDays}
-    FROM attributed a
-    LEFT JOIN first_in_mart f ON f.mmid = a.mmid
+    FROM combined c
+    LEFT JOIN first_in_mart f ON f.mmid = c.mmid
     ON CONFLICT (mmid, order_number, prod_num) DO UPDATE SET
       first_connected_date = EXCLUDED.first_connected_date,
       agent                = EXCLUDED.agent,
@@ -94,6 +139,7 @@ export async function buildMartMain(attributionDays = 14): Promise<number> {
       contact_note         = EXCLUDED.contact_note,
       lead_customers       = EXCLUDED.lead_customers,
       days_to_order        = EXCLUDED.days_to_order,
+      flag_attr            = EXCLUDED.flag_attr,
       senior_buyer_name    = EXCLUDED.senior_buyer_name,
       buyer_name           = EXCLUDED.buyer_name,
       subclass             = EXCLUDED.subclass,

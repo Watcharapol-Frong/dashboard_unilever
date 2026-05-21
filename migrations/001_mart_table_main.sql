@@ -11,8 +11,8 @@ CREATE TABLE IF NOT EXISTS mart_table_main (
   order_number         TEXT NOT NULL,
   prod_num             TEXT NOT NULL,
 
-  -- call context
-  first_connected_date DATE NOT NULL,
+  -- call context (NULL for non-attributed rows)
+  first_connected_date DATE,
   agent                TEXT,
   call_status          TEXT,
   reason_group         TEXT,
@@ -20,8 +20,9 @@ CREATE TABLE IF NOT EXISTS mart_table_main (
   contact_note         TEXT,
   lead_customers       TEXT,
 
-  -- attribution metric: days from call to order
-  days_to_order        INTEGER NOT NULL,
+  -- attribution: days from call to order (NULL for non-attributed)
+  days_to_order        INTEGER,
+  flag_attr            BOOLEAN NOT NULL DEFAULT FALSE,
 
   -- sale dimensions
   order_date           DATE NOT NULL,
@@ -59,4 +60,5 @@ CREATE INDEX IF NOT EXISTS idx_mart_main_month             ON mart_table_main (m
 CREATE INDEX IF NOT EXISTS idx_mart_main_mmid              ON mart_table_main (mmid);
 CREATE INDEX IF NOT EXISTS idx_mart_main_first_connected   ON mart_table_main (first_connected_date);
 CREATE INDEX IF NOT EXISTS idx_mart_main_dynamic_cmg       ON mart_table_main (dynamic_cmg);
+CREATE INDEX IF NOT EXISTS idx_mart_main_flag_attr         ON mart_table_main (flag_attr);
 CREATE INDEX IF NOT EXISTS idx_mart_main_flag_first_order  ON mart_table_main (flag_first_order);

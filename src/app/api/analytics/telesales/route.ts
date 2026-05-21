@@ -59,14 +59,16 @@ export async function GET(request: NextRequest) {
          COUNT(DISTINCT mmid) FILTER (WHERE customer_type = 'new_customer')   AS new_customers,
          COUNT(DISTINCT mmid) FILTER (WHERE customer_type = 'retention')      AS retention
        FROM mart_table_main
-       WHERE first_connected_date BETWEEN $1 AND $2`,
+       WHERE flag_attr = TRUE
+         AND first_connected_date BETWEEN $1 AND $2`,
       [from, to]
     ),
     // Mart: Homecare Unilever breakdown (all rows in mart are HOC + attributed)
     query<{ brands: string; orders: string; sales: string }>(
       `SELECT brands, COUNT(DISTINCT order_number) AS orders, COALESCE(SUM(sales_in_vat), 0) AS sales
        FROM mart_table_main
-       WHERE first_connected_date BETWEEN $1 AND $2
+       WHERE flag_attr = TRUE
+         AND first_connected_date BETWEEN $1 AND $2
        GROUP BY brands ORDER BY sales DESC`,
       [from, to]
     ),
