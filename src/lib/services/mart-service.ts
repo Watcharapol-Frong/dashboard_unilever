@@ -1,61 +1,12 @@
 import { query, queryOne } from '@/lib/db'
 
-export async function buildMartTelesalesOrders(): Promise<number> {
-  await query(`TRUNCATE TABLE mart_telesales_orders`)
-
-  await query(`
-    WITH all_sales AS (
-      SELECT order_number, order_date, mmid, prod_num, sales_qty, sales_in_vat, dynamic_cmg, 'online' AS channel
-        FROM online_sales
-      UNION ALL
-      SELECT order_number, order_date, mmid, prod_num, sales_qty, sales_in_vat, dynamic_cmg, 'offline' AS channel
-        FROM offline_sales
-    ),
-    first_purchases AS (
-      SELECT mmid, MIN(order_date) AS first_order_date FROM all_sales GROUP BY mmid
-    ),
-    attributed AS (
-      SELECT
-        t.mmid, s.order_number, s.order_date, s.channel, s.prod_num,
-        s.sales_qty, s.sales_in_vat, s.dynamic_cmg,
-        t.first_connected_date, t.agent, t.call_status, t.lead_customers,
-        (s.order_date - t.first_connected_date)::integer AS days_to_order,
-        ROW_NUMBER() OVER (PARTITION BY t.mmid ORDER BY s.order_date, s.order_number)::integer AS order_seq_in_window,
-        (s.order_date = fp.first_order_date) AS is_first_ever_order
-      FROM telesales_calls t
-      JOIN all_sales s
-        ON  s.mmid = t.mmid
-        AND s.order_date >= t.first_connected_date
-        AND s.order_date <= t.first_connected_date + INTERVAL '14 days'
-      LEFT JOIN first_purchases fp ON fp.mmid = t.mmid
-    )
-    INSERT INTO mart_telesales_orders (
-      mmid, order_number, order_date, channel, prod_num, sales_qty, sales_in_vat, dynamic_cmg,
-      first_connected_date, agent, call_status, lead_customers, days_to_order,
-      order_seq_in_window, is_first_ever_order, customer_type,
-      product_name_th, product_name_en, brands, class_name, is_hoc_unilever, month
-    )
-    SELECT
-      a.mmid, a.order_number, a.order_date, a.channel, a.prod_num,
-      a.sales_qty, a.sales_in_vat, a.dynamic_cmg,
-      a.first_connected_date, a.agent, a.call_status, a.lead_customers,
-      a.days_to_order, a.order_seq_in_window, a.is_first_ever_order,
-      CASE WHEN a.is_first_ever_order THEN 'new_customer' ELSE 'retention' END,
-      p.product_name_th, p.product_name_en, p.brands, p.class_name,
-      (p.product_name_en IS NOT NULL),
-      DATE_TRUNC('month', a.order_date)::date
-    FROM attributed a
-    LEFT JOIN products p ON p.prod_num = a.prod_num
-    WHERE p.product_name_en IS NOT NULL
-    ON CONFLICT (mmid, order_number, prod_num) DO UPDATE SET
-      sales_qty            = EXCLUDED.sales_qty,
-      sales_in_vat         = EXCLUDED.sales_in_vat,
-      is_hoc_unilever      = EXCLUDED.is_hoc_unilever,
-      customer_type        = EXCLUDED.customer_type,
-      refreshed_at         = NOW()
-  `)
-
-  const row = await queryOne<{ cnt: string }>(`SELECT COUNT(*) AS cnt FROM mart_telesales_orders`)
+export async function buildMartMain(attributionDays = 14): Promise<number> {
+  // TRUNCATE must happen outside the procedure (CockroachDB limitation).
+  await query(`TRUNCATE TABLE mart_table_main`)
+  await query(`TRUNCATE TABLE _mart_build_staging`)
+  // Procedure handles CTE → staging → mart copy (anti-join optimized).
+  await query(`CALL build_mart_main($1)`, [attributionDays])
+  const row = await queryOne<{ cnt: string }>(`SELECT COUNT(*) AS cnt FROM mart_table_main`)
   return Number(row?.cnt ?? 0)
 }
 
@@ -64,7 +15,6 @@ export async function buildMartCostIncentive(): Promise<number> {
 
   await query(`
     WITH all_sales_by_cmg AS (
-      -- ยอดขายรวมทุก product ต่อ (month, dynamic_cmg) จาก online + offline
       SELECT DATE_TRUNC('month', order_date)::date AS month, dynamic_cmg, SUM(sales_in_vat) AS actual_sales
       FROM (
         SELECT order_date, dynamic_cmg, sales_in_vat FROM online_sales  WHERE dynamic_cmg IS NOT NULL
@@ -74,11 +24,9 @@ export async function buildMartCostIncentive(): Promise<number> {
       GROUP BY 1, 2
     ),
     cmg_months AS (
-      -- distinct (month, dynamic_cmg) ที่มียอดขายจริง
       SELECT month, dynamic_cmg FROM all_sales_by_cmg
     ),
     tier_calls AS (
-      -- จำนวน call ต่อ (month, lead_customers)
       SELECT
         DATE_TRUNC('month', first_connected_date)::date AS month,
         lead_customers,
@@ -123,7 +71,6 @@ export async function buildMartCostIncentive(): Promise<number> {
       b.actual_sales,
       b.sales_target,
       b.achievement_ratio,
-      -- lookup incentive_per_head: tier <= achievement_ratio → เอา tier สูงสุดที่ไม่เกิน ratio
       (SELECT incentive_per_head FROM incentives
        WHERE tier <= b.achievement_ratio ORDER BY tier DESC LIMIT 1)          AS incentive_per_head,
       COUNT(DISTINCT m.mmid) *
@@ -131,7 +78,7 @@ export async function buildMartCostIncentive(): Promise<number> {
                   WHERE tier <= b.achievement_ratio ORDER BY tier DESC LIMIT 1), 0) AS total_incentive,
       co.cost_per_agent
     FROM base b
-    LEFT JOIN mart_telesales_orders m
+    LEFT JOIN mart_table_main m
       ON  m.month          = b.month
       AND m.dynamic_cmg    = b.dynamic_cmg
       AND m.lead_customers = b.lead_customers
@@ -159,8 +106,8 @@ export async function buildMartCostIncentive(): Promise<number> {
   return Number(row?.cnt ?? 0)
 }
 
-export async function refreshAllMarts(): Promise<{ telesales_orders: number; cost_incentive: number }> {
-  const telesales_orders = await buildMartTelesalesOrders()
-  const cost_incentive   = await buildMartCostIncentive()
-  return { telesales_orders, cost_incentive }
+export async function refreshAllMarts(attributionDays = 14): Promise<{ mart_main: number; cost_incentive: number }> {
+  const mart_main      = await buildMartMain(attributionDays)
+  const cost_incentive = await buildMartCostIncentive()
+  return { mart_main, cost_incentive }
 }
