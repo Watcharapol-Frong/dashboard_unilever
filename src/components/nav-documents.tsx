@@ -1,28 +1,17 @@
 "use client"
 
-import {
-  FolderIcon,
-  MoreHorizontalIcon,
-  ShareIcon,
-} from "lucide-react"
 import type { ComponentType } from "react"
-type LucideIcon = ComponentType<{ className?: string }>
-
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu"
+import Link from "next/link"
+import { usePathname } from "next/navigation"
 import {
   SidebarGroup,
   SidebarGroupLabel,
   SidebarMenu,
-  SidebarMenuAction,
   SidebarMenuButton,
   SidebarMenuItem,
-  useSidebar,
 } from "@/components/ui/sidebar"
+
+type LucideIcon = ComponentType<{ className?: string }>
 
 export function NavDocuments({
   items,
@@ -33,7 +22,7 @@ export function NavDocuments({
     icon: LucideIcon
   }[]
 }) {
-  const { isMobile } = useSidebar()
+  const pathname = usePathname()
 
   return (
     <SidebarGroup>
@@ -41,37 +30,12 @@ export function NavDocuments({
       <SidebarMenu>
         {items.map((item) => (
           <SidebarMenuItem key={item.name}>
-            <SidebarMenuButton asChild tooltip={item.name}>
-              <a href={item.url}>
+            <SidebarMenuButton asChild tooltip={item.name} isActive={pathname === item.url}>
+              <Link href={item.url}>
                 <item.icon />
                 <span>{item.name}</span>
-              </a>
+              </Link>
             </SidebarMenuButton>
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <SidebarMenuAction
-                  showOnHover
-                  className="rounded-sm data-[state=open]:bg-accent"
-                >
-                  <MoreHorizontalIcon />
-                  <span className="sr-only">More</span>
-                </SidebarMenuAction>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent
-                className="w-24 rounded-lg"
-                side={isMobile ? "bottom" : "right"}
-                align={isMobile ? "end" : "start"}
-              >
-                <DropdownMenuItem>
-                  <FolderIcon />
-                  <span>Open</span>
-                </DropdownMenuItem>
-                <DropdownMenuItem>
-                  <ShareIcon />
-                  <span>Share</span>
-                </DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
           </SidebarMenuItem>
         ))}
       </SidebarMenu>
