@@ -1,9 +1,10 @@
 import { query, queryOne } from '@/lib/db'
 
-export async function buildMartMain(attributionDays = 14): Promise<number> {
-  await query(`TRUNCATE TABLE mart_table_main`)
-
-  await query(`
+// CTE block shared across all monthly batches.
+// The batch filter (WHERE month = $2) is appended per-call so that
+// first_attr_order / first_nonattr_order always compute globally.
+function martCTE(attributionDays: number) {
+  return `
     WITH all_sales AS (
       SELECT mmid, order_number, order_date, prod_num, sales_qty, sales_in_vat, dynamic_cmg, 'online' AS channel
         FROM online_sales
@@ -12,11 +13,9 @@ export async function buildMartMain(attributionDays = 14): Promise<number> {
         FROM offline_sales
     ),
     telesales_mmids AS (
-      -- All mmids that telesales has actioned (called at least once)
       SELECT DISTINCT mmid FROM telesales_calls
     ),
     attributed AS (
-      -- HOC orders within attribution window — telesales drove this purchase directly
       SELECT DISTINCT ON (s.mmid, s.order_number, s.prod_num)
         tc.first_connected_date,
         tc.agent,
@@ -53,7 +52,6 @@ export async function buildMartMain(attributionDays = 14): Promise<number> {
       ORDER BY s.mmid, s.order_number, s.prod_num, tc.first_connected_date DESC
     ),
     retention_ext AS (
-      -- HOC orders from telesales-actioned mmids that fall outside attribution window
       SELECT
         NULL::date  AS first_connected_date,
         NULL::text  AS agent,
@@ -80,8 +78,7 @@ export async function buildMartMain(attributionDays = 14): Promise<number> {
         p.class_name,
         p.subclass
       FROM all_sales s
-      JOIN products p        ON  p.prod_num        = s.prod_num
-        AND p.product_name_en IS NOT NULL
+      JOIN products p ON p.prod_num = s.prod_num AND p.product_name_en IS NOT NULL
       JOIN telesales_mmids tm ON tm.mmid = s.mmid
       WHERE NOT EXISTS (
         SELECT 1 FROM attributed a
@@ -94,81 +91,80 @@ export async function buildMartMain(attributionDays = 14): Promise<number> {
       SELECT * FROM retention_ext
     ),
     first_attr_order AS (
-      -- First ATTRIBUTED order per mmid
-      SELECT mmid, MIN(order_date) AS first_attr_date
-        FROM attributed
-        GROUP BY mmid
+      SELECT mmid, MIN(order_date) AS first_attr_date FROM attributed GROUP BY mmid
     ),
     first_nonattr_order AS (
-      -- First non-attributed order per mmid (for mmids that have never converted)
-      SELECT mmid, MIN(order_date) AS first_nonattr_date
-        FROM retention_ext
-        GROUP BY mmid
+      SELECT mmid, MIN(order_date) AS first_nonattr_date FROM retention_ext GROUP BY mmid
     )
-    INSERT INTO mart_table_main (
-      mmid, order_number, prod_num,
-      first_connected_date, agent, call_status,
-      reason_group, reason_subgroup, contact_note, lead_customers,
-      days_to_order, flag_attr,
-      order_date, channel, dynamic_cmg,
-      sales_qty, sales_in_vat,
-      product_name_th, product_name_en, brands,
-      senior_buyer_name, buyer_name, class_name, subclass,
-      flag_hoc_unilever, flag_first_order, flag_retention, customer_type,
-      first_order_date,
-      month, attribution_days
-    )
-    SELECT
-      c.mmid, c.order_number, c.prod_num,
-      c.first_connected_date, c.agent, c.call_status,
-      c.reason_group, c.reason_subgroup, c.contact_note, c.lead_customers,
-      c.days_to_order, c.flag_attr,
-      c.order_date, c.channel, c.dynamic_cmg,
-      c.sales_qty, c.sales_in_vat,
-      c.product_name_th, c.product_name_en, c.brands,
-      c.senior_buyer_name, c.buyer_name, c.class_name, c.subclass,
-      TRUE,
-      (c.flag_attr = TRUE AND c.order_date = fa.first_attr_date),
-      (fa.first_attr_date IS NOT NULL
-        AND NOT (c.flag_attr = TRUE AND c.order_date = fa.first_attr_date)),
-      CASE
-        WHEN c.flag_attr = TRUE AND c.order_date = fa.first_attr_date
-          THEN 'new_customer'
-        WHEN fa.first_attr_date IS NOT NULL
-          AND NOT (c.flag_attr = TRUE AND c.order_date = fa.first_attr_date)
-          THEN 'retention'
-        WHEN fa.first_attr_date IS NULL AND c.order_date = fn.first_nonattr_date
-          THEN 'first_order_not_con'
-        WHEN fa.first_attr_date IS NULL AND c.order_date > fn.first_nonattr_date
-          THEN 'reten_not_con'
-        ELSE NULL
-      END,
-      fa.first_attr_date,
-      DATE_TRUNC('month', c.order_date)::date,
-      ${attributionDays}
-    FROM combined c
-    LEFT JOIN first_attr_order  fa ON fa.mmid = c.mmid
-    LEFT JOIN first_nonattr_order fn ON fn.mmid = c.mmid
-    ON CONFLICT (mmid, order_number, prod_num) DO UPDATE SET
-      first_connected_date = EXCLUDED.first_connected_date,
-      agent                = EXCLUDED.agent,
-      call_status          = EXCLUDED.call_status,
-      reason_group         = EXCLUDED.reason_group,
-      reason_subgroup      = EXCLUDED.reason_subgroup,
-      contact_note         = EXCLUDED.contact_note,
-      lead_customers       = EXCLUDED.lead_customers,
-      days_to_order        = EXCLUDED.days_to_order,
-      flag_attr            = EXCLUDED.flag_attr,
-      senior_buyer_name    = EXCLUDED.senior_buyer_name,
-      buyer_name           = EXCLUDED.buyer_name,
-      subclass             = EXCLUDED.subclass,
-      flag_first_order     = EXCLUDED.flag_first_order,
-      flag_retention       = EXCLUDED.flag_retention,
-      customer_type        = EXCLUDED.customer_type,
-      first_order_date     = EXCLUDED.first_order_date,
-      attribution_days     = EXCLUDED.attribution_days,
-      refreshed_at         = NOW()
+  `
+}
+
+export async function buildMartMain(attributionDays = 14): Promise<number> {
+  await query(`TRUNCATE TABLE mart_table_main`)
+
+  // Fetch distinct months to batch inserts — keeps each transaction
+  // small enough to stay within CockroachDB's lock-tracking budget.
+  const months = await query<{ m: string }>(`
+    SELECT DISTINCT DATE_TRUNC('month', order_date)::date::text AS m
+    FROM (
+      SELECT order_date FROM online_sales
+      UNION ALL
+      SELECT order_date FROM offline_sales
+    ) s
+    ORDER BY m
   `)
+
+  for (const { m } of months) {
+    await query(`
+      ${martCTE(attributionDays)}
+      INSERT INTO mart_table_main (
+        mmid, order_number, prod_num,
+        first_connected_date, agent, call_status,
+        reason_group, reason_subgroup, contact_note, lead_customers,
+        days_to_order, flag_attr,
+        order_date, channel, dynamic_cmg,
+        sales_qty, sales_in_vat,
+        product_name_th, product_name_en, brands,
+        senior_buyer_name, buyer_name, class_name, subclass,
+        flag_hoc_unilever, flag_first_order, flag_retention, customer_type,
+        first_order_date,
+        month, attribution_days
+      )
+      SELECT
+        c.mmid, c.order_number, c.prod_num,
+        c.first_connected_date, c.agent, c.call_status,
+        c.reason_group, c.reason_subgroup, c.contact_note, c.lead_customers,
+        c.days_to_order, c.flag_attr,
+        c.order_date, c.channel, c.dynamic_cmg,
+        c.sales_qty, c.sales_in_vat,
+        c.product_name_th, c.product_name_en, c.brands,
+        c.senior_buyer_name, c.buyer_name, c.class_name, c.subclass,
+        TRUE,
+        (c.flag_attr = TRUE AND c.order_date = fa.first_attr_date),
+        (fa.first_attr_date IS NOT NULL
+          AND NOT (c.flag_attr = TRUE AND c.order_date = fa.first_attr_date)),
+        CASE
+          WHEN c.flag_attr = TRUE AND c.order_date = fa.first_attr_date
+            THEN 'new_customer'
+          WHEN fa.first_attr_date IS NOT NULL
+            AND NOT (c.flag_attr = TRUE AND c.order_date = fa.first_attr_date)
+            THEN 'retention'
+          WHEN fa.first_attr_date IS NULL AND c.order_date = fn.first_nonattr_date
+            THEN 'first_order_not_con'
+          WHEN fa.first_attr_date IS NULL AND c.order_date > fn.first_nonattr_date
+            THEN 'reten_not_con'
+          ELSE NULL
+        END,
+        fa.first_attr_date,
+        DATE_TRUNC('month', c.order_date)::date,
+        ${attributionDays}
+      FROM combined c
+      LEFT JOIN first_attr_order    fa ON fa.mmid = c.mmid
+      LEFT JOIN first_nonattr_order fn ON fn.mmid = c.mmid
+      WHERE DATE_TRUNC('month', c.order_date)::date = $1
+      ON CONFLICT (mmid, order_number, prod_num) DO NOTHING
+    `, [m])
+  }
 
   const row = await queryOne<{ cnt: string }>(`SELECT COUNT(*) AS cnt FROM mart_table_main`)
   return Number(row?.cnt ?? 0)
