@@ -6,7 +6,8 @@ export const ADMIN_PATHS = ['/leads', '/data-hub']
 const isProtectedRoute = createRouteMatcher([
   '/overview(.*)', '/sales(.*)', '/telesales(.*)',
   '/products(.*)', '/leads(.*)', '/incentives(.*)', '/data-hub(.*)',
-  '/api/data/(.*)', '/api/auth/(.*)', '/api/system/(.*)',
+  '/api/data/upload/(.*)', '/api/data/status(.*)', '/api/data/history(.*)',
+  '/api/auth/(.*)', '/api/system/(.*)',
   '/api/analytics/(.*)', '/api/config/(.*)',
 ])
 
