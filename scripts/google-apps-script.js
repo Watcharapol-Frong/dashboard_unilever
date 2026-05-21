@@ -1,7 +1,23 @@
-/************ CONFIG ************/
-const APP_URL    = "https://your-domain.com";   // URL ของ Next.js app (Vercel หรือ localhost)
-const API_SECRET = "your-ingest-api-secret";    // ต้องตรงกับ INGEST_API_SECRET ใน .env.local
-/********************************/
+/************ CONFIG ************
+ * อย่า hardcode secret ที่นี่
+ * ไปที่ Extensions → Apps Script → Project Settings → Script Properties แล้วเพิ่ม:
+ *   DASHBOARD_URL  =  https://your-app.vercel.app
+ *   INGEST_SECRET  =  <ค่า INGEST_API_SECRET จาก Vercel env>
+ ********************************/
+function getConfig_() {
+  const props  = PropertiesService.getScriptProperties();
+  const url    = props.getProperty("DASHBOARD_URL");
+  const secret = props.getProperty("INGEST_SECRET");
+  if (!url || !secret) {
+    throw new Error(
+      "Script Properties ยังไม่ครบ\n" +
+      "ไปที่ Project Settings → Script Properties แล้วเพิ่ม:\n" +
+      "  DASHBOARD_URL = https://your-app.vercel.app\n" +
+      "  INGEST_SECRET = <secret>"
+    );
+  }
+  return { url: url.replace(/\/$/, ""), secret };
+}
 
 function exportIncrementalToStorage() {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
@@ -85,49 +101,57 @@ function exportIncrementalToStorage() {
   }
 }
 
-/* ================= POST ไปยัง Next.js API ================= */
-function postToAPI_(records) {
-  const url = `${APP_URL}/api/ingest/telesales-activity`;
-  const options = {
-  method: "post",
-  headers: {
-    "Authorization": `Bearer ${API_SECRET}`,
-    "Content-Type": "application/json",
-    "ngrok-skip-browser-warning": "true",
-  },
-  payload: JSON.stringify({ records }),
-  muteHttpExceptions: true,
-  }
+/* ================= POST ไปยัง Next.js API (chunked) ================= */
+const CHUNK_SIZE_ = 500;
 
-  try {
-    const response = UrlFetchApp.fetch(url, options);
-    const code = response.getResponseCode();
-    if (code === 200) {
-      Logger.log(`[API] ${response.getContentText()}`);
-      return true;
-    } else {
-      Logger.log(`[API Error] ${code}: ${response.getContentText()}`);
+function postToAPI_(records) {
+  const { url, secret } = getConfig_();
+  const endpoint = `${url}/api/data/ingest/telesales-activity`;
+  let totalInserted = 0;
+  let totalSkipped  = 0;
+
+  for (let i = 0; i < records.length; i += CHUNK_SIZE_) {
+    const chunk = records.slice(i, i + CHUNK_SIZE_);
+    const options = {
+      method:             "post",
+      headers:            { "Authorization": `Bearer ${secret}`, "Content-Type": "application/json" },
+      payload:            JSON.stringify({ records: chunk }),
+      muteHttpExceptions: true,
+    };
+
+    try {
+      const response = UrlFetchApp.fetch(endpoint, options);
+      const code     = response.getResponseCode();
+      if (code === 200) {
+        const body = JSON.parse(response.getContentText());
+        totalInserted += body.inserted || 0;
+        totalSkipped  += body.skipped  || 0;
+        Logger.log(`[chunk ${Math.floor(i / CHUNK_SIZE_) + 1}] inserted=${body.inserted} skipped=${body.skipped}`);
+      } else {
+        Logger.log(`[API Error] ${code}: ${response.getContentText()}`);
+        return false;
+      }
+    } catch (error) {
+      Logger.log(`[Exception] ${error.message}`);
       return false;
     }
-  } catch (error) {
-    Logger.log(`[Exception] ${error.message}`);
-    return false;
   }
+
+  Logger.log(`✅ รวม inserted=${totalInserted} skipped=${totalSkipped}`);
+  return true;
 }
 
 /* ================= ดึง Threshold Date จาก API ================= */
 function getThresholdDate_() {
-  const url = `${APP_URL}/api/ingest/threshold`;
-  const options = {method: "get",
-  headers: {
-    "Authorization": `Bearer ${API_SECRET}`,
-    "ngrok-skip-browser-warning": "true",
-  },
-  muteHttpExceptions: true,
-  }
+  const { url, secret } = getConfig_();
+  const options = {
+    method:             "get",
+    headers:            { "Authorization": `Bearer ${secret}` },
+    muteHttpExceptions: true,
+  };
 
   try {
-    const response = UrlFetchApp.fetch(url, options);
+    const response = UrlFetchApp.fetch(`${url}/api/data/ingest/threshold`, options);
     if (response.getResponseCode() === 200) {
       const data = JSON.parse(response.getContentText());
       if (data.date) {
