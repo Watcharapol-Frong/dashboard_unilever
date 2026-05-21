@@ -29,6 +29,9 @@ export async function buildMartMain(attributionDays = 14): Promise<number> {
         tc.first_connected_date,
         tc.agent,
         tc.call_status,
+        tc.reason_group,
+        tc.reason_subgroup,
+        tc.contact_note,
         tc.lead_customers,
         s.mmid,
         s.order_number,
@@ -42,7 +45,10 @@ export async function buildMartMain(attributionDays = 14): Promise<number> {
         p.product_name_th,
         p.product_name_en,
         p.brands,
-        p.class_name
+        p.senior_buyer_name,
+        p.buyer_name,
+        p.class_name,
+        p.subclass
       FROM telesales_calls tc
       JOIN all_sales s
         ON  s.mmid      = tc.mmid
@@ -55,22 +61,26 @@ export async function buildMartMain(attributionDays = 14): Promise<number> {
     )
     INSERT INTO mart_table_main (
       mmid, order_number, prod_num,
-      first_connected_date, agent, call_status, lead_customers,
+      first_connected_date, agent, call_status,
+      reason_group, reason_subgroup, contact_note, lead_customers,
       days_to_order,
       order_date, channel, dynamic_cmg,
       sales_qty, sales_in_vat,
-      product_name_th, product_name_en, brands, class_name,
+      product_name_th, product_name_en, brands,
+      senior_buyer_name, buyer_name, class_name, subclass,
       flag_hoc_unilever, flag_first_order, flag_retention, customer_type,
       first_order_date,
       month, attribution_days
     )
     SELECT
       a.mmid, a.order_number, a.prod_num,
-      a.first_connected_date, a.agent, a.call_status, a.lead_customers,
+      a.first_connected_date, a.agent, a.call_status,
+      a.reason_group, a.reason_subgroup, a.contact_note, a.lead_customers,
       a.days_to_order,
       a.order_date, a.channel, a.dynamic_cmg,
       a.sales_qty, a.sales_in_vat,
-      a.product_name_th, a.product_name_en, a.brands, a.class_name,
+      a.product_name_th, a.product_name_en, a.brands,
+      a.senior_buyer_name, a.buyer_name, a.class_name, a.subclass,
       TRUE,
       (a.order_date = fo.first_order_date),
       (a.order_date IS DISTINCT FROM fo.first_order_date),
@@ -84,8 +94,14 @@ export async function buildMartMain(attributionDays = 14): Promise<number> {
       first_connected_date = EXCLUDED.first_connected_date,
       agent                = EXCLUDED.agent,
       call_status          = EXCLUDED.call_status,
+      reason_group         = EXCLUDED.reason_group,
+      reason_subgroup      = EXCLUDED.reason_subgroup,
+      contact_note         = EXCLUDED.contact_note,
       lead_customers       = EXCLUDED.lead_customers,
       days_to_order        = EXCLUDED.days_to_order,
+      senior_buyer_name    = EXCLUDED.senior_buyer_name,
+      buyer_name           = EXCLUDED.buyer_name,
+      subclass             = EXCLUDED.subclass,
       flag_first_order     = EXCLUDED.flag_first_order,
       flag_retention       = EXCLUDED.flag_retention,
       customer_type        = EXCLUDED.customer_type,

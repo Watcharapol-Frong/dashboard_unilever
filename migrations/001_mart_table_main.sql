@@ -10,31 +10,44 @@ CREATE TABLE IF NOT EXISTS mart_table_main (
   mmid                 TEXT NOT NULL,
   order_number         TEXT NOT NULL,
   prod_num             TEXT NOT NULL,
+
   -- call context
   first_connected_date DATE NOT NULL,
   agent                TEXT,
   call_status          TEXT,
+  reason_group         TEXT,
+  reason_subgroup      TEXT,
+  contact_note         TEXT,
   lead_customers       TEXT,
+
   -- attribution metric: days from call to order
   days_to_order        INTEGER NOT NULL,
+
   -- sale dimensions
   order_date           DATE NOT NULL,
   channel              TEXT,
   dynamic_cmg          TEXT,
+
   -- sale metrics
   sales_qty            NUMERIC,
   sales_in_vat         NUMERIC,
+
   -- product info (Homecare Unilever)
   product_name_th      TEXT,
   product_name_en      TEXT,
   brands               TEXT,
+  senior_buyer_name    TEXT,
+  buyer_name           TEXT,
   class_name           TEXT,
+  subclass             TEXT,
   flag_hoc_unilever    BOOLEAN NOT NULL DEFAULT TRUE,
+
   -- customer type flags
   flag_first_order     BOOLEAN NOT NULL DEFAULT FALSE,
   flag_retention       BOOLEAN NOT NULL DEFAULT FALSE,
   customer_type        TEXT,
   first_order_date     DATE,
+
   -- meta
   month                DATE,
   attribution_days     INTEGER,
