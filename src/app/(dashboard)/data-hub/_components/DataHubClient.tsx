@@ -109,9 +109,20 @@ export function DataHubClient() {
   const [replayResult, setReplayResult] = useState<ReplayResult | null>(null)
 
   // ── Build state ────────────────────────────────────────────
-  type BuildResult = { ok: boolean; rows?: { mart_main: number; cost_incentive: number }; attribution_days?: number; duration_ms?: number; error?: string }
+  type BuildMode = 'incremental' | 'full'
+  type BuildResult = {
+    ok: boolean
+    rows?: { mart_main: number; cost_incentive: number }
+    attribution_days?: number
+    mode?: BuildMode
+    since_date?: string | null
+    duration_ms?: number
+    error?: string
+  }
   const [attributionDays, setAttributionDays] = useState<number | 'custom'>(14)
   const [customDays, setCustomDays]           = useState('')
+  const [buildMode, setBuildMode]             = useState<BuildMode>('incremental')
+  const [lookbackDays, setLookbackDays]       = useState(30)
   const [buildLoading, setBuildLoading]       = useState(false)
   const [buildResult, setBuildResult]         = useState<BuildResult | null>(null)
 
@@ -124,7 +135,11 @@ export function DataHubClient() {
       const res = await fetch('/api/system/refresh-mart', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ attribution_days: effectiveDays }),
+        body: JSON.stringify({
+          attribution_days: effectiveDays,
+          mode: buildMode,
+          lookback_days: lookbackDays,
+        }),
       })
       const data = await res.json()
       setBuildResult(data)
@@ -1005,12 +1020,75 @@ export function DataHubClient() {
             <CardHeader>
               <CardTitle className="text-base">Build Mart Tables</CardTitle>
               <p className="text-sm text-muted-foreground">
-                Rebuild <code className="bg-muted px-1 rounded">mart_table_main</code> and <code className="bg-muted px-1 rounded">mart_cost_incentive</code> from raw tables.
-                Attribution window controls how many days after a call a purchase counts as telesales-driven.
+                Update <code className="bg-muted px-1 rounded">mart_table_main</code> and <code className="bg-muted px-1 rounded">mart_cost_incentive</code> from raw tables.
               </p>
             </CardHeader>
             <CardContent className="space-y-5">
-              {/* Attribution window selector */}
+
+              {/* Build Mode */}
+              <div className="space-y-2">
+                <label className="text-sm font-medium">Build Mode</label>
+                <div className="grid grid-cols-2 gap-2">
+                  <button
+                    onClick={() => { setBuildMode('incremental'); setBuildResult(null) }}
+                    disabled={buildLoading}
+                    className={cn(
+                      'px-4 py-3 text-sm font-medium rounded-lg border text-left transition-all disabled:opacity-50',
+                      buildMode === 'incremental'
+                        ? 'bg-[#003DA6] text-white border-[#003DA6] shadow-sm'
+                        : 'bg-background text-muted-foreground border-gray-200 hover:border-[#003DA6] hover:text-foreground',
+                    )}
+                  >
+                    <p className="font-semibold">Incremental <span className="text-[10px] ml-1 opacity-80">(default)</span></p>
+                    <p className={cn('text-xs mt-0.5', buildMode === 'incremental' ? 'text-blue-100' : 'text-muted-foreground')}>
+                      Reprocess last {lookbackDays} days only — fast
+                    </p>
+                  </button>
+                  <button
+                    onClick={() => { setBuildMode('full'); setBuildResult(null) }}
+                    disabled={buildLoading}
+                    className={cn(
+                      'px-4 py-3 text-sm font-medium rounded-lg border text-left transition-all disabled:opacity-50',
+                      buildMode === 'full'
+                        ? 'bg-amber-600 text-white border-amber-600 shadow-sm'
+                        : 'bg-background text-muted-foreground border-gray-200 hover:border-amber-500 hover:text-foreground',
+                    )}
+                  >
+                    <p className="font-semibold">Full Rebuild</p>
+                    <p className={cn('text-xs mt-0.5', buildMode === 'full' ? 'text-amber-100' : 'text-muted-foreground')}>
+                      Wipe &amp; recompute all history — slow
+                    </p>
+                  </button>
+                </div>
+
+                {buildMode === 'incremental' && (
+                  <div className="flex items-center gap-3 pt-1">
+                    <label className="text-xs text-muted-foreground shrink-0">Lookback window</label>
+                    <div className="flex gap-1.5">
+                      {[14, 30, 60, 90].map(d => (
+                        <button
+                          key={d}
+                          onClick={() => setLookbackDays(d)}
+                          disabled={buildLoading}
+                          className={cn(
+                            'px-2.5 py-1 text-xs rounded-md border transition-all disabled:opacity-50',
+                            lookbackDays === d
+                              ? 'bg-[#003DA6] text-white border-[#003DA6]'
+                              : 'border-gray-200 text-muted-foreground hover:border-[#003DA6]',
+                          )}
+                        >
+                          {d}d
+                        </button>
+                      ))}
+                    </div>
+                    <p className="text-xs text-muted-foreground">
+                      Deletes &amp; recomputes orders from the last <strong>{lookbackDays} days</strong>
+                    </p>
+                  </div>
+                )}
+              </div>
+
+              {/* Attribution window */}
               <div className="space-y-2">
                 <label className="text-sm font-medium">Attribution Window</label>
                 <div className="flex flex-wrap gap-2">
@@ -1044,11 +1122,9 @@ export function DataHubClient() {
                 </div>
 
                 {attributionDays === 'custom' && (
-                  <div className="flex items-center gap-2 mt-2">
+                  <div className="flex items-center gap-2">
                     <input
-                      type="number"
-                      min={1}
-                      max={365}
+                      type="number" min={1} max={365}
                       value={customDays}
                       onChange={e => setCustomDays(e.target.value)}
                       placeholder="e.g. 60"
@@ -1058,26 +1134,45 @@ export function DataHubClient() {
                     <span className="text-sm text-muted-foreground">days</span>
                   </div>
                 )}
-
                 <p className="text-xs text-muted-foreground">
-                  A purchase within <strong>{effectiveDays} day{effectiveDays !== 1 ? 's' : ''}</strong> after the first connected call will be attributed to telesales.
+                  A purchase within <strong>{effectiveDays} day{effectiveDays !== 1 ? 's' : ''}</strong> after the first call is attributed to telesales.
                 </p>
               </div>
 
               <button
                 onClick={startBuild}
                 disabled={buildLoading || (attributionDays === 'custom' && !customDays)}
-                className="flex items-center gap-2 px-5 py-2 rounded-lg bg-[#003DA6] text-white text-sm font-medium hover:bg-[#002d80] transition-colors disabled:opacity-50"
+                className={cn(
+                  'flex items-center gap-2 px-5 py-2 rounded-lg text-white text-sm font-medium transition-colors disabled:opacity-50',
+                  buildMode === 'full' ? 'bg-amber-600 hover:bg-amber-700' : 'bg-[#003DA6] hover:bg-[#002d80]',
+                )}
               >
                 {buildLoading
                   ? <RefreshCw className="h-4 w-4 animate-spin" />
                   : <Hammer className="h-4 w-4" />}
-                {buildLoading ? 'Building…' : 'Build Tables'}
+                {buildLoading
+                  ? 'Building…'
+                  : buildMode === 'full' ? 'Full Rebuild' : 'Incremental Build'}
               </button>
 
               {buildLoading && (
-                <div className="rounded-lg border border-blue-200 bg-blue-50 p-4 text-sm text-blue-700">
-                  Building mart tables with <strong>{effectiveDays}-day</strong> attribution window. This may take a moment…
+                <div className={cn(
+                  'rounded-lg border p-4 text-sm space-y-2',
+                  buildMode === 'full' ? 'border-amber-200 bg-amber-50 text-amber-800' : 'border-blue-200 bg-blue-50 text-blue-700',
+                )}>
+                  <div className="flex items-center gap-2">
+                    <RefreshCw className="h-4 w-4 animate-spin shrink-0" />
+                    <span className="font-medium">
+                      {buildMode === 'full'
+                        ? `Full Rebuild — ${effectiveDays}-day attribution window`
+                        : `Incremental Build — last ${lookbackDays} days · ${effectiveDays}-day window`}
+                    </span>
+                  </div>
+                  <p className="text-xs opacity-80 pl-6">
+                    {buildMode === 'full'
+                      ? 'Computing attribution across all history. This may take several minutes…'
+                      : 'Deleting recent window and recomputing attribution. Usually completes in under a minute…'}
+                  </p>
                 </div>
               )}
 
@@ -1092,10 +1187,16 @@ export function DataHubClient() {
                       : <XCircle className="h-4 w-4 text-red-500 shrink-0" />}
                     <p className="text-sm font-medium">
                       {buildResult.ok
-                        ? `Build complete — ${buildResult.attribution_days}-day window · ${(buildResult.duration_ms! / 1000).toFixed(1)}s`
+                        ? `${buildResult.mode === 'full' ? 'Full Rebuild' : 'Incremental Build'} complete — ${buildResult.attribution_days}-day window · ${((buildResult.duration_ms ?? 0) / 1000).toFixed(1)}s`
                         : 'Build failed'}
                     </p>
                   </div>
+
+                  {buildResult.ok && buildResult.mode === 'incremental' && buildResult.since_date && (
+                    <p className="text-xs text-muted-foreground pl-6">
+                      Reprocessed orders from <strong>{new Date(buildResult.since_date).toLocaleDateString('en-US', { day: 'numeric', month: 'short', year: '2-digit' })}</strong> onwards
+                    </p>
+                  )}
 
                   {buildResult.ok && buildResult.rows && (
                     <div className="grid grid-cols-2 gap-2 text-sm">

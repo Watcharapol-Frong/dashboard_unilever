@@ -4,10 +4,7 @@ import { uploadToR2, downloadFromR2, deleteFromR2, listR2Folder } from '@/lib/st
 import { FILE_TYPE_CONFIGS, generateStoragePath, validateHeaders } from '@/lib/upload/config'
 import { transformRows } from '@/lib/upload/etl'
 import { encrypt } from '@/lib/utils/crypto'
-import { refreshAllMarts } from '@/lib/services/mart-service'
 import type { UploadFileType } from '@/lib/upload/config'
-
-const MART_AFFECTING_TYPES: UploadFileType[] = ['online_sales', 'offline_sales', 'telesales', 'products']
 
 const CHUNK = 500
 
@@ -198,10 +195,6 @@ async function processUploadFromText(type: UploadFileType, text: string, filenam
     } catch (err) {
       console.error(`[upload-service] Failed to update table_summaries:`, err)
     }
-  }
-
-  if (!dbError && MART_AFFECTING_TYPES.includes(type)) {
-    refreshAllMarts().catch(e => console.warn('[upload-service] mart refresh failed:', e))
   }
 
   if (dbError) {

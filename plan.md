@@ -278,7 +278,81 @@ dashboard-unilever/
 
 ---
 
-## 11. Local Dev
+## 11. Mart — Customer Type Classification Logic
+
+> บันทึก business logic สำหรับ tag `customer_type` บน order แต่ละรายการ
+> ใช้เป็น source of truth ก่อนออกแบบ mart schema ใหม่
+
+### ภาพรวม
+
+ทุก order ที่ mmid เคยถูก telesales call จะถูก tag เป็น 1 ใน 4 ประเภท โดยยึดจาก 2 มิติ:
+- **มิติที่ 1:** order นี้ "ถูก attribute" ให้กับ telesales หรือไม่ (อยู่ในหน้าต่าง attr_days หลัง call)
+- **มิติที่ 2:** เป็น order แรกของลูกค้าคนนี้ในประเภทนั้นๆ หรือไม่
+
+```
+                        ┌─────────────────────────────────────┐
+                        │  mmid เคยถูก telesales call ไหม?    │
+                        └──────────────┬──────────────────────┘
+                                       │ ใช่
+                    ┌──────────────────▼──────────────────────┐
+                    │  order นี้อยู่ใน attribution window?    │
+                    │  (order_date <= call_date + attr_days)  │
+                    └──────┬──────────────────────┬───────────┘
+                          ใช่                     ไม่ใช่
+              ┌────────────▼──────────┐  ┌────────▼──────────────┐
+              │   flag_attr = TRUE    │  │   flag_attr = FALSE   │
+              │   (attributed)        │  │   (not attributed)    │
+              └──────────┬────────────┘  └────────┬──────────────┘
+                         │                        │
+            ┌────────────▼──────────┐  ┌──────────▼────────────┐
+            │  เป็น order แรก?      │  │  เป็น order แรก?      │
+            │  order_date ==        │  │  order_date ==        │
+            │  first_attr_date      │  │  first_nonattr_date   │
+            └──────┬────────┬───────┘  └──────┬────────┬───────┘
+                  ใช่      ไม่ใช่            ใช่      ไม่ใช่
+                   │          │               │          │
+          ┌────────▼──┐  ┌────▼──────────┐ ┌─▼────────────┐ ┌──▼──────────────┐
+          │first_order│  │  retention    │ │first_order   │ │retention_not_con│
+          │           │  │               │ │_not_con      │ │                 │
+          └───────────┘  └───────────────┘ └──────────────┘ └─────────────────┘
+```
+
+### นิยาม 4 ประเภท
+
+| customer_type | ความหมาย | เงื่อนไข |
+|---|---|---|
+| `first_order` | ลูกค้าใหม่ที่ telesales สร้าง | mmid ถูก call + order อยู่ใน attr_days + เป็น order แรกที่ถูก attribute |
+| `retention` | ลูกค้าเก่าที่ telesales ดูแลต่อเนื่อง | mmid ถูก call + order อยู่ใน attr_days + มี order ที่ถูก attribute ก่อนหน้าแล้ว |
+| `first_order_not_con` | ลูกค้าใหม่ที่ซื้อเอง (เคยถูก call แต่ไม่ใช่ช่วง attr_days) | mmid ถูก call + order ไม่อยู่ใน attr_days + เป็น order แรก |
+| `retention_not_con` | ลูกค้าเก่าที่ซื้อเองซ้ำ (เคยถูก call) | mmid ถูก call + order ไม่อยู่ใน attr_days + มี order ก่อนหน้าแล้ว |
+
+### เงื่อนไข Attribution Window
+
+```
+order_date >= first_connected_date
+AND
+order_date <= first_connected_date + attr_days (default = 14 วัน)
+```
+
+- ใช้ `first_connected_date` จาก `telesales_calls` (วันที่โทรครั้งแรกที่รับสาย)
+- ถ้า mmid มีหลาย call → เลือก call ที่ `first_connected_date` ใกล้ order มากที่สุด (DISTINCT ON + ORDER BY DESC)
+- `attr_days` เป็น parameter ที่ผู้ใช้เลือกได้: 14 / 30 / 90 / custom
+
+### first_order_date
+
+- สำหรับ attributed rows: `first_order_date` = วันที่ของ order แรกที่ถูก attribute ของ mmid นั้น
+- สำหรับ not-attributed rows: `first_order_date` = NULL (ไม่มีค่า)
+
+### ข้อสังเกตสำคัญ
+
+- **mmid ที่ไม่เคยถูก call เลย** → ไม่ถูก tag ใดๆ ทั้งนั้น (ไม่อยู่ใน mart)
+- **order เดียวกัน** สามารถถูก attribute ได้แค่ call เดียว (DISTINCT ON)
+- **flag_hoc_unilever** = TRUE เสมอสำหรับทุก row ใน mart (เพราะ JOIN กับ products ที่เป็น Unilever เท่านั้น)
+- **customer_type** อิงจาก `first_attr_date` ของ mmid นั้น ไม่ใช่ของ order_number
+
+---
+
+## 12. Local Dev
 
 ```bash
 npm install
