@@ -11,20 +11,9 @@ export async function buildMartMain(attributionDays = 14): Promise<number> {
       SELECT mmid, order_number, order_date, prod_num, sales_qty, sales_in_vat, dynamic_cmg, 'offline' AS channel
         FROM offline_sales
     ),
-    first_orders AS (
-      -- First HOC Unilever order date per customer (scoped to HOC products only)
-      SELECT s.mmid, MIN(s.order_date) AS first_order_date
-        FROM (
-          SELECT mmid, order_date, prod_num FROM online_sales
-          UNION ALL
-          SELECT mmid, order_date, prod_num FROM offline_sales
-        ) s
-        JOIN products p ON p.prod_num = s.prod_num AND p.product_name_en IS NOT NULL
-        GROUP BY s.mmid
-    ),
     attributed AS (
       -- Start from telesales_calls, find HOC Unilever orders within attribution window.
-      -- DISTINCT ON (mmid, order_number, prod_num) keeps the closest preceding call per order-line.
+      -- DISTINCT ON (mmid, order_number, prod_num) keeps the most recent call per order-line.
       SELECT DISTINCT ON (s.mmid, s.order_number, s.prod_num)
         tc.first_connected_date,
         tc.agent,
@@ -58,6 +47,12 @@ export async function buildMartMain(attributionDays = 14): Promise<number> {
         ON  p.prod_num        = s.prod_num
         AND p.product_name_en IS NOT NULL
       ORDER BY s.mmid, s.order_number, s.prod_num, tc.first_connected_date DESC
+    ),
+    first_in_mart AS (
+      -- First attributed HOC order date per mmid (within this mart build only)
+      SELECT mmid, MIN(order_date) AS first_order_date
+        FROM attributed
+        GROUP BY mmid
     )
     INSERT INTO mart_table_main (
       mmid, order_number, prod_num,
@@ -82,14 +77,14 @@ export async function buildMartMain(attributionDays = 14): Promise<number> {
       a.product_name_th, a.product_name_en, a.brands,
       a.senior_buyer_name, a.buyer_name, a.class_name, a.subclass,
       TRUE,
-      (a.order_date = fo.first_order_date),
-      (a.order_date IS DISTINCT FROM fo.first_order_date),
-      CASE WHEN a.order_date = fo.first_order_date THEN 'new_customer' ELSE 'retention' END,
-      fo.first_order_date,
+      (a.order_date = f.first_order_date),
+      (a.order_date IS DISTINCT FROM f.first_order_date),
+      CASE WHEN a.order_date = f.first_order_date THEN 'new_customer' ELSE 'retention' END,
+      f.first_order_date,
       DATE_TRUNC('month', a.order_date)::date,
       ${attributionDays}
     FROM attributed a
-    LEFT JOIN first_orders fo ON fo.mmid = a.mmid
+    LEFT JOIN first_in_mart f ON f.mmid = a.mmid
     ON CONFLICT (mmid, order_number, prod_num) DO UPDATE SET
       first_connected_date = EXCLUDED.first_connected_date,
       agent                = EXCLUDED.agent,
