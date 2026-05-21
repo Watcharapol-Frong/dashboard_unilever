@@ -181,7 +181,7 @@ export function DataHubClient() {
   const { data: martStatus, isValidating: martValidating, mutate: mutateMart } = useSWR<MartStatus>(
     '/api/system/mart-status',
     fetcher,
-    { revalidateOnFocus: false, revalidateOnReconnect: false }
+    { revalidateOnFocus: false, revalidateOnReconnect: false, revalidateIfStale: false }
   )
 
   // ── File processing ────────────────────────────────────────
