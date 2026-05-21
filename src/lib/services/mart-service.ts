@@ -12,10 +12,15 @@ export async function buildMartMain(attributionDays = 14): Promise<number> {
         FROM offline_sales
     ),
     first_orders AS (
-      -- First ever order date per customer across all channels/time
-      SELECT mmid, MIN(order_date) AS first_order_date
-        FROM all_sales
-        GROUP BY mmid
+      -- First HOC Unilever order date per customer (scoped to HOC products only)
+      SELECT s.mmid, MIN(s.order_date) AS first_order_date
+        FROM (
+          SELECT mmid, order_date, prod_num FROM online_sales
+          UNION ALL
+          SELECT mmid, order_date, prod_num FROM offline_sales
+        ) s
+        JOIN products p ON p.prod_num = s.prod_num AND p.product_name_en IS NOT NULL
+        GROUP BY s.mmid
     ),
     attributed AS (
       -- Start from telesales_calls, find HOC Unilever orders within attribution window.
@@ -56,6 +61,7 @@ export async function buildMartMain(attributionDays = 14): Promise<number> {
       sales_qty, sales_in_vat,
       product_name_th, product_name_en, brands, class_name,
       flag_hoc_unilever, flag_first_order, flag_retention, customer_type,
+      first_order_date,
       month, attribution_days
     )
     SELECT
@@ -67,8 +73,9 @@ export async function buildMartMain(attributionDays = 14): Promise<number> {
       a.product_name_th, a.product_name_en, a.brands, a.class_name,
       TRUE,
       (a.order_date = fo.first_order_date),
-      (a.order_date IS DISTINCT FROM fo.first_order_date),  -- flag_retention
+      (a.order_date IS DISTINCT FROM fo.first_order_date),
       CASE WHEN a.order_date = fo.first_order_date THEN 'new_customer' ELSE 'retention' END,
+      fo.first_order_date,
       DATE_TRUNC('month', a.order_date)::date,
       ${attributionDays}
     FROM attributed a
@@ -82,6 +89,7 @@ export async function buildMartMain(attributionDays = 14): Promise<number> {
       flag_first_order     = EXCLUDED.flag_first_order,
       flag_retention       = EXCLUDED.flag_retention,
       customer_type        = EXCLUDED.customer_type,
+      first_order_date     = EXCLUDED.first_order_date,
       attribution_days     = EXCLUDED.attribution_days,
       refreshed_at         = NOW()
   `)

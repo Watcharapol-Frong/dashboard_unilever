@@ -34,6 +34,7 @@ CREATE TABLE IF NOT EXISTS mart_table_main (
   flag_first_order     BOOLEAN NOT NULL DEFAULT FALSE,
   flag_retention       BOOLEAN NOT NULL DEFAULT FALSE,
   customer_type        TEXT,
+  first_order_date     DATE,
   -- meta
   month                DATE,
   attribution_days     INTEGER,
