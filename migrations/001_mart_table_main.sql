@@ -32,7 +32,7 @@ CREATE TABLE IF NOT EXISTS mart_table_main (
   flag_hoc_unilever    BOOLEAN NOT NULL DEFAULT TRUE,
   -- customer type flags
   flag_first_order     BOOLEAN NOT NULL DEFAULT FALSE,
-  flag_rotation        BOOLEAN NOT NULL DEFAULT FALSE,
+  flag_retention       BOOLEAN NOT NULL DEFAULT FALSE,
   customer_type        TEXT,
   -- meta
   month                DATE,

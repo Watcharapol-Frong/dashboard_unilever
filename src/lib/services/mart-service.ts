@@ -55,7 +55,7 @@ export async function buildMartMain(attributionDays = 14): Promise<number> {
       order_date, channel, dynamic_cmg,
       sales_qty, sales_in_vat,
       product_name_th, product_name_en, brands, class_name,
-      flag_hoc_unilever, flag_first_order, flag_rotation, customer_type,
+      flag_hoc_unilever, flag_first_order, flag_retention, customer_type,
       month, attribution_days
     )
     SELECT
@@ -67,7 +67,7 @@ export async function buildMartMain(attributionDays = 14): Promise<number> {
       a.product_name_th, a.product_name_en, a.brands, a.class_name,
       TRUE,
       (a.order_date = fo.first_order_date),
-      (a.order_date IS DISTINCT FROM fo.first_order_date),
+      (a.order_date IS DISTINCT FROM fo.first_order_date),  -- flag_retention
       CASE WHEN a.order_date = fo.first_order_date THEN 'new_customer' ELSE 'retention' END,
       DATE_TRUNC('month', a.order_date)::date,
       ${attributionDays}
@@ -80,7 +80,7 @@ export async function buildMartMain(attributionDays = 14): Promise<number> {
       lead_customers       = EXCLUDED.lead_customers,
       days_to_order        = EXCLUDED.days_to_order,
       flag_first_order     = EXCLUDED.flag_first_order,
-      flag_rotation        = EXCLUDED.flag_rotation,
+      flag_retention       = EXCLUDED.flag_retention,
       customer_type        = EXCLUDED.customer_type,
       attribution_days     = EXCLUDED.attribution_days,
       refreshed_at         = NOW()
