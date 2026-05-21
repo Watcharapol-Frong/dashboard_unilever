@@ -112,7 +112,7 @@ export function DataHubClient() {
     setReplayLoading(true)
     setReplayResult(null)
     try {
-      const res = await fetch('/api/system/replay', {
+      const res = await fetch('/api/data/upload/replay', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ table: replayTable }),
