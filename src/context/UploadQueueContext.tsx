@@ -106,8 +106,7 @@ export function UploadQueueProvider({ children }: { children: React.ReactNode })
       setJobs(prev => prev.map(j =>
         j.id === job.id ? { ...j, status: result.ok ? 'done' : 'failed', progress: 100, result } : j
       ))
-      swrMutate('/api/data/history')
-      swrMutate('/api/data/status')
+      swrMutate('/api/data/dashboard')
 
     } catch (err) {
       if (uploadId && key) {

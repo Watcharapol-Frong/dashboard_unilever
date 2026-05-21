@@ -67,7 +67,6 @@ interface UploadBatch {
   id: string; table_name: string; filename: string | null
   row_count: number | null; error_count: number; status: string
   uploaded_at: string; uploaded_by: string | null
-  user_profiles: { email: string; full_name: string | null } | null
 }
 
 interface ReplayResult {
@@ -120,7 +119,7 @@ export function DataHubClient() {
       })
       const data = await res.json()
       setReplayResult(data)
-      mutateStatus()
+      mutate()
     } catch {
       setReplayResult({ ok: false, replayed_files: 0, inserted: 0, errors: ['Network error'] })
     } finally {
@@ -130,14 +129,16 @@ export function DataHubClient() {
 
   const inputRef = useRef<HTMLInputElement>(null)
 
-  const { data: batches, mutate, isValidating: batchesValidating } = useSWR<UploadBatch[]>('/api/data/history', fetcher, { 
-    revalidateOnFocus: false,
-    revalidateOnReconnect: false 
-  })
-  const { data: status, mutate: mutateStatus, isValidating: statusValidating } = useSWR<DataStatus>('/api/data/status', fetcher, { 
-    revalidateOnFocus: false,
-    revalidateOnReconnect: false 
-  })
+  const { data: dashboard, mutate, isValidating } = useSWR<{ status: DataStatus; history: UploadBatch[] }>(
+    '/api/data/dashboard',
+    fetcher,
+    { revalidateOnFocus: false, revalidateOnReconnect: false }
+  )
+  const status   = dashboard?.status
+  const batches  = dashboard?.history
+  const mutateStatus    = mutate
+  const statusValidating   = isValidating
+  const batchesValidating  = isValidating
 
   // ── File processing ────────────────────────────────────────
   const processFile = useCallback((f: File) => {

@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 import { CompleteMultipartUploadCommand } from '@aws-sdk/client-s3'
+import { currentUser } from '@clerk/nextjs/server'
 import { r2, R2_BUCKET } from '@/lib/storage/r2'
 import { FILE_TYPE_CONFIGS } from '@/lib/upload/config'
 import type { UploadFileType } from '@/lib/upload/config'
@@ -46,8 +47,14 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: 'Failed to assemble upload' }, { status: 500 })
   }
 
+  const user = await currentUser()
+  const uploadedBy = user?.primaryEmailAddress?.emailAddress
+    ?? user?.fullName
+    ?? user?.id
+    ?? undefined
+
   try {
-    const result = await processUploadFromKey(type, key, filename)
+    const result = await processUploadFromKey(type, key, filename, uploadedBy)
     if (!result.ok) {
       const isClientError = result.error?.includes('CSV') ||
                             result.error?.includes('Header') ||

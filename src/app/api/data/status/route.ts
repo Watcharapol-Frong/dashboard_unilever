@@ -85,7 +85,7 @@ export async function GET() {
       last_uploaded: lastUpload['products'] ?? null,
     },
     telesales: {
-      total_rows:    summaryMap['telesales_calls']?.total_rows ?? Number(teleCount?.cnt ?? 0),
+      total_rows:    Number(teleCount?.cnt ?? 0),
       total_agents:  teleAgents.length,
       earliest_date: teleMinDate?.d ?? null,
       latest_date:   teleMaxDate?.d ?? null,

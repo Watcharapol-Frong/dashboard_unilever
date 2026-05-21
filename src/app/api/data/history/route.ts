@@ -15,7 +15,7 @@ export async function GET() {
        ORDER BY uploaded_at DESC
        LIMIT 50`
     )
-    return NextResponse.json(rows.map(b => ({ ...b, user_profiles: null })))
+    return NextResponse.json(rows)
   } catch (err) {
     console.error('[history] DB error:', err)
     return NextResponse.json([])
