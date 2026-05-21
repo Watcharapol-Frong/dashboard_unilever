@@ -7,7 +7,7 @@ import { Badge } from '@/components/ui/badge'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { DataTable } from '@/components/ui/data-table'
 import { columns } from './columns'
-import { CheckCircle, XCircle, AlertCircle, Upload, FileText, Clock, RefreshCw, Hammer } from 'lucide-react'
+import { CheckCircle, XCircle, AlertCircle, Upload, FileText, Clock, RefreshCw, Hammer, Download } from 'lucide-react'
 import { Skeleton } from '@/components/ui/skeleton'
 import { FILE_TYPE_CONFIGS, validateHeaders } from '@/lib/upload/config'
 import type { UploadFileType } from '@/lib/upload/config'
@@ -116,6 +116,38 @@ export function DataHubClient() {
   const [buildResult, setBuildResult]         = useState<BuildResult | null>(null)
 
   const effectiveDays = attributionDays === 'custom' ? Number(customDays) || 14 : attributionDays
+
+  // ── Export state ───────────────────────────────────────────
+  const [exportFrom, setExportFrom]           = useState('2026-02-01')
+  const [exportTo, setExportTo]               = useState('2026-04-30')
+  const [exportAttr, setExportAttr]           = useState<number | 'custom'>(365)
+  const [exportCustom, setExportCustom]       = useState('')
+  const [exportLoading, setExportLoading]     = useState(false)
+
+  const exportEffectiveDays = exportAttr === 'custom' ? Number(exportCustom) || 365 : exportAttr
+
+  const startExport = async () => {
+    setExportLoading(true)
+    try {
+      const params = new URLSearchParams({
+        from: exportFrom,
+        to: exportTo,
+        attribution: String(exportEffectiveDays),
+      })
+      const res = await fetch(`/api/system/export?${params}`)
+      if (!res.ok) { const { error } = await res.json().catch(() => ({})); alert(error ?? 'Export failed'); return }
+      const blob = await res.blob()
+      const cd = res.headers.get('Content-Disposition') ?? ''
+      const match = cd.match(/filename="([^"]+)"/)
+      const filename = match?.[1] ?? 'export.csv'
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url; a.download = filename; a.click()
+      URL.revokeObjectURL(url)
+    } finally {
+      setExportLoading(false)
+    }
+  }
 
   const startBuild = async () => {
     setBuildLoading(true)
@@ -1013,6 +1045,98 @@ export function DataHubClient() {
                   )}
                 </div>
               )}
+            </CardContent>
+          </Card>
+
+          {/* Export card */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-base">Export Attribution Data</CardTitle>
+              <p className="text-sm text-muted-foreground">
+                Export <code className="bg-muted px-1 rounded">channel, dynamic_cmg, month, brands, prod_num, sum_sales, sum_qty, frequency</code> as CSV.
+                Runs a live query — no need to rebuild mart first.
+              </p>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-1">
+                  <label className="text-xs font-medium text-muted-foreground">From</label>
+                  <input
+                    type="date"
+                    value={exportFrom}
+                    onChange={e => setExportFrom(e.target.value)}
+                    disabled={exportLoading}
+                    className="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#003DA6] disabled:opacity-50"
+                  />
+                </div>
+                <div className="space-y-1">
+                  <label className="text-xs font-medium text-muted-foreground">To</label>
+                  <input
+                    type="date"
+                    value={exportTo}
+                    onChange={e => setExportTo(e.target.value)}
+                    disabled={exportLoading}
+                    className="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#003DA6] disabled:opacity-50"
+                  />
+                </div>
+              </div>
+
+              <div className="space-y-2">
+                <label className="text-sm font-medium">Attribution Window</label>
+                <div className="flex flex-wrap gap-2">
+                  {([14, 30, 90, 365] as const).map(d => (
+                    <button
+                      key={d}
+                      onClick={() => setExportAttr(d)}
+                      disabled={exportLoading}
+                      className={cn(
+                        'px-3 py-1.5 text-sm font-medium rounded-lg border transition-all disabled:opacity-50',
+                        exportAttr === d
+                          ? 'bg-[#003DA6] text-white border-[#003DA6]'
+                          : 'bg-background text-muted-foreground border-gray-200 hover:border-[#003DA6] hover:text-foreground',
+                      )}
+                    >
+                      {d}d{d === 365 ? ' (default)' : ''}
+                    </button>
+                  ))}
+                  <button
+                    onClick={() => setExportAttr('custom')}
+                    disabled={exportLoading}
+                    className={cn(
+                      'px-3 py-1.5 text-sm font-medium rounded-lg border transition-all disabled:opacity-50',
+                      exportAttr === 'custom'
+                        ? 'bg-[#003DA6] text-white border-[#003DA6]'
+                        : 'bg-background text-muted-foreground border-gray-200 hover:border-[#003DA6] hover:text-foreground',
+                    )}
+                  >
+                    Custom
+                  </button>
+                  {exportAttr === 'custom' && (
+                    <input
+                      type="number" min={1} max={730}
+                      value={exportCustom}
+                      onChange={e => setExportCustom(e.target.value)}
+                      placeholder="days"
+                      disabled={exportLoading}
+                      className="w-20 border rounded-lg px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-[#003DA6] disabled:opacity-50"
+                    />
+                  )}
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  HOC Unilever products only · attributed within <strong>{exportEffectiveDays} days</strong> of call
+                </p>
+              </div>
+
+              <button
+                onClick={startExport}
+                disabled={exportLoading || !exportFrom || !exportTo || (exportAttr === 'custom' && !exportCustom)}
+                className="flex items-center gap-2 px-5 py-2 rounded-lg bg-[#003DA6] text-white text-sm font-medium hover:bg-[#002d80] transition-colors disabled:opacity-50"
+              >
+                {exportLoading
+                  ? <RefreshCw className="h-4 w-4 animate-spin" />
+                  : <Download className="h-4 w-4" />}
+                {exportLoading ? 'Exporting…' : 'Download CSV'}
+              </button>
             </CardContent>
           </Card>
         </TabsContent>
