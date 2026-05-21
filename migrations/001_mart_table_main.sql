@@ -67,6 +67,7 @@ CREATE INDEX IF NOT EXISTS idx_mart_main_flag_first_order  ON mart_table_main (f
 -- Used during build to compute CTE once and batch-copy to mart (avoids lock budget overflow).
 DROP TABLE IF EXISTS _mart_build_staging;
 CREATE TABLE IF NOT EXISTS _mart_build_staging (
+  rownum               BIGSERIAL PRIMARY KEY,
   mmid                 TEXT,
   order_number         TEXT,
   prod_num             TEXT,

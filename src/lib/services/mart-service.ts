@@ -153,12 +153,13 @@ export async function buildMartMain(attributionDays = 14): Promise<number> {
     LEFT JOIN first_nonattr_order fn ON fn.mmid = c.mmid
   `)
 
-  // Phase 3: Batch-copy from staging → mart by month (small transactions, within lock budget)
-  const months = await query<{ m: string }>(`
-    SELECT DISTINCT month::text AS m FROM _mart_build_staging ORDER BY m
-  `)
+  // Phase 3: Batch-copy staging → mart in fixed-size chunks via rownum.
+  // Fixed chunk (not month) = safe regardless of attribution window size.
+  const CHUNK = 4_000
+  const countRow = await queryOne<{ total: string }>(`SELECT COUNT(*) AS total FROM _mart_build_staging`)
+  const total = Number(countRow?.total ?? 0)
 
-  for (const { m } of months) {
+  for (let lo = 1; lo <= total; lo += CHUNK) {
     await query(`
       INSERT INTO mart_table_main (
         mmid, order_number, prod_num,
@@ -186,9 +187,9 @@ export async function buildMartMain(attributionDays = 14): Promise<number> {
         first_order_date,
         month, attribution_days
       FROM _mart_build_staging
-      WHERE month = $1
+      WHERE rownum >= $1 AND rownum < $2
       ON CONFLICT (mmid, order_number, prod_num) DO NOTHING
-    `, [m])
+    `, [lo, lo + CHUNK])
   }
 
   const row = await queryOne<{ cnt: string }>(`SELECT COUNT(*) AS cnt FROM mart_table_main`)
