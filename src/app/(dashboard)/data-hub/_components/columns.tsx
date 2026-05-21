@@ -15,7 +15,6 @@ interface UploadBatch {
   status: string
   uploaded_at: string
   uploaded_by: string | null
-  user_profiles: { email: string; full_name: string | null } | null
 }
 
 export const columns: ColumnDef<UploadBatch>[] = [
@@ -63,15 +62,11 @@ export const columns: ColumnDef<UploadBatch>[] = [
     header: ({ column }) => (
       <DataTableColumnHeader column={column} title="Uploaded By" />
     ),
-    cell: ({ row }) => {
-      const profile = row.original.user_profiles
-      if (!profile) return <span className="text-xs italic text-muted-foreground">— (ยังไม่มี Auth)</span>
-      return (
-        <div className="text-xs text-muted-foreground">
-          {profile.full_name || profile.email}
-        </div>
-      )
-    },
+    cell: ({ row }) => (
+      <div className="text-xs text-muted-foreground">
+        {row.original.uploaded_by ?? '—'}
+      </div>
+    ),
   },
   {
     accessorKey: "row_count",

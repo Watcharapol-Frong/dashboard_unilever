@@ -25,21 +25,21 @@ export async function processUpload(type: UploadFileType, file: File): Promise<U
   return processUploadFromText(type, await file.text(), file.name)
 }
 
-export async function processUploadFromKey(type: UploadFileType, tempKey: string, filename: string): Promise<UploadResult> {
+export async function processUploadFromKey(type: UploadFileType, tempKey: string, filename: string, uploadedBy?: string): Promise<UploadResult> {
   const buffer = await downloadFromR2(tempKey)
   await deleteFromR2(tempKey)
-  return processUploadFromText(type, buffer.toString('utf-8'), filename)
+  return processUploadFromText(type, buffer.toString('utf-8'), filename, uploadedBy)
 }
 
-export async function processUploadFromChunks(type: UploadFileType, uploadId: string, filename: string): Promise<UploadResult> {
+export async function processUploadFromChunks(type: UploadFileType, uploadId: string, filename: string, uploadedBy?: string): Promise<UploadResult> {
   const keys = (await listR2Folder(`tmp/${uploadId}/`)).sort()
   if (keys.length === 0) throw new Error('No chunks found for upload')
   const buffers = await Promise.all(keys.map(k => downloadFromR2(k)))
   await Promise.all(keys.map(k => deleteFromR2(k)))
-  return processUploadFromText(type, Buffer.concat(buffers).toString('utf-8'), filename)
+  return processUploadFromText(type, Buffer.concat(buffers).toString('utf-8'), filename, uploadedBy)
 }
 
-async function processUploadFromText(type: UploadFileType, text: string, filename: string): Promise<UploadResult> {
+async function processUploadFromText(type: UploadFileType, text: string, filename: string, uploadedBy?: string): Promise<UploadResult> {
   const cfg = FILE_TYPE_CONFIGS[type]
   if (!cfg) throw new Error('Unknown file type')
 
@@ -103,9 +103,9 @@ async function processUploadFromText(type: UploadFileType, text: string, filenam
 
   // 4. Create upload_batch record
   const batch = await queryOne<{ id: string }>(
-    `INSERT INTO upload_batches (table_name, filename, storage_path, status)
-     VALUES ($1, $2, $3, 'failed') RETURNING id`,
-    [cfg.table, filename, storagePath]
+    `INSERT INTO upload_batches (table_name, filename, storage_path, status, uploaded_by)
+     VALUES ($1, $2, $3, 'failed', $4) RETURNING id`,
+    [cfg.table, filename, storagePath, uploadedBy ?? null]
   )
   if (!batch) throw new Error('Failed to create batch record')
 

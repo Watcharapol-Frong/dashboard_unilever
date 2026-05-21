@@ -67,7 +67,6 @@ interface UploadBatch {
   id: string; table_name: string; filename: string | null
   row_count: number | null; error_count: number; status: string
   uploaded_at: string; uploaded_by: string | null
-  user_profiles: { email: string; full_name: string | null } | null
 }
 
 interface ReplayResult {
