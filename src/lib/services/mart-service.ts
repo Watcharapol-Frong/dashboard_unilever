@@ -1,8 +1,10 @@
 import { query, queryOne } from '@/lib/db'
 
 export async function buildMartMain(attributionDays = 14): Promise<number> {
-  // Delegates all build logic to the stored procedure defined in
-  // migrations/002_build_mart_procedure.sql (truncate → staging → mart copy).
+  // TRUNCATE must happen outside the procedure (CockroachDB limitation).
+  await query(`TRUNCATE TABLE mart_table_main`)
+  await query(`TRUNCATE TABLE _mart_build_staging`)
+  // Procedure handles CTE → staging → mart copy (anti-join optimized).
   await query(`CALL build_mart_main($1)`, [attributionDays])
   const row = await queryOne<{ cnt: string }>(`SELECT COUNT(*) AS cnt FROM mart_table_main`)
   return Number(row?.cnt ?? 0)

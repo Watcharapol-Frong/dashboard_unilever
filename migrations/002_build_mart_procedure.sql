@@ -1,14 +1,13 @@
 -- Migration: stored procedure for building mart_table_main
--- Run once: psql $DB_URL < migrations/002_build_mart_procedure.sql
--- Usage (DB client or API): CALL build_mart_main(14);
+-- Run once in DB client (CockroachDB SQL Shell / psql):
+--   CREATE OR REPLACE PROCEDURE build_mart_main ... (paste full block below)
+--
+-- Usage: caller must TRUNCATE both tables first, then CALL build_mart_main(14);
+-- (CockroachDB does not support TRUNCATE inside a procedure — handled by TypeScript/caller)
 
 CREATE OR REPLACE PROCEDURE build_mart_main(attr_days INT DEFAULT 14)
 LANGUAGE SQL
 AS $$
-  -- Phase 1: Truncate both tables
-  TRUNCATE TABLE mart_table_main;
-  TRUNCATE TABLE _mart_build_staging;
-
   -- Phase 2: CTE once → staging (no unique constraint = pure Puts, no lock budget issue)
   -- Key optimization: LEFT JOIN IS NULL replaces NOT EXISTS (O(n log n) vs O(n²))
   INSERT INTO _mart_build_staging (
