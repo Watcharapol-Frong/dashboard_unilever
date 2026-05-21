@@ -7,7 +7,7 @@ import { Badge } from '@/components/ui/badge'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { DataTable } from '@/components/ui/data-table'
 import { columns } from './columns'
-import { CheckCircle, XCircle, AlertCircle, Upload, FileText, Clock, RefreshCw } from 'lucide-react'
+import { CheckCircle, XCircle, AlertCircle, Upload, FileText, Clock, RefreshCw, Hammer } from 'lucide-react'
 import { Skeleton } from '@/components/ui/skeleton'
 import { FILE_TYPE_CONFIGS, validateHeaders } from '@/lib/upload/config'
 import type { UploadFileType } from '@/lib/upload/config'
@@ -107,6 +107,33 @@ export function DataHubClient() {
   const [replayTable, setReplayTable]   = useState('telesales_calls')
   const [replayLoading, setReplayLoading] = useState(false)
   const [replayResult, setReplayResult] = useState<ReplayResult | null>(null)
+
+  // ── Build state ────────────────────────────────────────────
+  type BuildResult = { ok: boolean; rows?: { telesales_orders: number; cost_incentive: number }; attribution_days?: number; duration_ms?: number; error?: string }
+  const [attributionDays, setAttributionDays] = useState<number | 'custom'>(14)
+  const [customDays, setCustomDays]           = useState('')
+  const [buildLoading, setBuildLoading]       = useState(false)
+  const [buildResult, setBuildResult]         = useState<BuildResult | null>(null)
+
+  const effectiveDays = attributionDays === 'custom' ? Number(customDays) || 14 : attributionDays
+
+  const startBuild = async () => {
+    setBuildLoading(true)
+    setBuildResult(null)
+    try {
+      const res = await fetch('/api/system/refresh-mart', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ attribution_days: effectiveDays }),
+      })
+      const data = await res.json()
+      setBuildResult(data)
+    } catch {
+      setBuildResult({ ok: false, error: 'Network error' })
+    } finally {
+      setBuildLoading(false)
+    }
+  }
 
   const startReplay = async () => {
     setReplayLoading(true)
@@ -557,6 +584,7 @@ export function DataHubClient() {
             <TabsTrigger value="overview">Overview</TabsTrigger>
             <TabsTrigger value="status">Data Status</TabsTrigger>
             <TabsTrigger value="history">History</TabsTrigger>
+            <TabsTrigger value="build">Build</TabsTrigger>
             <TabsTrigger value="recovery">Recovery</TabsTrigger>
           </TabsList>
 
@@ -869,6 +897,126 @@ export function DataHubClient() {
             />
           )}
         </TabsContent>
+        {/* Tab: Build */}
+        <TabsContent value="build">
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-base">Build Mart Tables</CardTitle>
+              <p className="text-sm text-muted-foreground">
+                Rebuild <code className="bg-muted px-1 rounded">mart_telesales_orders</code> and <code className="bg-muted px-1 rounded">mart_cost_incentive</code> from raw tables.
+                Attribution window controls how many days after a call a purchase counts as telesales-driven.
+              </p>
+            </CardHeader>
+            <CardContent className="space-y-5">
+              {/* Attribution window selector */}
+              <div className="space-y-2">
+                <label className="text-sm font-medium">Attribution Window</label>
+                <div className="flex flex-wrap gap-2">
+                  {([14, 30, 90] as const).map(d => (
+                    <button
+                      key={d}
+                      onClick={() => { setAttributionDays(d); setBuildResult(null) }}
+                      disabled={buildLoading}
+                      className={cn(
+                        'px-4 py-2 text-sm font-medium rounded-lg border transition-all disabled:opacity-50',
+                        attributionDays === d
+                          ? 'bg-[#003DA6] text-white border-[#003DA6] shadow-sm'
+                          : 'bg-background text-muted-foreground border-gray-200 hover:border-[#003DA6] hover:text-foreground',
+                      )}
+                    >
+                      {d} days{d === 14 ? ' (default)' : ''}
+                    </button>
+                  ))}
+                  <button
+                    onClick={() => { setAttributionDays('custom'); setBuildResult(null) }}
+                    disabled={buildLoading}
+                    className={cn(
+                      'px-4 py-2 text-sm font-medium rounded-lg border transition-all disabled:opacity-50',
+                      attributionDays === 'custom'
+                        ? 'bg-[#003DA6] text-white border-[#003DA6] shadow-sm'
+                        : 'bg-background text-muted-foreground border-gray-200 hover:border-[#003DA6] hover:text-foreground',
+                    )}
+                  >
+                    Custom
+                  </button>
+                </div>
+
+                {attributionDays === 'custom' && (
+                  <div className="flex items-center gap-2 mt-2">
+                    <input
+                      type="number"
+                      min={1}
+                      max={365}
+                      value={customDays}
+                      onChange={e => setCustomDays(e.target.value)}
+                      placeholder="e.g. 60"
+                      disabled={buildLoading}
+                      className="w-28 border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#003DA6] disabled:opacity-50"
+                    />
+                    <span className="text-sm text-muted-foreground">days</span>
+                  </div>
+                )}
+
+                <p className="text-xs text-muted-foreground">
+                  A purchase within <strong>{effectiveDays} day{effectiveDays !== 1 ? 's' : ''}</strong> after the first connected call will be attributed to telesales.
+                </p>
+              </div>
+
+              <button
+                onClick={startBuild}
+                disabled={buildLoading || (attributionDays === 'custom' && !customDays)}
+                className="flex items-center gap-2 px-5 py-2 rounded-lg bg-[#003DA6] text-white text-sm font-medium hover:bg-[#002d80] transition-colors disabled:opacity-50"
+              >
+                {buildLoading
+                  ? <RefreshCw className="h-4 w-4 animate-spin" />
+                  : <Hammer className="h-4 w-4" />}
+                {buildLoading ? 'Building…' : 'Build Tables'}
+              </button>
+
+              {buildLoading && (
+                <div className="rounded-lg border border-blue-200 bg-blue-50 p-4 text-sm text-blue-700">
+                  Building mart tables with <strong>{effectiveDays}-day</strong> attribution window. This may take a moment…
+                </div>
+              )}
+
+              {buildResult && (
+                <div className={cn(
+                  'rounded-lg border p-4 space-y-3',
+                  buildResult.ok ? 'border-green-200 bg-green-50' : 'border-red-200 bg-red-50',
+                )}>
+                  <div className="flex items-center gap-2">
+                    {buildResult.ok
+                      ? <CheckCircle className="h-4 w-4 text-green-600 shrink-0" />
+                      : <XCircle className="h-4 w-4 text-red-500 shrink-0" />}
+                    <p className="text-sm font-medium">
+                      {buildResult.ok
+                        ? `Build complete — ${buildResult.attribution_days}-day window · ${(buildResult.duration_ms! / 1000).toFixed(1)}s`
+                        : 'Build failed'}
+                    </p>
+                  </div>
+
+                  {buildResult.ok && buildResult.rows && (
+                    <div className="grid grid-cols-2 gap-2 text-sm">
+                      <div className="rounded bg-white/60 border px-3 py-2 text-center">
+                        <p className="text-xl font-bold tabular-nums">{buildResult.rows.telesales_orders.toLocaleString()}</p>
+                        <p className="text-xs text-muted-foreground">mart_telesales_orders rows</p>
+                      </div>
+                      <div className="rounded bg-white/60 border px-3 py-2 text-center">
+                        <p className="text-xl font-bold tabular-nums">{buildResult.rows.cost_incentive.toLocaleString()}</p>
+                        <p className="text-xs text-muted-foreground">mart_cost_incentive rows</p>
+                      </div>
+                    </div>
+                  )}
+
+                  {buildResult.error && (
+                    <p className="text-sm text-red-600">{buildResult.error}</p>
+                  )}
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        </TabsContent>
+
         {/* Tab: Recovery */}
         <TabsContent value="recovery">
           <Card>

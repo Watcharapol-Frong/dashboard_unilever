@@ -1,6 +1,6 @@
 import { query, queryOne } from '@/lib/db'
 
-export async function buildMartTelesalesOrders(): Promise<number> {
+export async function buildMartTelesalesOrders(attributionDays = 14): Promise<number> {
   await query(`TRUNCATE TABLE mart_telesales_orders`)
 
   await query(`
@@ -26,7 +26,7 @@ export async function buildMartTelesalesOrders(): Promise<number> {
       JOIN all_sales s
         ON  s.mmid = t.mmid
         AND s.order_date >= t.first_connected_date
-        AND s.order_date <= t.first_connected_date + INTERVAL '14 days'
+        AND s.order_date <= t.first_connected_date + (${attributionDays} || ' days')::interval
       LEFT JOIN first_purchases fp ON fp.mmid = t.mmid
     )
     INSERT INTO mart_telesales_orders (
@@ -159,8 +159,8 @@ export async function buildMartCostIncentive(): Promise<number> {
   return Number(row?.cnt ?? 0)
 }
 
-export async function refreshAllMarts(): Promise<{ telesales_orders: number; cost_incentive: number }> {
-  const telesales_orders = await buildMartTelesalesOrders()
+export async function refreshAllMarts(attributionDays = 14): Promise<{ telesales_orders: number; cost_incentive: number }> {
+  const telesales_orders = await buildMartTelesalesOrders(attributionDays)
   const cost_incentive   = await buildMartCostIncentive()
   return { telesales_orders, cost_incentive }
 }
