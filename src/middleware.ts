@@ -7,14 +7,11 @@ const isProtectedRoute = createRouteMatcher([
   '/overview(.*)', '/sales(.*)', '/telesales(.*)',
   '/products(.*)', '/leads(.*)', '/incentives(.*)', '/data-hub(.*)', '/exports(.*)',
   '/api/data/(.*)',
-  '/api/auth/(.*)', '/api/system/(.*)',
-  '/api/analytics/(.*)', '/api/config/(.*)',
 ])
 
 const isAdminOnlyRoute = createRouteMatcher([
   '/leads(.*)', '/data-hub(.*)', '/exports(.*)',
   '/api/data/upload/(.*)', '/api/data/dashboard(.*)',
-  '/api/auth/invite(.*)', '/api/system/(.*)',
 ])
 
 export default clerkMiddleware(async (auth, request) => {
