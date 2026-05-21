@@ -144,5 +144,14 @@ export async function POST(request: NextRequest) {
     [`gas_${datePart}_${token}.json`, r2Key, rows.length],
   )
 
+  // ── 5. Sync table_summaries ───────────────────────────────
+  await query(
+    `INSERT INTO table_summaries (table_name, total_rows)
+     SELECT 'telesales_calls', COUNT(*) FROM telesales_calls
+     ON CONFLICT (table_name) DO UPDATE SET
+       total_rows   = EXCLUDED.total_rows,
+       last_updated = NOW()`
+  )
+
   return NextResponse.json({ ok: true, inserted: rows.length, skipped, storage_path: r2Key })
 }
