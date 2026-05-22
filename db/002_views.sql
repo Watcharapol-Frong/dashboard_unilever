@@ -89,8 +89,7 @@ CREATE OR REPLACE VIEW order_attr_flag AS
     s.buyer_name,
     s.class_name,
     s.subclass,
-    (s.order_date - tc.first_connected_date)::INT                AS days_to_order,
-    MIN(s.order_date) OVER (PARTITION BY tc.mmid)               AS first_order_date
+    (s.order_date - tc.first_connected_date)::INT                AS days_to_order
   FROM telesales_calls tc
   LEFT JOIN sales_hoc_all s
     ON  s.mmid       = tc.mmid
