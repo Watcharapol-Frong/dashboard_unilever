@@ -8,7 +8,7 @@ const isProtectedRoute = createRouteMatcher([
   '/products(.*)', '/leads(.*)', '/incentives(.*)', '/data-hub(.*)',
   '/api/data/(.*)',
   '/api/system/(.*)',
-  '/api/config/(.*)',
+
 ])
 
 const isAdminOnlyRoute = createRouteMatcher([
