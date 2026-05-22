@@ -58,39 +58,3 @@ CREATE OR REPLACE VIEW sales_hoc_all AS
     p.subclass
   FROM offline_sales o
   INNER JOIN products p ON p.prod_num = o.prod_num AND p.product_name_en IS NOT NULL;
-
--- ── Gold View: order_attr_flag ──────────────────────────────────
--- LEFT JOIN telesales_calls → sales_hoc_all
--- Only post-call orders (order_date >= first_connected_date)
--- NULL rows = called but never ordered
--- days_to_order: only fact pre-computed; flag_attr / customer_type computed at query time
-
-CREATE OR REPLACE VIEW order_attr_flag AS
-  SELECT
-    tc.mmid,
-    tc.agent,
-    tc.first_connected_date,
-    tc.call_status,
-    tc.reason_group,
-    tc.lead_customers,
-    s.order_number,
-    s.prod_num,
-    s.order_date,
-    s.channel,
-    s.dynamic_cmg,
-    s.sales_qty,
-    s.sales_in_vat,
-    s.month,
-    s.week,
-    s.brands,
-    s.product_name_th,
-    s.product_name_en,
-    s.senior_buyer_name,
-    s.buyer_name,
-    s.class_name,
-    s.subclass,
-    (s.order_date - tc.first_connected_date)::INT                AS days_to_order
-  FROM telesales_calls tc
-  LEFT JOIN sales_hoc_all s
-    ON  s.mmid       = tc.mmid
-    AND s.order_date >= tc.first_connected_date;
