@@ -133,11 +133,9 @@ export async function buildMartPerformance(): Promise<number> {
   await query(`
     WITH all_sales_by_cmg AS (
       SELECT DATE_TRUNC('month', order_date)::date AS month, dynamic_cmg, SUM(sales_in_vat) AS actual_sales
-      FROM (
-        SELECT order_date, dynamic_cmg, sales_in_vat FROM online_sales  WHERE dynamic_cmg IS NOT NULL
-        UNION ALL
-        SELECT order_date, dynamic_cmg, sales_in_vat FROM offline_sales WHERE dynamic_cmg IS NOT NULL
-      ) s GROUP BY 1, 2
+      FROM sales_hoc_all
+      WHERE dynamic_cmg IS NOT NULL
+      GROUP BY 1, 2
     ),
     tier_calls AS (
       SELECT
