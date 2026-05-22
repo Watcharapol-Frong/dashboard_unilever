@@ -964,12 +964,12 @@ export function DataHubClient() {
                     </p>
                     <p className="text-xs text-muted-foreground">
                       {martStatus?.performance.min_month && martStatus?.performance.max_month
-                        ? `${fmtMonth(martStatus.cost_incentive.min_month)} – ${fmtMonth(martStatus.cost_incentive.max_month)}`
+                        ? `${fmtMonth(martStatus.performance.min_month)} – ${fmtMonth(martStatus.performance.max_month)}`
                         : '—'}
                     </p>
                     <p className="text-xs text-muted-foreground">
                       Built: {martStatus?.performance.last_refreshed
-                        ? fmtUpload(martStatus.cost_incentive.last_refreshed)
+                        ? fmtUpload(martStatus.performance.last_refreshed)
                         : '—'}
                     </p>
                   </div>
