@@ -94,6 +94,28 @@ export async function refreshMartChunk(
 }
 
 export async function buildMartCostIncentive(): Promise<number> {
+  await query(`
+    CREATE TABLE IF NOT EXISTS mart_cost_incentive (
+      month              DATE NOT NULL,
+      lead_customers     TEXT NOT NULL,
+      dynamic_cmg        TEXT NOT NULL,
+      total_calls        INTEGER,
+      reached            INTEGER,
+      ordered            INTEGER,
+      new_customers      INTEGER,
+      retention          INTEGER,
+      hoc_orders         INTEGER,
+      hoc_sales          NUMERIC,
+      actual_sales       NUMERIC,
+      sales_target       NUMERIC,
+      achievement_ratio  NUMERIC,
+      incentive_per_head NUMERIC,
+      total_incentive    NUMERIC,
+      cost_per_agent     NUMERIC,
+      refreshed_at       TIMESTAMPTZ DEFAULT NOW(),
+      PRIMARY KEY (month, lead_customers, dynamic_cmg)
+    )
+  `)
   await query(`TRUNCATE TABLE mart_cost_incentive`)
   await query(`
     WITH all_sales_by_cmg AS (
