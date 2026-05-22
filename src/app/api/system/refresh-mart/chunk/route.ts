@@ -10,8 +10,8 @@ export async function POST(request: Request) {
     const attributionDays = Number(body.attribution_days ?? 14)
     const truncate        = Boolean(body.truncate ?? false)
 
-    if (limit < 1 || limit > 500)
-      return NextResponse.json({ error: 'limit must be 1–500' }, { status: 400 })
+    if (limit < 1 || limit > 1000)
+      return NextResponse.json({ error: 'limit must be 1–1000' }, { status: 400 })
 
     try {
       const result = await refreshMartChunk(offset, limit, attributionDays, truncate)
