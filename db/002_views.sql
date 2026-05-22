@@ -59,13 +59,13 @@ CREATE OR REPLACE VIEW sales_hoc_all AS
   FROM offline_sales o
   INNER JOIN products p ON p.prod_num = o.prod_num AND p.product_name_en IS NOT NULL;
 
--- ── Gold View: telesales_attribution_map ────────────────────────
+-- ── Gold View: order_attr_flag ──────────────────────────────────
 -- LEFT JOIN telesales_calls → sales_hoc_all
 -- Only post-call orders (order_date >= first_connected_date)
 -- NULL rows = called but never ordered
 -- days_to_order: only fact pre-computed; flag_attr / customer_type computed at query time
 
-CREATE OR REPLACE VIEW telesales_attribution_map AS
+CREATE OR REPLACE VIEW order_attr_flag AS
   SELECT
     tc.mmid,
     tc.agent,
