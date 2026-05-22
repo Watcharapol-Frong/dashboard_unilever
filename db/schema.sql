@@ -9,7 +9,7 @@ CREATE TABLE IF NOT EXISTS upload_batches (
   error_count  INT NOT NULL DEFAULT 0,
   status       TEXT NOT NULL DEFAULT 'success' CHECK (status IN ('success','partial','failed')),
   uploaded_at  TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-  uploaded_by  UUID
+  uploaded_by  TEXT
 );
 
 CREATE TABLE IF NOT EXISTS online_sales (
