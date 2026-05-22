@@ -27,7 +27,7 @@ const buildInsertSQL = (withMmidFilter: boolean) => `
     mmid, order_number, order_date, channel, prod_num, sales_qty, sales_in_vat,
     dynamic_cmg, first_connected_date, agent, call_status, lead_customers,
     days_to_order, order_seq_in_window, is_first_ever_order, customer_type,
-    product_name_th, product_name_en, brands, class_name, is_hoc_unilever, month, week_label, refreshed_at
+    product_name_th, product_name_en, brands, class_name, is_hoc_unilever, month, month_label, week_label, refreshed_at
   )
   SELECT
     mmid, order_number, order_date, channel, prod_num, sales_qty, sales_in_vat,
@@ -42,6 +42,7 @@ const buildInsertSQL = (withMmidFilter: boolean) => `
     END AS customer_type,
     product_name_th, product_name_en, brands, class_name,
     TRUE AS is_hoc_unilever, month,
+    TO_CHAR(month, 'FMMonth') AS month_label,
     'W' || LPAD(EXTRACT(WEEK FROM order_date)::TEXT, 2, '0')
       || '-' || TO_CHAR(DATE_TRUNC('week', order_date)::DATE, 'DD/Mon')
       || '-' || TO_CHAR(DATE_TRUNC('week', order_date)::DATE + 6, 'DD/Mon') AS week_label,
@@ -52,6 +53,7 @@ const buildInsertSQL = (withMmidFilter: boolean) => `
     order_seq_in_window = EXCLUDED.order_seq_in_window,
     is_first_ever_order = EXCLUDED.is_first_ever_order,
     customer_type       = EXCLUDED.customer_type,
+    month_label         = EXCLUDED.month_label,
     week_label          = EXCLUDED.week_label,
     refreshed_at        = EXCLUDED.refreshed_at
 `
