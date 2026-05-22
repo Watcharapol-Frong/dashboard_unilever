@@ -91,17 +91,20 @@ export default function LeadsClient() {
     return { total, called, reached, converted, hoc_sales, avgDays }
   }, [filtered])
 
-  // ── Funnel chart — per lead tier ─────────────────────────────────
+  // ── Funnel chart — 100% stacked bar per lead tier ────────────────
   const funnelData = useMemo(() => {
     const tiers = [...new Set(filtered.map(r => r.lead_customers))].sort()
     return tiers.map(tier => {
       const tierRows = filtered.filter(r => r.lead_customers === tier)
+      const total = sumBy(tierRows, 'lead_count')
+      const pct100 = (n: number) => total > 0 ? Math.round((n / total) * 1000) / 10 : 0
       return {
         tier,
-        Total:         sumBy(tierRows, 'lead_count'),
-        Called:        sumBy(tierRows.filter(r => r.contact_status !== 'not_called'), 'lead_count'),
-        Reached:       sumBy(tierRows.filter(r => r.contact_status === 'reached'), 'lead_count'),
-        Converted:     sumBy(tierRows.filter(r => ['new_customer','retention'].includes(r.conversion_status)), 'lead_count'),
+        'New Customer':  pct100(sumBy(tierRows.filter(r => r.conversion_status === 'new_customer'), 'lead_count')),
+        'Retention':     pct100(sumBy(tierRows.filter(r => r.conversion_status === 'retention'), 'lead_count')),
+        'Not Converted': pct100(sumBy(tierRows.filter(r => r.conversion_status === 'not_converted'), 'lead_count')),
+        'No HOC Order':  pct100(sumBy(tierRows.filter(r => r.conversion_status === 'no_hoc_order'), 'lead_count')),
+        _total: total,
       }
     })
   }, [filtered])
@@ -226,13 +229,19 @@ export default function LeadsClient() {
             <BarChart data={funnelData} margin={{ top: 4, right: 16, bottom: 4, left: 0 }}>
               <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
               <XAxis dataKey="tier" tick={{ fontSize: 12 }} />
-              <YAxis tick={{ fontSize: 11 }} width={48} />
-              <Tooltip />
+              <YAxis tickFormatter={v => `${v}%`} domain={[0, 100]} tick={{ fontSize: 11 }} width={44} />
+              <Tooltip
+                formatter={(value: number, name: string, props: { payload?: { _total?: number } }) => {
+                  const total = props.payload?._total ?? 0
+                  const count = total > 0 ? Math.round((value / 100) * total) : 0
+                  return [`${value}% (${count.toLocaleString()})`, name]
+                }}
+              />
               <Legend />
-              <Bar dataKey="Total"     fill="#e2e8f0" radius={[4,4,0,0]} />
-              <Bar dataKey="Called"    fill="#93c5fd" radius={[4,4,0,0]} />
-              <Bar dataKey="Reached"   fill="#3b82f6" radius={[4,4,0,0]} />
-              <Bar dataKey="Converted" fill="#22c55e" radius={[4,4,0,0]} />
+              <Bar dataKey="New Customer"  stackId="a" fill="#22c55e" />
+              <Bar dataKey="Retention"     stackId="a" fill="#3b82f6" />
+              <Bar dataKey="Not Converted" stackId="a" fill="#f59e0b" />
+              <Bar dataKey="No HOC Order"  stackId="a" fill="#e2e8f0" radius={[4,4,0,0]} />
             </BarChart>
           </ResponsiveContainer>
         </CardContent>
