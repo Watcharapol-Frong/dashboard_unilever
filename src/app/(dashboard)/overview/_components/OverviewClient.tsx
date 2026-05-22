@@ -30,14 +30,93 @@ type Row = {
   roi: number
 }
 
-const fetcher = (url: string) => fetch(url).then(r => r.json()).then(d => d.data as Row[])
+type Agg = {
+  hoc_sales: number
+  new_customers: number
+  retention: number
+  ordered: number
+  hoc_orders: number
+  total_incentive: number
+  actual_sales: number
+  sales_target: number
+  total_calls: number
+  reached: number
+  total_agent_cost: number
+  total_expense: number
+  roi: number
+  achievement: number
+}
+
+/**
+ * mart_performance has a cross-join structure:
+ *   hoc_sales / new_customers / retention / ordered / total_incentive
+ *     → correctly split per (month, dynamic_cmg, lead_customers) — sum directly
+ *   actual_sales / sales_target
+ *     → per (month, dynamic_cmg), duplicated across lead_customers — dedup before sum
+ *   total_calls / reached
+ *     → per (month, lead_customers), duplicated across dynamic_cmg — dedup before sum
+ *   total_agent_cost
+ *     → per (month), duplicated across all combinations — dedup before sum
+ */
+function aggregate(rows: Row[]): Agg {
+  const s = (k: keyof Row) => rows.reduce((a, r) => a + (r[k] as number), 0)
+
+  const hoc_sales       = s('hoc_sales')
+  const new_customers   = s('new_customers')
+  const retention       = s('retention')
+  const ordered         = s('ordered')
+  const hoc_orders      = s('hoc_orders')
+  const total_incentive = s('total_incentive')
+
+  const cmgSeen = new Set<string>()
+  let actual_sales = 0, sales_target = 0
+  for (const r of rows) {
+    const key = `${r.month}\0${r.dynamic_cmg}`
+    if (!cmgSeen.has(key)) {
+      cmgSeen.add(key)
+      actual_sales += r.actual_sales
+      sales_target += r.sales_target
+    }
+  }
+
+  const leadSeen = new Set<string>()
+  let total_calls = 0, reached = 0
+  for (const r of rows) {
+    const key = `${r.month}\0${r.lead_customers}`
+    if (!leadSeen.has(key)) {
+      leadSeen.add(key)
+      total_calls += r.total_calls
+      reached     += r.reached
+    }
+  }
+
+  const monthSeen = new Set<string>()
+  let total_agent_cost = 0
+  for (const r of rows) {
+    if (!monthSeen.has(r.month)) {
+      monthSeen.add(r.month)
+      total_agent_cost += r.total_agent_cost
+    }
+  }
+
+  const total_expense = total_incentive + total_agent_cost
+  const roi           = total_expense > 0 ? actual_sales / total_expense : 0
+  const achievement   = sales_target  > 0 ? (hoc_sales / sales_target) * 100 : 0
+
+  return {
+    hoc_sales, new_customers, retention, ordered, hoc_orders, total_incentive,
+    actual_sales, sales_target, total_calls, reached,
+    total_agent_cost, total_expense, roi, achievement,
+  }
+}
+
+const fetcher = (url: string) =>
+  fetch(url).then(r => r.json()).then(d => d.data as Row[])
 
 const fmt = (n: number) =>
-  n >= 1_000_000
-    ? `${(n / 1_000_000).toFixed(2)}M`
-    : n >= 1_000
-    ? `${(n / 1_000).toFixed(1)}K`
-    : n.toFixed(0)
+  n >= 1_000_000 ? `${(n / 1_000_000).toFixed(2)}M`
+  : n >= 1_000   ? `${(n / 1_000).toFixed(1)}K`
+  : n.toFixed(0)
 
 const fmtBaht = (n: number) => `฿${fmt(n)}`
 
@@ -48,67 +127,33 @@ export default function OverviewClient() {
     dedupingInterval: 300_000,
   })
 
-  const months        = useMemo(() => [...new Set(rows.map(r => r.month))].sort(), [rows])
-  const leadOptions   = useMemo(() => ['all', ...new Set(rows.map(r => r.lead_customers)).values()], [rows])
-  const cmgOptions    = useMemo(() => ['all', ...new Set(rows.map(r => r.dynamic_cmg)).values()], [rows])
+  const months      = useMemo(() => [...new Set(rows.map(r => r.month))].sort(), [rows])
+  const leadOptions = useMemo(() => ['all', ...[...new Set(rows.map(r => r.lead_customers))]], [rows])
+  const cmgOptions  = useMemo(() => ['all', ...[...new Set(rows.map(r => r.dynamic_cmg))]], [rows])
 
   const [filterLead, setFilterLead] = useState('all')
   const [filterCmg,  setFilterCmg]  = useState('all')
   const [filterFrom, setFilterFrom] = useState('all')
   const [filterTo,   setFilterTo]   = useState('all')
 
-  const filtered = useMemo(() => {
-    return rows.filter(r => {
-      if (filterLead !== 'all' && r.lead_customers !== filterLead) return false
-      if (filterCmg  !== 'all' && r.dynamic_cmg    !== filterCmg)  return false
-      if (filterFrom !== 'all' && r.month < filterFrom) return false
-      if (filterTo   !== 'all' && r.month > filterTo)   return false
-      return true
-    })
-  }, [rows, filterLead, filterCmg, filterFrom, filterTo])
+  const filtered = useMemo(() => rows.filter(r => {
+    if (filterLead !== 'all' && r.lead_customers !== filterLead) return false
+    if (filterCmg  !== 'all' && r.dynamic_cmg    !== filterCmg)  return false
+    if (filterFrom !== 'all' && r.month < filterFrom) return false
+    if (filterTo   !== 'all' && r.month > filterTo)   return false
+    return true
+  }), [rows, filterLead, filterCmg, filterFrom, filterTo])
 
-  // KPIs — sum across filtered rows
-  const kpi = useMemo(() => {
-    const sum = (key: keyof Row) => filtered.reduce((a, r) => a + (r[key] as number), 0)
-    const hoc_sales     = sum('hoc_sales')
-    const sales_target  = sum('sales_target')
-    const total_expense = sum('total_expense')
-    return {
-      hoc_sales,
-      sales_target,
-      achievement:   sales_target > 0 ? (hoc_sales / sales_target) * 100 : 0,
-      new_customers: sum('new_customers'),
-      retention:     sum('retention'),
-      total_calls:   sum('total_calls'),
-      reached:       sum('reached'),
-      roi:           total_expense > 0 ? hoc_sales / total_expense : 0,
-    }
-  }, [filtered])
+  const kpi = useMemo(() => aggregate(filtered), [filtered])
 
-  // Monthly chart data — group by month
   const byMonth = useMemo(() => {
-    const map = new Map<string, {
-      month: string; month_label: string
-      hoc_sales: number; sales_target: number
-      new_customers: number; retention: number; roi_sum: number; roi_count: number
-    }>()
-    for (const r of filtered) {
-      const k = r.month
-      if (!map.has(k)) map.set(k, { month: r.month, month_label: r.month_label, hoc_sales: 0, sales_target: 0, new_customers: 0, retention: 0, roi_sum: 0, roi_count: 0 })
-      const m = map.get(k)!
-      m.hoc_sales     += r.hoc_sales
-      m.sales_target  += r.sales_target
-      m.new_customers += r.new_customers
-      m.retention     += r.retention
-      if (r.roi > 0) { m.roi_sum += r.roi; m.roi_count++ }
-    }
-    return [...map.values()]
-      .sort((a, b) => a.month.localeCompare(b.month))
-      .map(m => ({
-        ...m,
-        achievement: m.sales_target > 0 ? Math.round((m.hoc_sales / m.sales_target) * 100) : 0,
-        roi: m.roi_count > 0 ? Math.round((m.roi_sum / m.roi_count) * 100) / 100 : 0,
-      }))
+    const monthSet = [...new Set(filtered.map(r => r.month))].sort()
+    return monthSet.map(month => {
+      const mRows = filtered.filter(r => r.month === month)
+      const agg = aggregate(mRows)
+      const label = mRows[0]?.month_label ?? month
+      return { month, month_label: label, ...agg }
+    })
   }, [filtered])
 
   if (isLoading) {
@@ -206,9 +251,9 @@ export default function OverviewClient() {
         <KpiCard title="Total Calls" value={kpi.total_calls.toLocaleString()} sub={`รับสาย ${kpi.reached.toLocaleString()}`} />
         <KpiCard
           title="ROI"
-          value={`${kpi.roi.toFixed(2)}x`}
-          sub="ยอดขาย / ค่าใช้จ่าย"
-          highlight={kpi.roi >= 10 ? 'green' : kpi.roi >= 5 ? 'yellow' : 'red'}
+          value={kpi.roi > 0 ? `${kpi.roi.toFixed(2)}x` : '—'}
+          sub="ยอดขาย HOC / ค่าใช้จ่ายรวม"
+          highlight={kpi.roi >= 10 ? 'green' : kpi.roi >= 5 ? 'yellow' : kpi.roi > 0 ? 'red' : undefined}
         />
       </div>
 
@@ -226,7 +271,7 @@ export default function OverviewClient() {
               <YAxis yAxisId="pct" orientation="right" tickFormatter={v => `${v}%`} tick={{ fontSize: 11 }} width={44} />
               <Tooltip
                 formatter={(value: number, name: string) => {
-                  if (name === 'achievement') return [`${value}%`, 'Achievement']
+                  if (name === 'achievement') return [`${value.toFixed(1)}%`, 'Achievement']
                   return [fmtBaht(value), name === 'hoc_sales' ? 'HOC Sales' : 'Target']
                 }}
               />
@@ -239,7 +284,7 @@ export default function OverviewClient() {
         </CardContent>
       </Card>
 
-      {/* New vs Retention */}
+      {/* New vs Retention + ROI */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         <Card>
           <CardHeader>
@@ -253,7 +298,7 @@ export default function OverviewClient() {
                 <YAxis tick={{ fontSize: 11 }} width={40} />
                 <Tooltip />
                 <Legend />
-                <Bar dataKey="new_customers" name="New" stackId="a" fill="#22c55e" radius={[0, 0, 0, 0]} />
+                <Bar dataKey="new_customers" name="New" stackId="a" fill="#22c55e" />
                 <Bar dataKey="retention" name="Retention" stackId="a" fill="#3b82f6" radius={[4, 4, 0, 0]} />
               </BarChart>
             </ResponsiveContainer>
@@ -269,8 +314,8 @@ export default function OverviewClient() {
               <LineChart data={byMonth} margin={{ top: 4, right: 8, bottom: 4, left: 0 }}>
                 <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
                 <XAxis dataKey="month_label" tick={{ fontSize: 12 }} />
-                <YAxis tick={{ fontSize: 11 }} width={40} tickFormatter={v => `${v}x`} />
-                <Tooltip formatter={(v: number) => [`${v}x`, 'ROI']} />
+                <YAxis tick={{ fontSize: 11 }} width={44} tickFormatter={v => `${v}x`} />
+                <Tooltip formatter={(v: number) => [`${v.toFixed(2)}x`, 'ROI']} />
                 <Line dataKey="roi" name="ROI" type="monotone" stroke="#8b5cf6" strokeWidth={2} dot={{ r: 4 }} />
               </LineChart>
             </ResponsiveContainer>
@@ -278,10 +323,10 @@ export default function OverviewClient() {
         </Card>
       </div>
 
-      {/* Data table */}
+      {/* Detail table */}
       <Card>
         <CardHeader>
-          <CardTitle className="text-sm font-medium">ตารางสรุปรายเดือน</CardTitle>
+          <CardTitle className="text-sm font-medium">ตารางรายละเอียด</CardTitle>
         </CardHeader>
         <CardContent className="overflow-x-auto">
           <table className="w-full text-xs">
@@ -292,7 +337,7 @@ export default function OverviewClient() {
                 <th className="text-left py-2 pr-3 font-medium">CMG</th>
                 <th className="text-right py-2 pr-3 font-medium">HOC Sales</th>
                 <th className="text-right py-2 pr-3 font-medium">Target</th>
-                <th className="text-right py-2 pr-3 font-medium">Achievement</th>
+                <th className="text-right py-2 pr-3 font-medium">Achiev.</th>
                 <th className="text-right py-2 pr-3 font-medium">New</th>
                 <th className="text-right py-2 pr-3 font-medium">Retention</th>
                 <th className="text-right py-2 font-medium">ROI</th>
@@ -328,7 +373,10 @@ function KpiCard({ title, value, sub, highlight }: {
   sub?: string
   highlight?: 'green' | 'yellow' | 'red'
 }) {
-  const color = highlight === 'green' ? 'text-green-600' : highlight === 'yellow' ? 'text-yellow-600' : highlight === 'red' ? 'text-red-500' : ''
+  const color =
+    highlight === 'green'  ? 'text-green-600' :
+    highlight === 'yellow' ? 'text-yellow-600' :
+    highlight === 'red'    ? 'text-red-500' : ''
   return (
     <Card>
       <CardContent className="pt-4 pb-3">
@@ -341,6 +389,13 @@ function KpiCard({ title, value, sub, highlight }: {
 }
 
 function AchievementBadge({ value }: { value: number }) {
-  const color = value >= 100 ? 'bg-green-100 text-green-700' : value >= 80 ? 'bg-yellow-100 text-yellow-700' : 'bg-red-100 text-red-600'
-  return <span className={`inline-block px-1.5 py-0.5 rounded text-xs font-medium ${color}`}>{value.toFixed(1)}%</span>
+  const color =
+    value >= 100 ? 'bg-green-100 text-green-700' :
+    value >= 80  ? 'bg-yellow-100 text-yellow-700' :
+    'bg-red-100 text-red-600'
+  return (
+    <span className={`inline-block px-1.5 py-0.5 rounded text-xs font-medium ${color}`}>
+      {value.toFixed(1)}%
+    </span>
+  )
 }
