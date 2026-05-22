@@ -26,7 +26,10 @@ CREATE OR REPLACE VIEW sales_hoc_all AS
     p.brands,
     p.product_name_th,
     p.product_name_en,
-    p.class_name
+    p.senior_buyer_name,
+    p.buyer_name,
+    p.class_name,
+    p.subclass
   FROM online_sales o
   INNER JOIN products p ON p.prod_num = o.prod_num AND p.product_name_en IS NOT NULL
 
@@ -49,6 +52,9 @@ CREATE OR REPLACE VIEW sales_hoc_all AS
     p.brands,
     p.product_name_th,
     p.product_name_en,
-    p.class_name
+    p.senior_buyer_name,
+    p.buyer_name,
+    p.class_name,
+    p.subclass
   FROM offline_sales o
   INNER JOIN products p ON p.prod_num = o.prod_num AND p.product_name_en IS NOT NULL;

@@ -2,12 +2,14 @@ import { AppSidebar } from '@/components/app-sidebar'
 import { TopBar } from '@/components/layout/TopBar'
 import { DateRangeProvider } from '@/context/DateRangeContext'
 import { UploadQueueProvider } from '@/context/UploadQueueContext'
+import { BuildProvider } from '@/context/BuildContext'
 import { SidebarInset, SidebarProvider } from '@/components/ui/sidebar'
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
   return (
     <DateRangeProvider>
       <UploadQueueProvider>
+      <BuildProvider>
         <SidebarProvider>
           <AppSidebar />
           <SidebarInset>
@@ -17,6 +19,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
             </main>
           </SidebarInset>
         </SidebarProvider>
+      </BuildProvider>
       </UploadQueueProvider>
     </DateRangeProvider>
   )
