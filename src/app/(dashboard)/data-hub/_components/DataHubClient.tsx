@@ -13,6 +13,7 @@ import { FILE_TYPE_CONFIGS, validateHeaders } from '@/lib/upload/config'
 import type { UploadFileType } from '@/lib/upload/config'
 import { cn, formatTHB, formatNumber } from '@/lib/utils'
 import { useUploadQueue, MAX_CONCURRENT } from '@/context/UploadQueueContext'
+import { useBuild } from '@/context/BuildContext'
 
 const FILE_TYPES = Object.entries(FILE_TYPE_CONFIGS) as [UploadFileType, typeof FILE_TYPE_CONFIGS[UploadFileType]][]
 
@@ -91,6 +92,7 @@ const fetcher = (url: string) => fetch(url, { cache: 'no-store' }).then(r => r.j
 
 export function DataHubClient() {
   const { jobs, enqueueJob, dismissJob } = useUploadQueue()
+  const { buildLoading, buildProgress, buildResult, clearBuildResult, startBuild } = useBuild()
 
   // ── Form state (current file being prepared) ───────────────
   const [fileType, setFileType]         = useState<UploadFileType>('online_sales')
@@ -108,89 +110,11 @@ export function DataHubClient() {
   const [replayLoading, setReplayLoading] = useState(false)
   const [replayResult, setReplayResult] = useState<ReplayResult | null>(null)
 
-  // ── Build state ────────────────────────────────────────────
-  type BuildResult = { ok: boolean; rows?: { mart_main: number; cost_incentive: number }; attribution_days?: number; error?: string }
-  type BuildProgress = { current: number; total: number; phase: 'chunking' | 'finalizing' }
+  // ── Build state (lives in BuildContext — persists across navigation) ──
   const [attributionDays, setAttributionDays] = useState<number | 'custom'>(14)
   const [customDays, setCustomDays]           = useState('')
-  const [buildLoading, setBuildLoading]       = useState(false)
-  const [buildResult, setBuildResult]         = useState<BuildResult | null>(null)
-  const [buildProgress, setBuildProgress]     = useState<BuildProgress | null>(null)
 
   const effectiveDays = attributionDays === 'custom' ? Number(customDays) || 14 : attributionDays
-
-  const startBuild = async () => {
-    setBuildLoading(true)
-    setBuildResult(null)
-    setBuildProgress(null)
-
-    const LIMIT = 750
-    const PARALLEL = 2
-    let offset = 0
-    let martMainRows = 0
-
-    try {
-      while (true) {
-        // Fire up to PARALLEL requests concurrently
-        const promises = []
-        for (let i = 0; i < PARALLEL; i++) {
-          const currentOffset = offset + (i * LIMIT)
-          promises.push(
-            fetch('/api/system/refresh-mart/chunk', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({
-                offset: currentOffset,
-                limit: LIMIT,
-                attribution_days: effectiveDays,
-                truncate: currentOffset === 0,
-              }),
-            }).then(res => res.json())
-          )
-        }
-
-        const results = await Promise.all(promises)
-
-        let anyDone = false
-        let lastNextOffset = offset
-
-        for (const data of results) {
-          if (!data.ok) {
-            setBuildResult({ ok: false, error: data.error ?? 'Chunk failed' })
-            return
-          }
-          martMainRows += data.processed
-          lastNextOffset = Math.max(lastNextOffset, data.next_offset)
-          if (data.done) anyDone = true
-        }
-
-        setBuildProgress({ current: lastNextOffset, total: results[0].total, phase: 'chunking' })
-
-        if (anyDone) break
-        offset = lastNextOffset
-      }
-
-      setBuildProgress({ current: 0, total: 0, phase: 'finalizing' })
-      const finalRes = await fetch('/api/system/refresh-mart/finalize', { method: 'POST' })
-      const finalData = await finalRes.json()
-      if (!finalRes.ok || !finalData.ok) {
-        setBuildResult({ ok: false, error: finalData.error ?? 'Finalize failed' })
-        return
-      }
-
-      setBuildResult({
-        ok: true,
-        attribution_days: effectiveDays,
-        rows: { mart_main: martMainRows, cost_incentive: finalData.cost_incentive },
-      })
-      mutateMart()
-    } catch {
-      setBuildResult({ ok: false, error: 'Network error' })
-    } finally {
-      setBuildLoading(false)
-      setBuildProgress(null)
-    }
-  }
 
   const startReplay = async () => {
     setReplayLoading(true)
@@ -1069,7 +993,7 @@ export function DataHubClient() {
                   {([14, 30, 90] as const).map(d => (
                     <button
                       key={d}
-                      onClick={() => { setAttributionDays(d); setBuildResult(null) }}
+                      onClick={() => { setAttributionDays(d); clearBuildResult() }}
                       disabled={buildLoading}
                       className={cn(
                         'px-4 py-2 text-sm font-medium rounded-lg border transition-all disabled:opacity-50',
@@ -1082,7 +1006,7 @@ export function DataHubClient() {
                     </button>
                   ))}
                   <button
-                    onClick={() => { setAttributionDays('custom'); setBuildResult(null) }}
+                    onClick={() => { setAttributionDays('custom'); clearBuildResult() }}
                     disabled={buildLoading}
                     className={cn(
                       'px-4 py-2 text-sm font-medium rounded-lg border transition-all disabled:opacity-50',
@@ -1117,7 +1041,7 @@ export function DataHubClient() {
               </div>
 
               <button
-                onClick={startBuild}
+                onClick={() => startBuild(effectiveDays)}
                 disabled={buildLoading || (attributionDays === 'custom' && !customDays)}
                 className="flex items-center gap-2 px-5 py-2 rounded-lg bg-[#003DA6] text-white text-sm font-medium hover:bg-[#002d80] transition-colors disabled:opacity-50"
               >
