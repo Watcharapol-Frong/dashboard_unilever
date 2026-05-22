@@ -109,30 +109,69 @@ export function DataHubClient() {
   const [replayResult, setReplayResult] = useState<ReplayResult | null>(null)
 
   // ── Build state ────────────────────────────────────────────
-  type BuildResult = { ok: boolean; rows?: { mart_main: number; cost_incentive: number }; attribution_days?: number; duration_ms?: number; error?: string }
+  type BuildResult = { ok: boolean; rows?: { mart_main: number; cost_incentive: number }; attribution_days?: number; error?: string }
+  type BuildProgress = { current: number; total: number; phase: 'chunking' | 'finalizing' }
   const [attributionDays, setAttributionDays] = useState<number | 'custom'>(14)
   const [customDays, setCustomDays]           = useState('')
   const [buildLoading, setBuildLoading]       = useState(false)
   const [buildResult, setBuildResult]         = useState<BuildResult | null>(null)
+  const [buildProgress, setBuildProgress]     = useState<BuildProgress | null>(null)
 
   const effectiveDays = attributionDays === 'custom' ? Number(customDays) || 14 : attributionDays
 
   const startBuild = async () => {
     setBuildLoading(true)
     setBuildResult(null)
+    setBuildProgress(null)
+
+    const LIMIT = 200
+    let offset = 0
+    let martMainRows = 0
+
     try {
-      const res = await fetch('/api/system/refresh-mart', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ attribution_days: effectiveDays }),
+      while (true) {
+        const res = await fetch('/api/system/refresh-mart/chunk', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            offset,
+            limit: LIMIT,
+            attribution_days: effectiveDays,
+            truncate: offset === 0,
+          }),
+        })
+        const data = await res.json()
+        if (!res.ok || !data.ok) {
+          setBuildResult({ ok: false, error: data.error ?? 'Chunk failed' })
+          return
+        }
+
+        martMainRows += data.processed
+        setBuildProgress({ current: data.next_offset, total: data.total, phase: 'chunking' })
+
+        if (data.done) break
+        offset = data.next_offset
+      }
+
+      setBuildProgress({ current: 0, total: 0, phase: 'finalizing' })
+      const finalRes = await fetch('/api/system/refresh-mart/finalize', { method: 'POST' })
+      const finalData = await finalRes.json()
+      if (!finalRes.ok || !finalData.ok) {
+        setBuildResult({ ok: false, error: finalData.error ?? 'Finalize failed' })
+        return
+      }
+
+      setBuildResult({
+        ok: true,
+        attribution_days: effectiveDays,
+        rows: { mart_main: martMainRows, cost_incentive: finalData.cost_incentive },
       })
-      const data = await res.json()
-      setBuildResult(data)
-      if (data.ok) mutateMart()
+      mutateMart()
     } catch {
       setBuildResult({ ok: false, error: 'Network error' })
     } finally {
       setBuildLoading(false)
+      setBuildProgress(null)
     }
   }
 
@@ -173,7 +212,6 @@ export function DataHubClient() {
       row_count: number
       min_date: string | null; max_date: string | null
       last_refreshed: string | null
-      attribution_days: number | null
       avg_days_to_order: number | null
     }
     cost_incentive: { row_count: number; min_month: string | null; max_month: string | null; last_refreshed: string | null }
@@ -950,7 +988,7 @@ export function DataHubClient() {
                     'rounded-lg border p-3 space-y-1',
                     (martStatus?.mart_main.row_count ?? 0) > 0 ? 'border-green-200 bg-green-50/40' : 'border-gray-200 bg-muted/30',
                   )}>
-                    <p className="text-xs font-medium text-muted-foreground">mart_table_main</p>
+                    <p className="text-xs font-medium text-muted-foreground">mart_telesales_orders</p>
                     <p className="text-2xl font-bold tabular-nums">
                       {formatNumber(martStatus?.mart_main.row_count ?? 0)}
                       <span className="text-xs font-normal text-muted-foreground ml-1">rows</span>
@@ -960,12 +998,9 @@ export function DataHubClient() {
                         ? `${fmtDate(martStatus.mart_main.min_date)} – ${fmtDate(martStatus.mart_main.max_date)}`
                         : '—'}
                     </p>
-                    {martStatus?.mart_main.attribution_days && (
+                    {martStatus?.mart_main.avg_days_to_order !== null && martStatus?.mart_main.avg_days_to_order !== undefined && (
                       <p className="text-xs text-muted-foreground">
-                        Window: {martStatus.mart_main.attribution_days}d
-                        {martStatus.mart_main.avg_days_to_order !== null && (
-                          <> · avg {martStatus.mart_main.avg_days_to_order}d to order</>
-                        )}
+                        avg {martStatus.mart_main.avg_days_to_order}d to order
                       </p>
                     )}
                     <p className="text-xs text-muted-foreground">
@@ -1005,7 +1040,7 @@ export function DataHubClient() {
             <CardHeader>
               <CardTitle className="text-base">Build Mart Tables</CardTitle>
               <p className="text-sm text-muted-foreground">
-                Rebuild <code className="bg-muted px-1 rounded">mart_table_main</code> and <code className="bg-muted px-1 rounded">mart_cost_incentive</code> from raw tables.
+                Rebuild <code className="bg-muted px-1 rounded">mart_telesales_orders</code> and <code className="bg-muted px-1 rounded">mart_cost_incentive</code> from raw tables.
                 Attribution window controls how many days after a call a purchase counts as telesales-driven.
               </p>
             </CardHeader>
@@ -1075,9 +1110,28 @@ export function DataHubClient() {
                 {buildLoading ? 'Building…' : 'Build Tables'}
               </button>
 
-              {buildLoading && (
-                <div className="rounded-lg border border-blue-200 bg-blue-50 p-4 text-sm text-blue-700">
-                  Building mart tables with <strong>{effectiveDays}-day</strong> attribution window. This may take a moment…
+              {buildLoading && buildProgress && (
+                <div className="rounded-lg border border-blue-200 bg-blue-50 p-4 space-y-2">
+                  <div className="flex justify-between text-sm text-blue-700">
+                    <span>
+                      {buildProgress.phase === 'chunking'
+                        ? `Processing customers… ${buildProgress.current.toLocaleString()} / ${buildProgress.total.toLocaleString()}`
+                        : 'Finalizing cost & incentive mart…'}
+                    </span>
+                    {buildProgress.phase === 'chunking' && buildProgress.total > 0 && (
+                      <span className="font-medium">
+                        {Math.round((buildProgress.current / buildProgress.total) * 100)}%
+                      </span>
+                    )}
+                  </div>
+                  {buildProgress.phase === 'chunking' && buildProgress.total > 0 && (
+                    <div className="h-2 w-full rounded-full bg-blue-200 overflow-hidden">
+                      <div
+                        className="h-full rounded-full bg-[#003DA6] transition-all duration-300"
+                        style={{ width: `${Math.round((buildProgress.current / buildProgress.total) * 100)}%` }}
+                      />
+                    </div>
+                  )}
                 </div>
               )}
 
@@ -1092,7 +1146,7 @@ export function DataHubClient() {
                       : <XCircle className="h-4 w-4 text-red-500 shrink-0" />}
                     <p className="text-sm font-medium">
                       {buildResult.ok
-                        ? `Build complete — ${buildResult.attribution_days}-day window · ${(buildResult.duration_ms! / 1000).toFixed(1)}s`
+                        ? `Build complete — ${buildResult.attribution_days}-day window`
                         : 'Build failed'}
                     </p>
                   </div>
@@ -1101,7 +1155,7 @@ export function DataHubClient() {
                     <div className="grid grid-cols-2 gap-2 text-sm">
                       <div className="rounded bg-white/60 border px-3 py-2 text-center">
                         <p className="text-xl font-bold tabular-nums">{buildResult.rows.mart_main.toLocaleString()}</p>
-                        <p className="text-xs text-muted-foreground">mart_table_main rows</p>
+                        <p className="text-xs text-muted-foreground">mart_telesales_orders rows</p>
                       </div>
                       <div className="rounded bg-white/60 border px-3 py-2 text-center">
                         <p className="text-xl font-bold tabular-nums">{buildResult.rows.cost_incentive.toLocaleString()}</p>
