@@ -100,9 +100,9 @@ export async function refreshMartChunk(
   return { processed: mmids.length, done, next_offset: offset + mmids.length, total }
 }
 
-export async function buildMartCostIncentive(): Promise<number> {
+export async function buildMartPerformance(): Promise<number> {
   await query(`
-    CREATE TABLE IF NOT EXISTS mart_cost_incentive (
+    CREATE TABLE IF NOT EXISTS mart_performance (
       month              DATE NOT NULL,
       lead_customers     TEXT NOT NULL,
       dynamic_cmg        TEXT NOT NULL,
@@ -119,11 +119,17 @@ export async function buildMartCostIncentive(): Promise<number> {
       incentive_per_head NUMERIC,
       total_incentive    NUMERIC,
       cost_per_agent     NUMERIC,
+      cost_per_supervisor NUMERIC,
+      supervisor_count   INTEGER,
+      agent_count        INTEGER,
+      total_agent_cost   NUMERIC,
+      total_expense      NUMERIC,
+      roi                NUMERIC,
       refreshed_at       TIMESTAMPTZ DEFAULT NOW(),
       PRIMARY KEY (month, lead_customers, dynamic_cmg)
     )
   `)
-  await query(`DELETE FROM mart_cost_incentive WHERE true`)
+  await query(`DELETE FROM mart_performance WHERE true`)
   await query(`
     WITH all_sales_by_cmg AS (
       SELECT DATE_TRUNC('month', order_date)::date AS month, dynamic_cmg, SUM(sales_in_vat) AS actual_sales
@@ -152,11 +158,13 @@ export async function buildMartCostIncentive(): Promise<number> {
       LEFT JOIN all_sales_by_cmg asc2 ON asc2.month = cm.month AND asc2.dynamic_cmg = cm.dynamic_cmg
       LEFT JOIN targets tg ON tg.month = cm.month AND tg.dynamic_cmg = cm.dynamic_cmg
     )
-    INSERT INTO mart_cost_incentive (
+    INSERT INTO mart_performance (
       month, lead_customers, dynamic_cmg, total_calls, reached, ordered,
       new_customers, retention, hoc_orders, hoc_sales,
       actual_sales, sales_target, achievement_ratio,
-      incentive_per_head, total_incentive, cost_per_agent
+      incentive_per_head, total_incentive,
+      cost_per_agent, cost_per_supervisor, supervisor_count, agent_count,
+      total_agent_cost, total_expense, roi
     )
     SELECT
       b.month, b.lead_customers, b.dynamic_cmg, b.total_calls, b.reached,
@@ -169,28 +177,60 @@ export async function buildMartCostIncentive(): Promise<number> {
       (SELECT incentive_per_head FROM incentives WHERE tier <= b.achievement_ratio ORDER BY tier DESC LIMIT 1) AS incentive_per_head,
       COUNT(DISTINCT m.mmid) FILTER (WHERE m.customer_type IN ('new_customer','retention')) *
         COALESCE((SELECT incentive_per_head FROM incentives WHERE tier <= b.achievement_ratio ORDER BY tier DESC LIMIT 1), 0) AS total_incentive,
-      co.cost_per_agent
+      co.cost_per_agent,
+      co.cost_per_supervisor,
+      ah.supervisor_count,
+      ah.agent_count,
+      COALESCE(ah.supervisor_count, 0) * COALESCE(co.cost_per_supervisor, 0)
+        + COALESCE(ah.agent_count, 0) * COALESCE(co.cost_per_agent, 0)                                AS total_agent_cost,
+      (COUNT(DISTINCT m.mmid) FILTER (WHERE m.customer_type IN ('new_customer','retention')) *
+        COALESCE((SELECT incentive_per_head FROM incentives WHERE tier <= b.achievement_ratio ORDER BY tier DESC LIMIT 1), 0))
+        + COALESCE(ah.supervisor_count, 0) * COALESCE(co.cost_per_supervisor, 0)
+        + COALESCE(ah.agent_count, 0) * COALESCE(co.cost_per_agent, 0)                                AS total_expense,
+      ROUND(
+        b.actual_sales / NULLIF(
+          (COUNT(DISTINCT m.mmid) FILTER (WHERE m.customer_type IN ('new_customer','retention')) *
+            COALESCE((SELECT incentive_per_head FROM incentives WHERE tier <= b.achievement_ratio ORDER BY tier DESC LIMIT 1), 0))
+          + COALESCE(ah.supervisor_count, 0) * COALESCE(co.cost_per_supervisor, 0)
+          + COALESCE(ah.agent_count, 0) * COALESCE(co.cost_per_agent, 0)
+        , 0), 2
+      )                                                                                                 AS roi
     FROM base b
     LEFT JOIN mart_telesales_orders m
       ON m.month = b.month AND m.dynamic_cmg = b.dynamic_cmg AND m.lead_customers = b.lead_customers
     LEFT JOIN costs co ON co.month = b.month
+    LEFT JOIN agent_headcount ah ON ah.month = b.month
     GROUP BY b.month, b.lead_customers, b.dynamic_cmg,
-             b.total_calls, b.reached, b.actual_sales, b.sales_target, b.achievement_ratio, co.cost_per_agent
+             b.total_calls, b.reached, b.actual_sales, b.sales_target, b.achievement_ratio,
+             co.cost_per_agent, co.cost_per_supervisor, ah.supervisor_count, ah.agent_count
     ON CONFLICT (month, lead_customers, dynamic_cmg) DO UPDATE SET
-      total_calls = EXCLUDED.total_calls, reached = EXCLUDED.reached,
-      ordered = EXCLUDED.ordered, new_customers = EXCLUDED.new_customers,
-      retention = EXCLUDED.retention, hoc_orders = EXCLUDED.hoc_orders,
-      hoc_sales = EXCLUDED.hoc_sales, actual_sales = EXCLUDED.actual_sales,
-      sales_target = EXCLUDED.sales_target, achievement_ratio = EXCLUDED.achievement_ratio,
-      incentive_per_head = EXCLUDED.incentive_per_head, total_incentive = EXCLUDED.total_incentive,
-      cost_per_agent = EXCLUDED.cost_per_agent, refreshed_at = NOW()
+      total_calls         = EXCLUDED.total_calls,
+      reached             = EXCLUDED.reached,
+      ordered             = EXCLUDED.ordered,
+      new_customers       = EXCLUDED.new_customers,
+      retention           = EXCLUDED.retention,
+      hoc_orders          = EXCLUDED.hoc_orders,
+      hoc_sales           = EXCLUDED.hoc_sales,
+      actual_sales        = EXCLUDED.actual_sales,
+      sales_target        = EXCLUDED.sales_target,
+      achievement_ratio   = EXCLUDED.achievement_ratio,
+      incentive_per_head  = EXCLUDED.incentive_per_head,
+      total_incentive     = EXCLUDED.total_incentive,
+      cost_per_agent      = EXCLUDED.cost_per_agent,
+      cost_per_supervisor = EXCLUDED.cost_per_supervisor,
+      supervisor_count    = EXCLUDED.supervisor_count,
+      agent_count         = EXCLUDED.agent_count,
+      total_agent_cost    = EXCLUDED.total_agent_cost,
+      total_expense       = EXCLUDED.total_expense,
+      roi                 = EXCLUDED.roi,
+      refreshed_at        = NOW()
   `)
-  const row = await queryOne<{ cnt: string }>(`SELECT COUNT(*) AS cnt FROM mart_cost_incentive`)
+  const row = await queryOne<{ cnt: string }>(`SELECT COUNT(*) AS cnt FROM mart_performance`)
   return Number(row?.cnt ?? 0)
 }
 
-export async function refreshAllMarts(attributionDays = 14): Promise<{ mart_main: number; cost_incentive: number }> {
-  const mart_main      = await buildMartMain(attributionDays)
-  const cost_incentive = await buildMartCostIncentive()
-  return { mart_main, cost_incentive }
+export async function refreshAllMarts(attributionDays = 14): Promise<{ mart_main: number; performance: number }> {
+  const mart_main   = await buildMartMain(attributionDays)
+  const performance = await buildMartPerformance()
+  return { mart_main, performance }
 }

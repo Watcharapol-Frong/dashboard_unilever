@@ -152,6 +152,14 @@ const ETL_TRANSFORMS: Record<UploadFileType, (row: Row, batchId: string) => Silv
     batch_id:           batchId,
     updated_at:         new Date().toISOString(),
   }),
+
+  agent_headcount: (row, batchId) => ({
+    month:            parseMonth(row['month']),
+    supervisor_count: Math.round(toNum(row['supervisor_count'])),
+    agent_count:      Math.round(toNum(row['agent_count'])),
+    batch_id:         batchId,
+    updated_at:       new Date().toISOString(),
+  }),
 }
 
 export function transformRows(

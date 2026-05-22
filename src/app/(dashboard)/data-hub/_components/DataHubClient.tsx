@@ -156,7 +156,7 @@ export function DataHubClient() {
       last_refreshed: string | null
       avg_days_to_order: number | null
     }
-    cost_incentive: { row_count: number; min_month: string | null; max_month: string | null; last_refreshed: string | null }
+    performance: { row_count: number; min_month: string | null; max_month: string | null; last_refreshed: string | null }
   }
   const { data: martStatus, isValidating: martValidating, mutate: mutateMart } = useSWR<MartStatus>(
     '/api/data/mart-status',
@@ -952,23 +952,23 @@ export function DataHubClient() {
                         : '—'}
                     </p>
                   </div>
-                  {/* mart_cost_incentive */}
+                  {/* mart_performance */}
                   <div className={cn(
                     'rounded-lg border p-3 space-y-1',
-                    (martStatus?.cost_incentive.row_count ?? 0) > 0 ? 'border-green-200 bg-green-50/40' : 'border-gray-200 bg-muted/30',
+                    (martStatus?.performance.row_count ?? 0) > 0 ? 'border-green-200 bg-green-50/40' : 'border-gray-200 bg-muted/30',
                   )}>
-                    <p className="text-xs font-medium text-muted-foreground">mart_cost_incentive</p>
+                    <p className="text-xs font-medium text-muted-foreground">mart_performance</p>
                     <p className="text-2xl font-bold tabular-nums">
-                      {formatNumber(martStatus?.cost_incentive.row_count ?? 0)}
+                      {formatNumber(martStatus?.performance.row_count ?? 0)}
                       <span className="text-xs font-normal text-muted-foreground ml-1">rows</span>
                     </p>
                     <p className="text-xs text-muted-foreground">
-                      {martStatus?.cost_incentive.min_month && martStatus?.cost_incentive.max_month
+                      {martStatus?.performance.min_month && martStatus?.performance.max_month
                         ? `${fmtMonth(martStatus.cost_incentive.min_month)} – ${fmtMonth(martStatus.cost_incentive.max_month)}`
                         : '—'}
                     </p>
                     <p className="text-xs text-muted-foreground">
-                      Built: {martStatus?.cost_incentive.last_refreshed
+                      Built: {martStatus?.performance.last_refreshed
                         ? fmtUpload(martStatus.cost_incentive.last_refreshed)
                         : '—'}
                     </p>
@@ -983,7 +983,7 @@ export function DataHubClient() {
             <CardHeader>
               <CardTitle className="text-base">Build Mart Tables</CardTitle>
               <p className="text-sm text-muted-foreground">
-                Rebuild <code className="bg-muted px-1 rounded">mart_telesales_orders</code> and <code className="bg-muted px-1 rounded">mart_cost_incentive</code> from raw tables.
+                Rebuild <code className="bg-muted px-1 rounded">mart_telesales_orders</code> and <code className="bg-muted px-1 rounded">mart_performance</code> from raw tables.
                 Attribution window controls how many days after a call a purchase counts as telesales-driven.
               </p>
             </CardHeader>
@@ -1101,8 +1101,8 @@ export function DataHubClient() {
                         <p className="text-xs text-muted-foreground">mart_telesales_orders rows</p>
                       </div>
                       <div className="rounded bg-white/60 border px-3 py-2 text-center">
-                        <p className="text-xl font-bold tabular-nums">{buildResult.rows.cost_incentive.toLocaleString()}</p>
-                        <p className="text-xs text-muted-foreground">mart_cost_incentive rows</p>
+                        <p className="text-xl font-bold tabular-nums">{buildResult.rows.performance.toLocaleString()}</p>
+                        <p className="text-xs text-muted-foreground">mart_performance rows</p>
                       </div>
                     </div>
                   )}

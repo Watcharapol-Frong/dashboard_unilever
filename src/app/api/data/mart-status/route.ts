@@ -33,7 +33,7 @@ export async function GET() {
           MIN(month)::text                      AS min_month,
           MAX(month)::text                      AS max_month,
           MAX(refreshed_at)::text               AS last_refreshed
-        FROM mart_cost_incentive
+        FROM mart_performance
       `),
     ])
 
@@ -45,7 +45,7 @@ export async function GET() {
         last_refreshed:    main?.last_refreshed ?? null,
         avg_days_to_order: main?.avg_days ? Number(main.avg_days) : null,
       },
-      cost_incentive: {
+      performance: {
         row_count:      Number(costIncentive?.cnt ?? 0),
         min_month:      costIncentive?.min_month ?? null,
         max_month:      costIncentive?.max_month ?? null,
