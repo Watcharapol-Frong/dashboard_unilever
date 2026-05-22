@@ -155,6 +155,27 @@ export async function buildMartPerformance(): Promise<number> {
       JOIN tier_calls tc ON tc.month = cm.month
       LEFT JOIN all_sales_by_cmg asc2 ON asc2.month = cm.month AND asc2.dynamic_cmg = cm.dynamic_cmg
       LEFT JOIN targets tg ON tg.month = cm.month AND tg.dynamic_cmg = cm.dynamic_cmg
+    ),
+    base_with_incentive AS (
+      SELECT b.*,
+        COALESCE(inc.incentive_per_head, 0) AS incentive_per_head
+      FROM base b
+      LEFT JOIN LATERAL (
+        SELECT incentive_per_head FROM incentives
+        WHERE tier <= b.achievement_ratio
+        ORDER BY tier DESC LIMIT 1
+      ) inc ON true
+    ),
+    telesales_metrics AS (
+      SELECT
+        month, dynamic_cmg, lead_customers,
+        COUNT(DISTINCT mmid) FILTER (WHERE customer_type IN ('new_customer','retention'))        AS ordered,
+        COUNT(DISTINCT mmid) FILTER (WHERE customer_type = 'new_customer')                       AS new_customers,
+        COUNT(DISTINCT mmid) FILTER (WHERE customer_type = 'retention')                          AS retention,
+        COUNT(DISTINCT order_number) FILTER (WHERE customer_type IN ('new_customer','retention')) AS hoc_orders,
+        COALESCE(SUM(sales_in_vat) FILTER (WHERE customer_type IN ('new_customer','retention')), 0) AS hoc_sales
+      FROM mart_telesales_orders
+      GROUP BY month, dynamic_cmg, lead_customers
     )
     INSERT INTO mart_performance (
       month, lead_customers, dynamic_cmg, total_calls, reached, ordered,
@@ -166,41 +187,35 @@ export async function buildMartPerformance(): Promise<number> {
     )
     SELECT
       b.month, b.lead_customers, b.dynamic_cmg, b.total_calls, b.reached,
-      COUNT(DISTINCT m.mmid) FILTER (WHERE m.customer_type IN ('new_customer','retention'))            AS ordered,
-      COUNT(DISTINCT m.mmid) FILTER (WHERE m.customer_type = 'new_customer')                           AS new_customers,
-      COUNT(DISTINCT m.mmid) FILTER (WHERE m.customer_type = 'retention')                              AS retention,
-      COUNT(DISTINCT m.order_number) FILTER (WHERE m.customer_type IN ('new_customer','retention'))    AS hoc_orders,
-      COALESCE(SUM(m.sales_in_vat) FILTER (WHERE m.customer_type IN ('new_customer','retention')), 0) AS hoc_sales,
+      COALESCE(tm.ordered, 0)       AS ordered,
+      COALESCE(tm.new_customers, 0) AS new_customers,
+      COALESCE(tm.retention, 0)     AS retention,
+      COALESCE(tm.hoc_orders, 0)    AS hoc_orders,
+      COALESCE(tm.hoc_sales, 0)     AS hoc_sales,
       b.actual_sales, b.sales_target, b.achievement_ratio,
-      (SELECT incentive_per_head FROM incentives WHERE tier <= b.achievement_ratio ORDER BY tier DESC LIMIT 1) AS incentive_per_head,
-      COUNT(DISTINCT m.mmid) FILTER (WHERE m.customer_type IN ('new_customer','retention')) *
-        COALESCE((SELECT incentive_per_head FROM incentives WHERE tier <= b.achievement_ratio ORDER BY tier DESC LIMIT 1), 0) AS total_incentive,
+      b.incentive_per_head,
+      COALESCE(tm.ordered, 0) * b.incentive_per_head                                           AS total_incentive,
       co.cost_per_agent,
       co.cost_per_supervisor,
       ah.supervisor_count,
       ah.agent_count,
       COALESCE(ah.supervisor_count, 0) * COALESCE(co.cost_per_supervisor, 0)
-        + COALESCE(ah.agent_count, 0) * COALESCE(co.cost_per_agent, 0)                                AS total_agent_cost,
-      (COUNT(DISTINCT m.mmid) FILTER (WHERE m.customer_type IN ('new_customer','retention')) *
-        COALESCE((SELECT incentive_per_head FROM incentives WHERE tier <= b.achievement_ratio ORDER BY tier DESC LIMIT 1), 0))
+        + COALESCE(ah.agent_count, 0) * COALESCE(co.cost_per_agent, 0)                         AS total_agent_cost,
+      COALESCE(tm.ordered, 0) * b.incentive_per_head
         + COALESCE(ah.supervisor_count, 0) * COALESCE(co.cost_per_supervisor, 0)
-        + COALESCE(ah.agent_count, 0) * COALESCE(co.cost_per_agent, 0)                                AS total_expense,
+        + COALESCE(ah.agent_count, 0) * COALESCE(co.cost_per_agent, 0)                         AS total_expense,
       ROUND(
         b.actual_sales / NULLIF(
-          (COUNT(DISTINCT m.mmid) FILTER (WHERE m.customer_type IN ('new_customer','retention')) *
-            COALESCE((SELECT incentive_per_head FROM incentives WHERE tier <= b.achievement_ratio ORDER BY tier DESC LIMIT 1), 0))
+          COALESCE(tm.ordered, 0) * b.incentive_per_head
           + COALESCE(ah.supervisor_count, 0) * COALESCE(co.cost_per_supervisor, 0)
           + COALESCE(ah.agent_count, 0) * COALESCE(co.cost_per_agent, 0)
         , 0), 2
-      )                                                                                                 AS roi
-    FROM base b
-    LEFT JOIN mart_telesales_orders m
-      ON m.month = b.month AND m.dynamic_cmg = b.dynamic_cmg AND m.lead_customers = b.lead_customers
+      )                                                                                          AS roi
+    FROM base_with_incentive b
+    LEFT JOIN telesales_metrics tm
+      ON tm.month = b.month AND tm.dynamic_cmg = b.dynamic_cmg AND tm.lead_customers = b.lead_customers
     LEFT JOIN costs co ON co.month = b.month
     LEFT JOIN agent_headcount ah ON ah.month = b.month
-    GROUP BY b.month, b.lead_customers, b.dynamic_cmg,
-             b.total_calls, b.reached, b.actual_sales, b.sales_target, b.achievement_ratio,
-             co.cost_per_agent, co.cost_per_supervisor, ah.supervisor_count, ah.agent_count
     ON CONFLICT (month, lead_customers, dynamic_cmg) DO UPDATE SET
       total_calls         = EXCLUDED.total_calls,
       reached             = EXCLUDED.reached,
