@@ -72,7 +72,7 @@ export async function refreshMartChunk(
   attributionDays = 14,
   truncate = false,
 ): Promise<{ processed: number; done: boolean; next_offset: number; total: number }> {
-  if (truncate) await query(`TRUNCATE TABLE mart_telesales_orders`)
+  if (truncate) await query(`DELETE FROM mart_telesales_orders WHERE true`)
 
   const totalRow = await queryOne<{ cnt: string }>(
     `SELECT COUNT(*) AS cnt FROM telesales_calls WHERE first_connected_date IS NOT NULL`
@@ -116,7 +116,7 @@ export async function buildMartCostIncentive(): Promise<number> {
       PRIMARY KEY (month, lead_customers, dynamic_cmg)
     )
   `)
-  await query(`TRUNCATE TABLE mart_cost_incentive`)
+  await query(`DELETE FROM mart_cost_incentive WHERE true`)
   await query(`
     WITH all_sales_by_cmg AS (
       SELECT DATE_TRUNC('month', order_date)::date AS month, dynamic_cmg, SUM(sales_in_vat) AS actual_sales
