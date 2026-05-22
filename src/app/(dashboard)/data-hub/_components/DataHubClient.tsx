@@ -583,6 +583,7 @@ export function DataHubClient() {
             <TabsTrigger value="status">Data Status</TabsTrigger>
             <TabsTrigger value="history">History</TabsTrigger>
             <TabsTrigger value="recovery">Recovery</TabsTrigger>
+            <TabsTrigger value="build">Build</TabsTrigger>
           </TabsList>
 
           <button
