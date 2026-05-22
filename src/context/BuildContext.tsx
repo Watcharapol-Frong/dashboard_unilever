@@ -10,7 +10,7 @@ export interface BuildProgress {
 
 export interface BuildResult {
   ok: boolean
-  rows?: { mart_main: number; cost_incentive: number }
+  rows?: { mart_main: number; performance: number }
   attribution_days?: number
   error?: string
 }
@@ -102,7 +102,7 @@ export function BuildProvider({ children }: { children: React.ReactNode }) {
       setBuildResult({
         ok: true,
         attribution_days: effectiveDays,
-        rows: { mart_main: martMainRows, cost_incentive: finalData.cost_incentive },
+        rows: { mart_main: martMainRows, performance: finalData.performance },
       })
       swrMutate('/api/data/mart-status')
     } catch {

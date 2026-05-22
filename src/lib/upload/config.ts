@@ -7,6 +7,7 @@ export type UploadFileType =
   | 'targets'
   | 'costs'
   | 'incentives'
+  | 'agent_headcount'
 
 export interface FileTypeConfig {
   label: string
@@ -96,6 +97,15 @@ export const FILE_TYPE_CONFIGS: Record<UploadFileType, FileTypeConfig> = {
     conflictKey: 'tier',
     requiredHeaders: ['tier', 'incentive_per_head'],
     schemaHeaders: ['tier', 'incentive_per_head'],
+  },
+  agent_headcount: {
+    label: 'Agent Headcount',
+    table: 'agent_headcount',
+    storageFolder: 'agent-headcount',
+    storageFilename: 'agent_headcount',
+    conflictKey: 'month',
+    requiredHeaders: ['month', 'supervisor_count', 'agent_count'],
+    schemaHeaders: ['month', 'supervisor_count', 'agent_count'],
   },
 }
 

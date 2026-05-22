@@ -107,6 +107,14 @@ CREATE TABLE IF NOT EXISTS incentives (
   updated_at         TIMESTAMPTZ DEFAULT NOW()
 );
 
+CREATE TABLE IF NOT EXISTS agent_headcount (
+  month            DATE PRIMARY KEY,
+  supervisor_count INT NOT NULL DEFAULT 0,
+  agent_count      INT NOT NULL DEFAULT 0,
+  batch_id         UUID REFERENCES upload_batches(id) ON DELETE SET NULL,
+  updated_at       TIMESTAMPTZ DEFAULT NOW()
+);
+
 -- ── Indexes ─────────────────────────────────────────────────────
 
 CREATE INDEX IF NOT EXISTS idx_online_sales_date    ON online_sales(order_date);
