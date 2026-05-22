@@ -58,10 +58,9 @@ export async function GET() {
           cs.lead_customers,
           cs.contact_status,
           CASE
-            WHEN os.is_new            THEN 'new_customer'
-            WHEN os.is_retention      THEN 'retention'
-            WHEN os.is_not_converted  THEN 'not_converted'
-            ELSE                           'no_hoc_order'
+            WHEN os.is_new OR os.is_retention THEN 'converted'
+            WHEN os.is_not_converted          THEN 'not_converted'
+            ELSE                                   'no_hoc_order'
           END AS conversion_status,
           COALESCE(os.hoc_sales, 0)        AS hoc_sales,
           os.days_to_first_order

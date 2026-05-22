@@ -12,21 +12,19 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 type Row = {
   lead_customers: string
   contact_status: 'not_called' | 'called_not_reached' | 'reached'
-  conversion_status: 'new_customer' | 'retention' | 'not_converted' | 'no_hoc_order'
+  conversion_status: 'converted' | 'not_converted' | 'no_hoc_order'
   lead_count: number
   hoc_sales: number
   avg_days_to_first_order: number | null
 }
 
 const CONVERSION_LABEL: Record<string, string> = {
-  new_customer:  'New Customer',
-  retention:     'Retention',
+  converted:     'Converted (HOC)',
   not_converted: 'Not Converted',
   no_hoc_order:  'No HOC Order',
 }
 const CONVERSION_COLOR: Record<string, string> = {
-  new_customer:  '#22c55e',
-  retention:     '#3b82f6',
+  converted:     '#22c55e',
   not_converted: '#f59e0b',
   no_hoc_order:  '#e2e8f0',
 }
@@ -76,13 +74,13 @@ export default function LeadsClient() {
     const called    = sumBy(filtered.filter(r => r.contact_status !== 'not_called'), 'lead_count')
     const reached   = sumBy(filtered.filter(r => r.contact_status === 'reached'), 'lead_count')
     const converted = sumBy(
-      filtered.filter(r => r.conversion_status === 'new_customer' || r.conversion_status === 'retention'),
+      filtered.filter(r => r.conversion_status === 'converted'),
       'lead_count'
     )
     const hoc_sales = sumBy(filtered, 'hoc_sales')
 
-    // Weighted average of days_to_first_order for new_customer rows only
-    const newRows = filtered.filter(r => r.conversion_status === 'new_customer' && r.avg_days_to_first_order !== null)
+    // Weighted average of days_to_first_order for converted rows only
+    const newRows = filtered.filter(r => r.conversion_status === 'converted' && r.avg_days_to_first_order !== null)
     const newTotal = sumBy(newRows, 'lead_count')
     const avgDays  = newTotal > 0
       ? newRows.reduce((a, r) => a + (r.avg_days_to_first_order! * r.lead_count), 0) / newTotal
@@ -100,8 +98,7 @@ export default function LeadsClient() {
       const pct100 = (n: number) => total > 0 ? Math.round((n / total) * 1000) / 10 : 0
       return {
         tier,
-        'New Customer':  pct100(sumBy(tierRows.filter(r => r.conversion_status === 'new_customer'), 'lead_count')),
-        'Retention':     pct100(sumBy(tierRows.filter(r => r.conversion_status === 'retention'), 'lead_count')),
+        'Converted':     pct100(sumBy(tierRows.filter(r => r.conversion_status === 'converted'), 'lead_count')),
         'Not Converted': pct100(sumBy(tierRows.filter(r => r.conversion_status === 'not_converted'), 'lead_count')),
         'No HOC Order':  pct100(sumBy(tierRows.filter(r => r.conversion_status === 'no_hoc_order'), 'lead_count')),
         _total: total,
@@ -115,7 +112,7 @@ export default function LeadsClient() {
     for (const r of filtered) {
       statusMap.set(r.conversion_status, (statusMap.get(r.conversion_status) ?? 0) + r.lead_count)
     }
-    return ['new_customer', 'retention', 'not_converted', 'no_hoc_order']
+    return ['converted', 'not_converted', 'no_hoc_order']
       .filter(s => statusMap.has(s))
       .map(s => ({ status: s, label: CONVERSION_LABEL[s], count: statusMap.get(s)! }))
   }, [filtered])
@@ -139,10 +136,10 @@ export default function LeadsClient() {
       const total     = sumBy(tierRows, 'lead_count')
       const called    = sumBy(tierRows.filter(r => r.contact_status !== 'not_called'), 'lead_count')
       const reached   = sumBy(tierRows.filter(r => r.contact_status === 'reached'), 'lead_count')
-      const newCust   = sumBy(tierRows.filter(r => r.conversion_status === 'new_customer'), 'lead_count')
-      const retention = sumBy(tierRows.filter(r => r.conversion_status === 'retention'), 'lead_count')
+      const newCust   = sumBy(tierRows.filter(r => r.conversion_status === 'converted'), 'lead_count')
+      const retention = 0
       const hocSales  = sumBy(tierRows, 'hoc_sales')
-      const newRows   = tierRows.filter(r => r.conversion_status === 'new_customer' && r.avg_days_to_first_order !== null)
+      const newRows   = tierRows.filter(r => r.conversion_status === 'converted' && r.avg_days_to_first_order !== null)
       const newTotal  = sumBy(newRows, 'lead_count')
       const avgDays   = newTotal > 0
         ? newRows.reduce((a, r) => a + (r.avg_days_to_first_order! * r.lead_count), 0) / newTotal
@@ -238,8 +235,7 @@ export default function LeadsClient() {
                 }}
               />
               <Legend />
-              <Bar dataKey="New Customer"  stackId="a" fill="#22c55e" />
-              <Bar dataKey="Retention"     stackId="a" fill="#3b82f6" />
+              <Bar dataKey="Converted"     stackId="a" fill="#22c55e" />
               <Bar dataKey="Not Converted" stackId="a" fill="#f59e0b" />
               <Bar dataKey="No HOC Order"  stackId="a" fill="#e2e8f0" radius={[4,4,0,0]} />
             </BarChart>
@@ -314,8 +310,7 @@ export default function LeadsClient() {
                 <th className="text-right py-2 pr-3 font-medium">Call %</th>
                 <th className="text-right py-2 pr-3 font-medium">Reached</th>
                 <th className="text-right py-2 pr-3 font-medium">Reach %</th>
-                <th className="text-right py-2 pr-3 font-medium">New</th>
-                <th className="text-right py-2 pr-3 font-medium">Retention</th>
+                <th className="text-right py-2 pr-3 font-medium">Converted</th>
                 <th className="text-right py-2 pr-3 font-medium">Conv %</th>
                 <th className="text-right py-2 pr-3 font-medium">HOC Sales</th>
                 <th className="text-right py-2 font-medium">Avg Days</th>
@@ -331,9 +326,8 @@ export default function LeadsClient() {
                   <td className="py-1.5 pr-3 text-right tabular-nums">{r.reached.toLocaleString()}</td>
                   <td className="py-1.5 pr-3 text-right tabular-nums text-muted-foreground">{pct(r.reached, r.called)}</td>
                   <td className="py-1.5 pr-3 text-right tabular-nums text-green-600">{r.newCust.toLocaleString()}</td>
-                  <td className="py-1.5 pr-3 text-right tabular-nums text-blue-600">{r.retention.toLocaleString()}</td>
                   <td className="py-1.5 pr-3 text-right tabular-nums">
-                    <ConvBadge value={(r.newCust + r.retention) / r.total * 100} />
+                    <ConvBadge value={r.newCust / r.total * 100} />
                   </td>
                   <td className="py-1.5 pr-3 text-right tabular-nums">{fmtBaht(r.hocSales)}</td>
                   <td className="py-1.5 text-right tabular-nums">{r.avgDays !== null ? `${r.avgDays.toFixed(1)}d` : '—'}</td>
