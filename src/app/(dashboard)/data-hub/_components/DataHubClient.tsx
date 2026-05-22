@@ -116,11 +116,12 @@ export function DataHubClient() {
 
   const effectiveDays = attributionDays === 'custom' ? Number(customDays) || 14 : attributionDays
 
+
   const startReplay = async () => {
     setReplayLoading(true)
     setReplayResult(null)
     try {
-      const res = await fetch('/api/system/replay', {
+      const res = await fetch('/api/data/upload/replay', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ table: replayTable }),
@@ -162,6 +163,7 @@ export function DataHubClient() {
     fetcher,
     { revalidateOnFocus: false, revalidateOnReconnect: false, revalidateIfStale: false }
   )
+
 
   // ── File processing ────────────────────────────────────────
   const processFile = useCallback((f: File) => {
@@ -580,7 +582,6 @@ export function DataHubClient() {
             <TabsTrigger value="overview">Overview</TabsTrigger>
             <TabsTrigger value="status">Data Status</TabsTrigger>
             <TabsTrigger value="history">History</TabsTrigger>
-            <TabsTrigger value="build">Build</TabsTrigger>
             <TabsTrigger value="recovery">Recovery</TabsTrigger>
           </TabsList>
 
