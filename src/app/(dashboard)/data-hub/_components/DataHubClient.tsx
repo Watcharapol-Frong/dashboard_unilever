@@ -124,33 +124,50 @@ export function DataHubClient() {
     setBuildResult(null)
     setBuildProgress(null)
 
-    const LIMIT = 200
+    const LIMIT = 750
+    const PARALLEL = 2
     let offset = 0
     let martMainRows = 0
 
     try {
       while (true) {
-        const res = await fetch('/api/system/refresh-mart/chunk', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            offset,
-            limit: LIMIT,
-            attribution_days: effectiveDays,
-            truncate: offset === 0,
-          }),
-        })
-        const data = await res.json()
-        if (!res.ok || !data.ok) {
-          setBuildResult({ ok: false, error: data.error ?? 'Chunk failed' })
-          return
+        // Fire up to PARALLEL requests concurrently
+        const promises = []
+        for (let i = 0; i < PARALLEL; i++) {
+          const currentOffset = offset + (i * LIMIT)
+          promises.push(
+            fetch('/api/system/refresh-mart/chunk', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                offset: currentOffset,
+                limit: LIMIT,
+                attribution_days: effectiveDays,
+                truncate: currentOffset === 0,
+              }),
+            }).then(res => res.json())
+          )
         }
 
-        martMainRows += data.processed
-        setBuildProgress({ current: data.next_offset, total: data.total, phase: 'chunking' })
+        const results = await Promise.all(promises)
 
-        if (data.done) break
-        offset = data.next_offset
+        let anyDone = false
+        let lastNextOffset = offset
+
+        for (const data of results) {
+          if (!data.ok) {
+            setBuildResult({ ok: false, error: data.error ?? 'Chunk failed' })
+            return
+          }
+          martMainRows += data.processed
+          lastNextOffset = Math.max(lastNextOffset, data.next_offset)
+          if (data.done) anyDone = true
+        }
+
+        setBuildProgress({ current: lastNextOffset, total: results[0].total, phase: 'chunking' })
+
+        if (anyDone) break
+        offset = lastNextOffset
       }
 
       setBuildProgress({ current: 0, total: 0, phase: 'finalizing' })
