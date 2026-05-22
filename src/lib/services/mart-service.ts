@@ -180,6 +180,93 @@ export async function buildMartCostIncentive(): Promise<number> {
   return Number(row?.cnt ?? 0)
 }
 
+export async function refreshMartForMmids(mmids: string[], attributionDays = 14): Promise<number> {
+  if (mmids.length === 0) return 0
+
+  await query(`DELETE FROM mart_telesales_orders WHERE mmid = ANY($1)`, [mmids])
+
+  await query(`
+    WITH base AS (
+      SELECT
+        tc.mmid,
+        tc.first_connected_date,
+        tc.agent,
+        tc.call_status,
+        tc.lead_customers,
+        s.order_number,
+        s.prod_num,
+        s.order_date,
+        s.channel,
+        s.dynamic_cmg,
+        s.sales_qty,
+        s.sales_in_vat,
+        s.product_name_th,
+        s.product_name_en,
+        s.brands,
+        s.class_name,
+        s.month,
+        (s.order_date - tc.first_connected_date)::INT AS days_to_order
+      FROM telesales_calls tc
+      JOIN sales_hoc_all s
+        ON  s.mmid       = tc.mmid
+        AND s.order_date >= tc.first_connected_date
+      WHERE tc.first_connected_date IS NOT NULL
+        AND tc.mmid = ANY($2)
+    ),
+    first_orders AS (
+      SELECT mmid, MIN(order_date) AS first_order_date
+      FROM base
+      GROUP BY mmid
+    ),
+    ranked AS (
+      SELECT
+        b.*,
+        fo.first_order_date,
+        ROW_NUMBER() OVER (
+          PARTITION BY b.mmid
+          ORDER BY b.order_date, b.order_number
+        ) AS order_seq_in_window
+      FROM base b
+      JOIN first_orders fo ON fo.mmid = b.mmid
+    )
+    INSERT INTO mart_telesales_orders (
+      mmid, order_number, order_date, channel, prod_num,
+      sales_qty, sales_in_vat, dynamic_cmg,
+      first_connected_date, agent, call_status, lead_customers,
+      days_to_order, order_seq_in_window, is_first_ever_order, customer_type,
+      product_name_th, product_name_en, brands, class_name, is_hoc_unilever,
+      month, refreshed_at
+    )
+    SELECT
+      mmid, order_number, order_date, channel, prod_num,
+      sales_qty, sales_in_vat, dynamic_cmg,
+      first_connected_date, agent, call_status, lead_customers,
+      days_to_order,
+      order_seq_in_window,
+      (order_date = first_order_date)                                          AS is_first_ever_order,
+      CASE
+        WHEN days_to_order > $1 AND order_date = first_order_date THEN 'first_order_not_converted'
+        WHEN days_to_order > $1                                   THEN 'retention_not_converted'
+        WHEN order_date = first_order_date                        THEN 'new_customer'
+        ELSE                                                           'retention'
+      END                                                                      AS customer_type,
+      product_name_th, product_name_en, brands, class_name,
+      TRUE                                                                     AS is_hoc_unilever,
+      month,
+      NOW()                                                                    AS refreshed_at
+    FROM ranked
+    ON CONFLICT (mmid, order_number, prod_num) DO UPDATE SET
+      days_to_order       = EXCLUDED.days_to_order,
+      order_seq_in_window = EXCLUDED.order_seq_in_window,
+      is_first_ever_order = EXCLUDED.is_first_ever_order,
+      customer_type       = EXCLUDED.customer_type,
+      refreshed_at        = EXCLUDED.refreshed_at
+  `, [attributionDays, mmids])
+
+  const row = await queryOne<{ cnt: string }>(`SELECT COUNT(*) AS cnt FROM mart_telesales_orders WHERE mmid = ANY($1)`, [mmids])
+  return Number(row?.cnt ?? 0)
+}
+
 export async function refreshAllMarts(attributionDays = 14): Promise<{ mart_main: number; cost_incentive: number }> {
   const mart_main      = await buildMartMain(attributionDays)
   const cost_incentive = await buildMartCostIncentive()
