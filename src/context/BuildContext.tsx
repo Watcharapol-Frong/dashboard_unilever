@@ -55,7 +55,7 @@ export function BuildProvider({ children }: { children: React.ReactNode }) {
         for (let i = 0; i < PARALLEL; i++) {
           const currentOffset = offset + i * LIMIT
           promises.push(
-            fetch('/api/system/refresh-mart/chunk', {
+            fetch('/api/data/refresh-mart/chunk', {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({
@@ -92,7 +92,7 @@ export function BuildProvider({ children }: { children: React.ReactNode }) {
       }
 
       setBuildProgress({ current: 0, total: 0, phase: 'finalizing' })
-      const finalRes  = await fetch('/api/system/refresh-mart/finalize', { method: 'POST' })
+      const finalRes  = await fetch('/api/data/refresh-mart/finalize', { method: 'POST' })
       const finalData = await finalRes.json()
       if (!finalRes.ok || !finalData.ok) {
         setBuildResult({ ok: false, error: finalData.error ?? 'Finalize failed' })
@@ -104,7 +104,7 @@ export function BuildProvider({ children }: { children: React.ReactNode }) {
         attribution_days: effectiveDays,
         rows: { mart_main: martMainRows, cost_incentive: finalData.cost_incentive },
       })
-      swrMutate('/api/system/mart-status')
+      swrMutate('/api/data/mart-status')
     } catch {
       setBuildResult({ ok: false, error: 'Network error' })
     } finally {

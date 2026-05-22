@@ -158,7 +158,7 @@ export function DataHubClient() {
     cost_incentive: { row_count: number; min_month: string | null; max_month: string | null; last_refreshed: string | null }
   }
   const { data: martStatus, isValidating: martValidating, mutate: mutateMart } = useSWR<MartStatus>(
-    '/api/system/mart-status',
+    '/api/data/mart-status',
     fetcher,
     { revalidateOnFocus: false, revalidateOnReconnect: false, revalidateIfStale: false }
   )
