@@ -1,8 +1,10 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
+  serverExternalPackages: ['papaparse'],
   experimental: {
-    serverComponentsExternalPackages: ['papaparse'],
-    bodySizeLimit: '10mb',
+    serverActions: {
+      bodySizeLimit: '10mb',
+    },
   },
 }
 

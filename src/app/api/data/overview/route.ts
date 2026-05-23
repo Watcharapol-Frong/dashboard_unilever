@@ -9,7 +9,6 @@ export async function GET() {
     const rows = await query<{
       month: string
       month_label: string
-      lead_customers: string
       dynamic_cmg: string
       total_calls: number
       reached: number
@@ -18,7 +17,6 @@ export async function GET() {
       retention: number
       hoc_orders: number
       hoc_sales: string
-      actual_sales: string
       sales_target: string
       achievement_ratio: string
       incentive_per_head: string
@@ -30,7 +28,6 @@ export async function GET() {
       SELECT
         month::text,
         TO_CHAR(month, 'FMMonth') AS month_label,
-        lead_customers,
         dynamic_cmg,
         total_calls,
         reached,
@@ -39,7 +36,6 @@ export async function GET() {
         retention,
         hoc_orders,
         hoc_sales,
-        actual_sales,
         sales_target,
         achievement_ratio,
         incentive_per_head,
@@ -48,13 +44,12 @@ export async function GET() {
         total_expense,
         roi
       FROM mart_performance
-      ORDER BY month, lead_customers, dynamic_cmg
+      ORDER BY month, dynamic_cmg
     `)
 
     const data = rows.map(r => ({
       month:             r.month,
       month_label:       r.month_label,
-      lead_customers:    r.lead_customers,
       dynamic_cmg:       r.dynamic_cmg,
       total_calls:       Number(r.total_calls ?? 0),
       reached:           Number(r.reached ?? 0),
@@ -63,7 +58,6 @@ export async function GET() {
       retention:         Number(r.retention ?? 0),
       hoc_orders:        Number(r.hoc_orders ?? 0),
       hoc_sales:         Number(r.hoc_sales ?? 0),
-      actual_sales:      Number(r.actual_sales ?? 0),
       sales_target:      Number(r.sales_target ?? 0),
       achievement_ratio: Number(r.achievement_ratio ?? 0),
       incentive_per_head:Number(r.incentive_per_head ?? 0),

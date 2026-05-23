@@ -12,7 +12,6 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 type Row = {
   month: string
   month_label: string
-  lead_customers: string
   dynamic_cmg: string
   total_calls: number
   reached: number
@@ -21,7 +20,6 @@ type Row = {
   retention: number
   hoc_orders: number
   hoc_sales: number
-  actual_sales: number
   sales_target: number
   achievement_ratio: number
   total_incentive: number
@@ -37,7 +35,6 @@ type Agg = {
   ordered: number
   hoc_orders: number
   total_incentive: number
-  actual_sales: number
   sales_target: number
   total_calls: number
   reached: number
@@ -47,65 +44,37 @@ type Agg = {
   achievement: number
 }
 
-/**
- * mart_performance has a cross-join structure:
- *   hoc_sales / new_customers / retention / ordered / total_incentive
- *     → correctly split per (month, dynamic_cmg, lead_customers) — sum directly
- *   actual_sales / sales_target
- *     → per (month, dynamic_cmg), duplicated across lead_customers — dedup before sum
- *   total_calls / reached
- *     → per (month, lead_customers), duplicated across dynamic_cmg — dedup before sum
- *   total_agent_cost
- *     → per (month), duplicated across all combinations — dedup before sum
- */
+// mart_performance grain: (month, dynamic_cmg)
+// total_calls/reached/total_incentive/total_agent_cost are month-level — dedup by month before summing
 function aggregate(rows: Row[]): Agg {
   const s = (k: keyof Row) => rows.reduce((a, r) => a + (r[k] as number), 0)
 
-  const hoc_sales       = s('hoc_sales')
-  const new_customers   = s('new_customers')
-  const retention       = s('retention')
-  const ordered         = s('ordered')
-  const hoc_orders      = s('hoc_orders')
-  const total_incentive = s('total_incentive')
-
-  const cmgSeen = new Set<string>()
-  let actual_sales = 0, sales_target = 0
-  for (const r of rows) {
-    const key = `${r.month}\0${r.dynamic_cmg}`
-    if (!cmgSeen.has(key)) {
-      cmgSeen.add(key)
-      actual_sales += r.actual_sales
-      sales_target += r.sales_target
-    }
-  }
-
-  const leadSeen = new Set<string>()
-  let total_calls = 0, reached = 0
-  for (const r of rows) {
-    const key = `${r.month}\0${r.lead_customers}`
-    if (!leadSeen.has(key)) {
-      leadSeen.add(key)
-      total_calls += r.total_calls
-      reached     += r.reached
-    }
-  }
+  const hoc_sales     = s('hoc_sales')
+  const new_customers = s('new_customers')
+  const retention     = s('retention')
+  const ordered       = s('ordered')
+  const hoc_orders    = s('hoc_orders')
+  const sales_target  = s('sales_target')
 
   const monthSeen = new Set<string>()
-  let total_agent_cost = 0
+  let total_calls = 0, reached = 0, total_incentive = 0, total_agent_cost = 0
   for (const r of rows) {
     if (!monthSeen.has(r.month)) {
       monthSeen.add(r.month)
+      total_calls      += r.total_calls
+      reached          += r.reached
+      total_incentive  += r.total_incentive
       total_agent_cost += r.total_agent_cost
     }
   }
 
   const total_expense = total_incentive + total_agent_cost
-  const roi           = total_expense > 0 ? actual_sales / total_expense : 0
+  const roi           = total_expense > 0 ? hoc_sales  / total_expense : 0
   const achievement   = sales_target  > 0 ? (hoc_sales / sales_target) * 100 : 0
 
   return {
     hoc_sales, new_customers, retention, ordered, hoc_orders, total_incentive,
-    actual_sales, sales_target, total_calls, reached,
+    sales_target, total_calls, reached,
     total_agent_cost, total_expense, roi, achievement,
   }
 }
@@ -127,22 +96,19 @@ export default function OverviewClient() {
     dedupingInterval: 300_000,
   })
 
-  const months      = useMemo(() => [...new Set(rows.map(r => r.month))].sort(), [rows])
-  const leadOptions = useMemo(() => ['all', ...[...new Set(rows.map(r => r.lead_customers))]], [rows])
-  const cmgOptions  = useMemo(() => ['all', ...[...new Set(rows.map(r => r.dynamic_cmg))]], [rows])
+  const months     = useMemo(() => [...new Set(rows.map(r => r.month))].sort(), [rows])
+  const cmgOptions = useMemo(() => ['all', ...[...new Set(rows.map(r => r.dynamic_cmg))]], [rows])
 
-  const [filterLead, setFilterLead] = useState('all')
   const [filterCmg,  setFilterCmg]  = useState('all')
   const [filterFrom, setFilterFrom] = useState('all')
   const [filterTo,   setFilterTo]   = useState('all')
 
   const filtered = useMemo(() => rows.filter(r => {
-    if (filterLead !== 'all' && r.lead_customers !== filterLead) return false
-    if (filterCmg  !== 'all' && r.dynamic_cmg    !== filterCmg)  return false
+    if (filterCmg  !== 'all' && r.dynamic_cmg !== filterCmg)  return false
     if (filterFrom !== 'all' && r.month < filterFrom) return false
     if (filterTo   !== 'all' && r.month > filterTo)   return false
     return true
-  }), [rows, filterLead, filterCmg, filterFrom, filterTo])
+  }), [rows, filterCmg, filterFrom, filterTo])
 
   const kpi = useMemo(() => aggregate(filtered), [filtered])
 
@@ -205,17 +171,6 @@ export default function OverviewClient() {
           </SelectContent>
         </Select>
 
-        <Select value={filterLead} onValueChange={setFilterLead}>
-          <SelectTrigger className="w-44">
-            <SelectValue placeholder="Lead Customers" />
-          </SelectTrigger>
-          <SelectContent>
-            {leadOptions.map(v => (
-              <SelectItem key={v} value={v}>{v === 'all' ? 'ทุก Lead' : v}</SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-
         <Select value={filterCmg} onValueChange={setFilterCmg}>
           <SelectTrigger className="w-44">
             <SelectValue placeholder="Dynamic CMG" />
@@ -227,9 +182,9 @@ export default function OverviewClient() {
           </SelectContent>
         </Select>
 
-        {(filterLead !== 'all' || filterCmg !== 'all' || filterFrom !== 'all' || filterTo !== 'all') && (
+        {(filterCmg !== 'all' || filterFrom !== 'all' || filterTo !== 'all') && (
           <button
-            onClick={() => { setFilterLead('all'); setFilterCmg('all'); setFilterFrom('all'); setFilterTo('all') }}
+            onClick={() => { setFilterCmg('all'); setFilterFrom('all'); setFilterTo('all') }}
             className="text-xs text-muted-foreground underline"
           >
             ล้างตัวกรอง
@@ -333,7 +288,6 @@ export default function OverviewClient() {
             <thead>
               <tr className="border-b text-muted-foreground">
                 <th className="text-left py-2 pr-3 font-medium">เดือน</th>
-                <th className="text-left py-2 pr-3 font-medium">Lead</th>
                 <th className="text-left py-2 pr-3 font-medium">CMG</th>
                 <th className="text-right py-2 pr-3 font-medium">HOC Sales</th>
                 <th className="text-right py-2 pr-3 font-medium">Target</th>
@@ -347,7 +301,6 @@ export default function OverviewClient() {
               {filtered.map((r, i) => (
                 <tr key={i} className="border-b last:border-0 hover:bg-muted/40">
                   <td className="py-1.5 pr-3">{r.month_label}</td>
-                  <td className="py-1.5 pr-3 text-muted-foreground">{r.lead_customers}</td>
                   <td className="py-1.5 pr-3 text-muted-foreground">{r.dynamic_cmg}</td>
                   <td className="py-1.5 pr-3 text-right tabular-nums">{fmtBaht(r.hoc_sales)}</td>
                   <td className="py-1.5 pr-3 text-right tabular-nums text-muted-foreground">{fmtBaht(r.sales_target)}</td>

@@ -12,11 +12,11 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
       <BuildProvider>
         <SidebarProvider>
           <AppSidebar />
-          <SidebarInset>
+          <SidebarInset className="min-w-0">
             <TopBar />
-            <main className="flex-1 p-6 overflow-auto">
+            <div className="flex-1 p-6 overflow-x-auto">
               {children}
-            </main>
+            </div>
           </SidebarInset>
         </SidebarProvider>
       </BuildProvider>
