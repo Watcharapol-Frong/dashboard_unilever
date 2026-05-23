@@ -1,26 +1,19 @@
 'use client'
 
-import useSWR from 'swr'
 import { useMemo, useState } from 'react'
 import { Input } from '@/components/ui/input'
 import { DataTable } from '@/components/ui/data-table'
 import { KpiCard } from '@/components/dashboard/KpiCard'
+import { KpiGrid } from '@/components/dashboard/KpiGrid'
+import { FilterBar } from '@/components/dashboard/FilterBar'
 import { FilterSelect } from '@/components/dashboard/FilterSelect'
 import { PageLoading, PageEmpty, PageError } from '@/components/dashboard/PageState'
+import { useDashboardSWR } from '@/hooks/useDashboardSWR'
 import { fmtPct } from '@/lib/formatters'
 import { leadsColumns, type Lead } from './columns'
 
-const fetcher = async (url: string): Promise<Lead[]> => {
-  const res  = await fetch(url)
-  const json = await res.json()
-  if (!res.ok || !json.ok) throw new Error(json.error ?? `HTTP ${res.status}`)
-  return json.data as Lead[]
-}
-
 export default function LeadsClient() {
-  const { data: rows = [], isLoading, error } = useSWR<Lead[]>('/api/data/leads', fetcher, {
-    revalidateOnFocus: false, revalidateOnReconnect: false, dedupingInterval: 300_000,
-  })
+  const { data: rows = [], isLoading, error } = useDashboardSWR<Lead[]>('/api/data/leads')
 
   const [search,        setSearch]        = useState('')
   const [filterTier,    setFilterTier]    = useState('all')
@@ -54,8 +47,8 @@ export default function LeadsClient() {
     })
   }, [rows, search, filterTier, filterContact, filterConv, filterCmg, filterAgent])
 
-  const hasFilter = search || filterTier !== 'all' || filterContact !== 'all' ||
-                    filterConv !== 'all' || filterCmg !== 'all' || filterAgent !== 'all'
+  const hasFilter = !!(search || filterTier !== 'all' || filterContact !== 'all' ||
+                    filterConv !== 'all' || filterCmg !== 'all' || filterAgent !== 'all')
 
   if (isLoading) return <PageLoading />
   if (error)     return <PageError message={error.message} />
@@ -67,7 +60,7 @@ export default function LeadsClient() {
     <div className="space-y-5">
 
       {/* KPI Cards */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+      <KpiGrid cols={4}>
         <KpiCard title="Total Leads" value={kpi.total.toLocaleString()} />
         <KpiCard
           title="Contacted"
@@ -86,10 +79,16 @@ export default function LeadsClient() {
           subtitle={kpi.converted > 0 ? `avg ${(kpi.orders / kpi.converted).toFixed(1)}x / person` : undefined}
           valueClassName="text-green-600"
         />
-      </div>
+      </KpiGrid>
 
       {/* Filters */}
-      <div className="flex flex-wrap gap-2 items-center">
+      <FilterBar
+        hasFilter={hasFilter}
+        onClear={() => {
+          setSearch(''); setFilterTier('all'); setFilterContact('all')
+          setFilterConv('all'); setFilterCmg('all'); setFilterAgent('all')
+        }}
+      >
         <Input
           placeholder="Search MMID / Name..."
           value={search}
@@ -134,18 +133,7 @@ export default function LeadsClient() {
           onChange={setFilterAgent}
           options={agentOptions.map(v => ({ value: v, label: v }))}
         />
-        {hasFilter && (
-          <button
-            onClick={() => {
-              setSearch(''); setFilterTier('all'); setFilterContact('all')
-              setFilterConv('all'); setFilterCmg('all'); setFilterAgent('all')
-            }}
-            className="text-xs text-muted-foreground underline"
-          >
-            Clear filters
-          </button>
-        )}
-      </div>
+      </FilterBar>
 
       <DataTable
         key={`${search}|${filterTier}|${filterContact}|${filterConv}|${filterCmg}|${filterAgent}`}

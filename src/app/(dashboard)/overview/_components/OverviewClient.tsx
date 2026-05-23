@@ -1,6 +1,5 @@
 'use client'
 
-import useSWR from 'swr'
 import { useMemo, useState } from 'react'
 import {
   ComposedChart, Bar, Line, XAxis, YAxis,
@@ -11,8 +10,10 @@ import {
   ChartContainer, ChartTooltip, ChartTooltipContent, type ChartConfig,
 } from '@/components/ui/chart'
 import { KpiCard } from '@/components/dashboard/KpiCard'
+import { KpiGrid } from '@/components/dashboard/KpiGrid'
 import { FilterSelect } from '@/components/dashboard/FilterSelect'
 import { PageLoading, PageEmpty } from '@/components/dashboard/PageState'
+import { useDashboardSWR } from '@/hooks/useDashboardSWR'
 import { fmtBaht, fmt } from '@/lib/formatters'
 import { type OverviewRow } from './columns'
 
@@ -52,9 +53,6 @@ function aggregate(rows: OverviewRow[]): Agg {
   }
 }
 
-const fetcher = (url: string) =>
-  fetch(url).then(r => r.json()).then(d => d.data as OverviewRow[])
-
 const chartConfig = {
   hoc_sales:    { label: 'HOC Sales',  color: '#3b82f6' },
   sales_target: { label: 'Target',     color: '#e2e8f0' },
@@ -74,9 +72,7 @@ function roiColor(v: number) {
 }
 
 export default function OverviewClient() {
-  const { data: rows = [], isLoading } = useSWR<OverviewRow[]>('/api/data/overview', fetcher, {
-    revalidateOnFocus: false, revalidateOnReconnect: false, dedupingInterval: 300_000,
-  })
+  const { data: rows = [], isLoading } = useDashboardSWR<OverviewRow[]>('/api/data/overview')
 
   const months     = useMemo(() => [...new Set(rows.map(r => r.month))].sort(), [rows])
   const cmgOptions = useMemo(() => [...new Set(rows.map(r => r.dynamic_cmg))].sort(), [rows])
@@ -177,7 +173,7 @@ export default function OverviewClient() {
       </div>
 
       {/* KPI Cards */}
-      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-4">
+      <KpiGrid cols={6}>
         <KpiCard
           title="HOC Sales"
           value={fmtBaht(kpi.hoc_sales)}
@@ -210,7 +206,7 @@ export default function OverviewClient() {
           subtitle="Sales / Expense"
           valueClassName={roiColor(kpi.roi)}
         />
-      </div>
+      </KpiGrid>
 
       {/* HOC Sales vs Target */}
       <Card>
