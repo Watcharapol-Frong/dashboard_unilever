@@ -106,7 +106,7 @@ export default function LeadsClient() {
           placeholder="Search MMID / Name..."
           value={search}
           onChange={e => setSearch(e.target.value)}
-          className="h-8 w-48 text-sm"
+          className="h-8 w-full sm:w-48 text-sm"
         />
 
         <Filter label="All Tiers" value={filterTier} onChange={setFilterTier}
@@ -167,7 +167,7 @@ function Filter({ label, value, onChange, options }: {
 }) {
   return (
     <Select value={value} onValueChange={onChange}>
-      <SelectTrigger className="h-8 w-36 text-sm">
+      <SelectTrigger className="h-8 w-full sm:w-36 text-sm">
         <SelectValue placeholder={label} />
       </SelectTrigger>
       <SelectContent>

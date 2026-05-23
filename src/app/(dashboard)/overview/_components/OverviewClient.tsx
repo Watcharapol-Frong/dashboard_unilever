@@ -144,7 +144,7 @@ export default function OverviewClient() {
       {/* Filters */}
       <div className="flex flex-wrap gap-3 items-center">
         <Select value={filterFrom} onValueChange={setFilterFrom}>
-          <SelectTrigger className="w-36">
+          <SelectTrigger className="w-full sm:w-36">
             <SelectValue placeholder="จากเดือน" />
           </SelectTrigger>
           <SelectContent>
@@ -158,7 +158,7 @@ export default function OverviewClient() {
         </Select>
 
         <Select value={filterTo} onValueChange={setFilterTo}>
-          <SelectTrigger className="w-36">
+          <SelectTrigger className="w-full sm:w-36">
             <SelectValue placeholder="ถึงเดือน" />
           </SelectTrigger>
           <SelectContent>
@@ -172,7 +172,7 @@ export default function OverviewClient() {
         </Select>
 
         <Select value={filterCmg} onValueChange={setFilterCmg}>
-          <SelectTrigger className="w-44">
+          <SelectTrigger className="w-full sm:w-44">
             <SelectValue placeholder="Dynamic CMG" />
           </SelectTrigger>
           <SelectContent>

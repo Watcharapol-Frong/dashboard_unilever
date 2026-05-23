@@ -333,7 +333,7 @@ export function DataHubClient() {
             onDrop={onDrop}
             onClick={() => inputRef.current?.click()}
             className={cn(
-              'border-2 border-dashed rounded-xl p-10 text-center cursor-pointer transition-colors',
+              'border-2 border-dashed rounded-xl p-6 sm:p-10 text-center cursor-pointer transition-colors',
               dragOver ? 'border-[#003DA6] bg-blue-50' : 'border-gray-200 hover:border-[#003DA6] hover:bg-gray-50',
               step !== 'select' && 'border-solid border-gray-200',
             )}
@@ -577,8 +577,8 @@ export function DataHubClient() {
 
       {/* Overview + Data Status + Upload History Tabs */}
       <Tabs defaultValue="overview" className="gap-4">
-        <div className="flex items-center justify-between">
-          <TabsList>
+        <div className="flex items-center justify-between gap-2 overflow-x-auto">
+          <TabsList className="shrink-0">
             <TabsTrigger value="overview">Overview</TabsTrigger>
             <TabsTrigger value="status">Data Status</TabsTrigger>
             <TabsTrigger value="history">History</TabsTrigger>

@@ -104,7 +104,7 @@ export function TopBar({ title }: { title?: string }) {
   const customLabel = `${format(customRange.from, 'dd MMM yy')} – ${format(customRange.to, 'dd MMM yy')}`
 
   return (
-    <header className="no-print sticky top-0 z-10 bg-background/95 backdrop-blur border-b px-4 py-3 flex items-center justify-between">
+    <header className="no-print sticky top-0 z-10 bg-background/95 backdrop-blur border-b px-3 sm:px-4 py-2 sm:py-3 flex flex-wrap items-center justify-between gap-y-2">
       {/* Left */}
       <div className="flex items-center gap-2">
         <SidebarTrigger className="h-8 w-8" />
@@ -120,7 +120,7 @@ export function TopBar({ title }: { title?: string }) {
 
       {/* Right */}
       {!hideControls && (
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-1.5 sm:gap-3">
 
           {/* Mode tabs */}
           <div className="flex items-center border rounded-lg overflow-hidden text-sm">
@@ -128,7 +128,7 @@ export function TopBar({ title }: { title?: string }) {
               <button
                 key={m}
                 onClick={() => handleModeClick(m)}
-                className={`px-3 py-1.5 font-medium transition-colors ${
+                className={`px-2 py-1 sm:px-3 sm:py-1.5 text-xs sm:text-sm font-medium transition-colors ${
                   mode === m
                     ? 'bg-[#003DA6] text-white'
                     : 'text-muted-foreground hover:bg-muted'
@@ -144,13 +144,13 @@ export function TopBar({ title }: { title?: string }) {
             {mode === 'custom' ? (
               <button
                 onClick={() => setShowPicker(v => !v)}
-                className="flex items-center gap-2 px-3 py-1.5 h-8 border rounded-lg text-sm font-medium hover:bg-muted transition-colors"
+                className="flex items-center gap-1.5 px-2 sm:px-3 py-1 sm:py-1.5 h-7 sm:h-8 border rounded-lg text-xs sm:text-sm font-medium hover:bg-muted transition-colors"
               >
                 <CalendarDays className="h-3.5 w-3.5 text-muted-foreground" />
                 {customLabel}
               </button>
             ) : (
-              <span className="px-3 py-1.5 text-sm font-medium text-muted-foreground">
+              <span className="hidden sm:block px-2 sm:px-3 py-1 sm:py-1.5 text-xs sm:text-sm font-medium text-muted-foreground">
                 {getPeriodLabel(mode, anchor)}
               </span>
             )}
