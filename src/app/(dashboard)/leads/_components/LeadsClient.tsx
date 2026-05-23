@@ -144,9 +144,6 @@ export default function LeadsClient() {
           </button>
         )}
 
-        <span className="ml-auto text-xs text-muted-foreground">
-          {filtered.length.toLocaleString()} records
-        </span>
       </div>
 
       {/* Table — key resets internal page index whenever filters change */}
