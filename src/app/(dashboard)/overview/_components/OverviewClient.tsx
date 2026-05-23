@@ -8,25 +8,8 @@ import {
 } from 'recharts'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
-
-type Row = {
-  month: string
-  month_label: string
-  dynamic_cmg: string
-  total_calls: number
-  reached: number
-  ordered: number
-  new_customers: number
-  retention: number
-  hoc_orders: number
-  hoc_sales: number
-  sales_target: number
-  achievement_ratio: number
-  total_incentive: number
-  total_agent_cost: number
-  total_expense: number
-  roi: number
-}
+import { DataTable } from '@/components/ui/data-table'
+import { overviewColumns, type OverviewRow } from './columns'
 
 type Agg = {
   hoc_sales: number
@@ -44,8 +27,8 @@ type Agg = {
   achievement: number
 }
 
-function aggregate(rows: Row[]): Agg {
-  const s = (k: keyof Row) => rows.reduce((a, r) => a + (r[k] as number), 0)
+function aggregate(rows: OverviewRow[]): Agg {
+  const s = (k: keyof OverviewRow) => rows.reduce((a, r) => a + (r[k] as number), 0)
 
   const hoc_sales     = s('hoc_sales')
   const new_customers = s('new_customers')
@@ -78,7 +61,7 @@ function aggregate(rows: Row[]): Agg {
 }
 
 const fetcher = (url: string) =>
-  fetch(url).then(r => r.json()).then(d => d.data as Row[])
+  fetch(url).then(r => r.json()).then(d => d.data as OverviewRow[])
 
 const fmt = (n: number) =>
   n >= 1_000_000 ? `${(n / 1_000_000).toFixed(2)}M`
@@ -88,40 +71,19 @@ const fmt = (n: number) =>
 const fmtBaht = (n: number) => `฿${fmt(n)}`
 
 export default function OverviewClient() {
-  const { data: rows = [], isLoading } = useSWR<Row[]>('/api/data/overview', fetcher, {
+  const { data: rows = [], isLoading } = useSWR<OverviewRow[]>('/api/data/overview', fetcher, {
     revalidateOnFocus: false,
     revalidateOnReconnect: false,
     dedupingInterval: 300_000,
   })
 
-  const months     = useMemo(() => [...new Set(rows.map(r => r.month))].sort(), [rows])
   const cmgOptions = useMemo(() => [...new Set(rows.map(r => r.dynamic_cmg))], [rows])
+  const [filterCmg, setFilterCmg] = useState('all')
 
-  const [filterCmg,  setFilterCmg]  = useState('all')
-  const [rangeFrom,  setRangeFrom]  = useState<string | null>(null)
-  const [rangeTo,    setRangeTo]    = useState<string | null>(null)
-  const [hoverMonth, setHoverMonth] = useState<string | null>(null)
-
-  const handleMonthClick = (m: string) => {
-    if (!rangeFrom || (rangeFrom && rangeTo)) {
-      setRangeFrom(m); setRangeTo(null)
-    } else if (m === rangeFrom) {
-      setRangeFrom(null); setRangeTo(null)
-    } else if (m < rangeFrom) {
-      setRangeFrom(m); setRangeTo(rangeFrom)
-    } else {
-      setRangeTo(m)
-    }
-  }
-
-  const filtered = useMemo(() => rows.filter(r => {
-    if (filterCmg !== 'all' && r.dynamic_cmg !== filterCmg) return false
-    const effectiveTo = rangeTo ?? hoverMonth
-    if (rangeFrom && r.month < rangeFrom)  return false
-    if (effectiveTo && rangeFrom && r.month > effectiveTo) return false
-    if (rangeFrom && !effectiveTo && r.month !== rangeFrom) return false
-    return true
-  }), [rows, filterCmg, rangeFrom, rangeTo, hoverMonth])
+  const filtered = useMemo(() =>
+    filterCmg === 'all' ? rows : rows.filter(r => r.dynamic_cmg === filterCmg),
+    [rows, filterCmg]
+  )
 
   const kpi = useMemo(() => aggregate(filtered), [filtered])
 
@@ -129,16 +91,21 @@ export default function OverviewClient() {
     const monthSet = [...new Set(filtered.map(r => r.month))].sort()
     return monthSet.map(month => {
       const mRows = filtered.filter(r => r.month === month)
-      const agg = aggregate(mRows)
+      const agg   = aggregate(mRows)
       const label = mRows[0]?.month_label ?? month
-      return { month, month_label: label, ...agg }
+      const total = agg.new_customers + agg.retention
+      return {
+        month, month_label: label, ...agg,
+        new_pct:       total > 0 ? (agg.new_customers / total) * 100 : 0,
+        retention_pct: total > 0 ? (agg.retention     / total) * 100 : 0,
+      }
     })
   }, [filtered])
 
   if (isLoading) {
     return (
       <div className="flex items-center justify-center h-64 text-muted-foreground text-sm">
-        กำลังโหลดข้อมูล...
+        Loading...
       </div>
     )
   }
@@ -146,86 +113,57 @@ export default function OverviewClient() {
   if (rows.length === 0) {
     return (
       <div className="flex flex-col items-center justify-center h-64 gap-2 text-muted-foreground text-sm">
-        <p>ยังไม่มีข้อมูล</p>
-        <p className="text-xs">กรุณา Build Mart ก่อนใช้งาน</p>
+        <p>No data available</p>
+        <p className="text-xs">Please run Build Mart first</p>
       </div>
     )
   }
 
-  const hasRange = !!(rangeFrom || rangeTo)
-
   return (
     <div className="space-y-5">
 
-      {/* Month Grid Control */}
-      <Card>
-        <CardContent className="pt-4 pb-3">
-          <div className="flex items-center justify-between mb-3">
-            <p className="text-xs font-medium text-muted-foreground">เลือกช่วงเวลา</p>
-            <div className="flex items-center gap-3">
-              {hasRange && (
-                <button
-                  onClick={() => { setRangeFrom(null); setRangeTo(null) }}
-                  className="text-xs text-muted-foreground underline"
-                >
-                  ล้าง
-                </button>
-              )}
-              <Select value={filterCmg} onValueChange={setFilterCmg}>
-                <SelectTrigger className="h-7 w-36 text-xs">
-                  <SelectValue placeholder="Dynamic CMG" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">ทุก CMG</SelectItem>
-                  {cmgOptions.map(v => <SelectItem key={v} value={v}>{v}</SelectItem>)}
-                </SelectContent>
-              </Select>
-            </div>
-          </div>
-
-          <MonthGrid
-            months={months}
-            from={rangeFrom}
-            to={rangeTo}
-            hover={hoverMonth}
-            onClick={handleMonthClick}
-            onHover={setHoverMonth}
-          />
-
-          {rangeFrom && (
-            <p className="text-xs text-muted-foreground mt-2">
-              {rangeTo
-                ? `แสดง ${labelOf(rangeFrom)} – ${labelOf(rangeTo)}`
-                : `เลือกเดือนสิ้นสุด (กำลังแสดง ${labelOf(rangeFrom)})`}
-            </p>
-          )}
-        </CardContent>
-      </Card>
+      {/* CMG Filter */}
+      <div className="flex items-center gap-2">
+        <Select value={filterCmg} onValueChange={setFilterCmg}>
+          <SelectTrigger className="h-8 w-full sm:w-44 text-sm">
+            <SelectValue placeholder="Dynamic CMG" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">All CMG</SelectItem>
+            {cmgOptions.map(v => <SelectItem key={v} value={v}>{v}</SelectItem>)}
+          </SelectContent>
+        </Select>
+        {filterCmg !== 'all' && (
+          <button onClick={() => setFilterCmg('all')} className="text-xs text-muted-foreground underline">
+            Clear
+          </button>
+        )}
+      </div>
 
       {/* KPI Cards */}
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4">
-        <KpiCard title="HOC Sales" value={fmtBaht(kpi.hoc_sales)} sub={`เป้า ${fmtBaht(kpi.sales_target)}`} />
+        <KpiCard title="HOC Sales" value={fmtBaht(kpi.hoc_sales)} sub={`Target ${fmtBaht(kpi.sales_target)}`} />
         <KpiCard
           title="Achievement"
           value={`${kpi.achievement.toFixed(1)}%`}
-          sub={kpi.achievement >= 100 ? 'บรรลุเป้า ✓' : 'ต่ำกว่าเป้า'}
+          sub={kpi.achievement >= 100 ? 'Target reached ✓' : 'Below target'}
           highlight={kpi.achievement >= 100 ? 'green' : kpi.achievement >= 80 ? 'yellow' : 'red'}
         />
-        <KpiCard title="New Customers" value={kpi.new_customers.toLocaleString()} sub="ลูกค้าใหม่ HOC" />
-        <KpiCard title="Retention" value={kpi.retention.toLocaleString()} sub="ลูกค้าซื้อซ้ำ HOC" />
-        <KpiCard title="Total Calls" value={kpi.total_calls.toLocaleString()} sub={`รับสาย ${kpi.reached.toLocaleString()}`} />
+        <KpiCard title="New Customers" value={kpi.new_customers.toLocaleString()} sub="HOC new customers" />
+        <KpiCard title="Retention" value={kpi.retention.toLocaleString()} sub="HOC repeat customers" />
+        <KpiCard title="Total Calls" value={kpi.total_calls.toLocaleString()} sub={`Reached ${kpi.reached.toLocaleString()}`} />
         <KpiCard
           title="ROI"
           value={kpi.roi > 0 ? `${kpi.roi.toFixed(2)}x` : '—'}
-          sub="ยอดขาย HOC / ค่าใช้จ่ายรวม"
+          sub="HOC Sales / Total Expense"
           highlight={kpi.roi >= 10 ? 'green' : kpi.roi >= 5 ? 'yellow' : kpi.roi > 0 ? 'red' : undefined}
         />
       </div>
 
-      {/* Sales vs Target */}
+      {/* HOC Sales vs Target */}
       <Card>
         <CardHeader>
-          <CardTitle className="text-sm font-medium">HOC Sales vs Target รายเดือน</CardTitle>
+          <CardTitle className="text-sm font-medium">HOC Sales vs Target</CardTitle>
         </CardHeader>
         <CardContent>
           <ResponsiveContainer width="100%" height={280}>
@@ -241,15 +179,15 @@ export default function OverviewClient() {
                 }}
               />
               <Legend />
-              <Bar yAxisId="sales" dataKey="hoc_sales" name="HOC Sales" fill="#3b82f6" radius={[4, 4, 0, 0]} />
-              <Bar yAxisId="sales" dataKey="sales_target" name="Target" fill="#e2e8f0" radius={[4, 4, 0, 0]} />
+              <Bar yAxisId="sales" dataKey="hoc_sales"    name="HOC Sales" fill="#3b82f6" radius={[4, 4, 0, 0]} />
+              <Bar yAxisId="sales" dataKey="sales_target" name="Target"    fill="#e2e8f0" radius={[4, 4, 0, 0]} />
               <Line yAxisId="pct" dataKey="achievement" name="achievement" type="monotone" stroke="#f59e0b" strokeWidth={2} dot={{ r: 3 }} />
             </ComposedChart>
           </ResponsiveContainer>
         </CardContent>
       </Card>
 
-      {/* New vs Retention + ROI */}
+      {/* New vs Retention (100% Stacked) + ROI */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         <Card>
           <CardHeader>
@@ -260,11 +198,18 @@ export default function OverviewClient() {
               <BarChart data={byMonth} margin={{ top: 4, right: 8, bottom: 4, left: 0 }}>
                 <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
                 <XAxis dataKey="month_label" tick={{ fontSize: 12 }} />
-                <YAxis tick={{ fontSize: 11 }} width={40} />
-                <Tooltip />
-                <Legend />
-                <Bar dataKey="new_customers" name="New" stackId="a" fill="#22c55e" />
-                <Bar dataKey="retention" name="Retention" stackId="a" fill="#3b82f6" radius={[4, 4, 0, 0]} />
+                <YAxis tick={{ fontSize: 11 }} width={44} tickFormatter={v => `${v}%`} domain={[0, 100]} />
+                <Tooltip
+                  formatter={(value: number, name: string) => [
+                    `${value.toFixed(1)}%`,
+                    name === 'new_pct' ? 'New' : 'Retention',
+                  ]}
+                />
+                <Legend
+                  formatter={(value: string) => value === 'new_pct' ? 'New' : 'Retention'}
+                />
+                <Bar dataKey="new_pct"       name="new_pct"       stackId="a" fill="#22c55e" />
+                <Bar dataKey="retention_pct" name="retention_pct" stackId="a" fill="#3b82f6" radius={[4, 4, 0, 0]} />
               </BarChart>
             </ResponsiveContainer>
           </CardContent>
@@ -272,7 +217,7 @@ export default function OverviewClient() {
 
         <Card>
           <CardHeader>
-            <CardTitle className="text-sm font-medium">ROI รายเดือน (เท่า)</CardTitle>
+            <CardTitle className="text-sm font-medium">ROI by Month</CardTitle>
           </CardHeader>
           <CardContent>
             <ResponsiveContainer width="100%" height={240}>
@@ -288,107 +233,22 @@ export default function OverviewClient() {
         </Card>
       </div>
 
-      {/* Detail table */}
+      {/* Detail Table */}
       <Card>
         <CardHeader>
-          <CardTitle className="text-sm font-medium">ตารางรายละเอียด</CardTitle>
+          <CardTitle className="text-sm font-medium">Detail</CardTitle>
         </CardHeader>
-        <CardContent className="overflow-x-auto">
-          <table className="w-full text-xs">
-            <thead>
-              <tr className="border-b text-muted-foreground">
-                <th className="text-left py-2 pr-3 font-medium">เดือน</th>
-                <th className="text-left py-2 pr-3 font-medium">CMG</th>
-                <th className="text-right py-2 pr-3 font-medium">HOC Sales</th>
-                <th className="text-right py-2 pr-3 font-medium">Target</th>
-                <th className="text-right py-2 pr-3 font-medium">Achiev.</th>
-                <th className="text-right py-2 pr-3 font-medium">New</th>
-                <th className="text-right py-2 pr-3 font-medium">Retention</th>
-                <th className="text-right py-2 font-medium">ROI</th>
-              </tr>
-            </thead>
-            <tbody>
-              {filtered.map((r, i) => (
-                <tr key={i} className="border-b last:border-0 hover:bg-muted/40">
-                  <td className="py-1.5 pr-3">{r.month_label}</td>
-                  <td className="py-1.5 pr-3 text-muted-foreground">{r.dynamic_cmg}</td>
-                  <td className="py-1.5 pr-3 text-right tabular-nums">{fmtBaht(r.hoc_sales)}</td>
-                  <td className="py-1.5 pr-3 text-right tabular-nums text-muted-foreground">{fmtBaht(r.sales_target)}</td>
-                  <td className="py-1.5 pr-3 text-right tabular-nums">
-                    <AchievementBadge value={r.achievement_ratio * 100} />
-                  </td>
-                  <td className="py-1.5 pr-3 text-right tabular-nums">{r.new_customers}</td>
-                  <td className="py-1.5 pr-3 text-right tabular-nums">{r.retention}</td>
-                  <td className="py-1.5 text-right tabular-nums">{r.roi > 0 ? `${r.roi.toFixed(2)}x` : '—'}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+        <CardContent>
+          <DataTable
+            key={filterCmg}
+            columns={overviewColumns}
+            data={filtered}
+          />
         </CardContent>
       </Card>
     </div>
   )
 }
-
-// ── Month Grid Control ───────────────────────────────────────────────────────
-
-function labelOf(iso: string) {
-  return new Date(iso).toLocaleDateString('th-TH', { month: 'short', year: 'numeric' })
-}
-
-function MonthGrid({ months, from, to, hover, onClick, onHover }: {
-  months: string[]
-  from: string | null
-  to: string | null
-  hover: string | null
-  onClick: (m: string) => void
-  onHover: (m: string | null) => void
-}) {
-  const effectiveTo = to ?? (from ? hover : null)
-
-  const getState = (m: string): 'from' | 'to' | 'in-range' | 'preview' | 'idle' => {
-    if (!from) return 'idle'
-    if (m === from) return 'from'
-    if (to && m === to) return 'to'
-    if (effectiveTo && m > from && m < effectiveTo) return to ? 'in-range' : 'preview'
-    if (!to && hover && m > from && m <= hover) return 'preview'
-    return 'idle'
-  }
-
-  return (
-    <div className="grid grid-cols-4 sm:grid-cols-6 md:grid-cols-8 gap-1.5">
-      {months.map(m => {
-        const state = getState(m)
-        const short = new Date(m).toLocaleDateString('th-TH', { month: 'short' })
-        const year  = new Date(m).getFullYear().toString().slice(2)
-
-        const cls =
-          state === 'from' || state === 'to'
-            ? 'bg-primary text-primary-foreground shadow-sm'
-            : state === 'in-range'
-            ? 'bg-primary/25 text-primary font-medium'
-            : state === 'preview'
-            ? 'bg-primary/12 text-primary/80'
-            : 'bg-muted/60 text-muted-foreground hover:bg-muted hover:text-foreground'
-
-        return (
-          <button
-            key={m}
-            onClick={() => onClick(m)}
-            onMouseEnter={() => onHover(m)}
-            onMouseLeave={() => onHover(null)}
-            className={`flex flex-col items-center justify-center rounded-md py-1.5 text-xs font-medium transition-colors select-none cursor-pointer ${cls}`}
-          >
-            <span>{short}</span>
-            <span className="text-[10px] opacity-60">{year}</span>
-          </button>
-        )
-      })}
-    </div>
-  )
-}
-
-// ── Shared components ────────────────────────────────────────────────────────
 
 function KpiCard({ title, value, sub, highlight }: {
   title: string; value: string; sub?: string; highlight?: 'green' | 'yellow' | 'red'
@@ -405,17 +265,5 @@ function KpiCard({ title, value, sub, highlight }: {
         {sub && <p className="text-xs text-muted-foreground mt-1">{sub}</p>}
       </CardContent>
     </Card>
-  )
-}
-
-function AchievementBadge({ value }: { value: number }) {
-  const color =
-    value >= 100 ? 'bg-green-100 text-green-700' :
-    value >= 80  ? 'bg-yellow-100 text-yellow-700' :
-    'bg-red-100 text-red-600'
-  return (
-    <span className={`inline-block px-1.5 py-0.5 rounded text-xs font-medium ${color}`}>
-      {value.toFixed(1)}%
-    </span>
   )
 }
