@@ -77,13 +77,19 @@ export default function OverviewClient() {
     dedupingInterval: 300_000,
   })
 
+  const months     = useMemo(() => [...new Set(rows.map(r => r.month))].sort(), [rows])
   const cmgOptions = useMemo(() => [...new Set(rows.map(r => r.dynamic_cmg))], [rows])
-  const [filterCmg, setFilterCmg] = useState('all')
 
-  const filtered = useMemo(() =>
-    filterCmg === 'all' ? rows : rows.filter(r => r.dynamic_cmg === filterCmg),
-    [rows, filterCmg]
-  )
+  const [filterFrom, setFilterFrom] = useState('all')
+  const [filterTo,   setFilterTo]   = useState('all')
+  const [filterCmg,  setFilterCmg]  = useState('all')
+
+  const filtered = useMemo(() => rows.filter(r => {
+    if (filterCmg  !== 'all' && r.dynamic_cmg !== filterCmg) return false
+    if (filterFrom !== 'all' && r.month < filterFrom)         return false
+    if (filterTo   !== 'all' && r.month > filterTo)           return false
+    return true
+  }), [rows, filterCmg, filterFrom, filterTo])
 
   const kpi = useMemo(() => aggregate(filtered), [filtered])
 
@@ -93,12 +99,7 @@ export default function OverviewClient() {
       const mRows = filtered.filter(r => r.month === month)
       const agg   = aggregate(mRows)
       const label = mRows[0]?.month_label ?? month
-      const total = agg.new_customers + agg.retention
-      return {
-        month, month_label: label, ...agg,
-        new_pct:       total > 0 ? (agg.new_customers / total) * 100 : 0,
-        retention_pct: total > 0 ? (agg.retention     / total) * 100 : 0,
-      }
+      return { month, month_label: label, ...agg }
     })
   }, [filtered])
 
@@ -122,8 +123,36 @@ export default function OverviewClient() {
   return (
     <div className="space-y-5">
 
-      {/* CMG Filter */}
-      <div className="flex items-center gap-2">
+      {/* Filters */}
+      <div className="flex flex-wrap gap-2 items-center">
+        <Select value={filterFrom} onValueChange={setFilterFrom}>
+          <SelectTrigger className="h-8 w-full sm:w-36 text-sm">
+            <SelectValue placeholder="From month" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">From month</SelectItem>
+            {months.map(m => (
+              <SelectItem key={m} value={m}>
+                {new Date(m).toLocaleDateString('en-GB', { month: 'short', year: 'numeric' })}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+
+        <Select value={filterTo} onValueChange={setFilterTo}>
+          <SelectTrigger className="h-8 w-full sm:w-36 text-sm">
+            <SelectValue placeholder="To month" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">To month</SelectItem>
+            {months.map(m => (
+              <SelectItem key={m} value={m}>
+                {new Date(m).toLocaleDateString('en-GB', { month: 'short', year: 'numeric' })}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+
         <Select value={filterCmg} onValueChange={setFilterCmg}>
           <SelectTrigger className="h-8 w-full sm:w-44 text-sm">
             <SelectValue placeholder="Dynamic CMG" />
@@ -133,9 +162,13 @@ export default function OverviewClient() {
             {cmgOptions.map(v => <SelectItem key={v} value={v}>{v}</SelectItem>)}
           </SelectContent>
         </Select>
-        {filterCmg !== 'all' && (
-          <button onClick={() => setFilterCmg('all')} className="text-xs text-muted-foreground underline">
-            Clear
+
+        {(filterFrom !== 'all' || filterTo !== 'all' || filterCmg !== 'all') && (
+          <button
+            onClick={() => { setFilterFrom('all'); setFilterTo('all'); setFilterCmg('all') }}
+            className="text-xs text-muted-foreground underline"
+          >
+            Clear filters
           </button>
         )}
       </div>
@@ -187,7 +220,7 @@ export default function OverviewClient() {
         </CardContent>
       </Card>
 
-      {/* New vs Retention (100% Stacked) + ROI */}
+      {/* New vs Retention + ROI */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         <Card>
           <CardHeader>
@@ -198,18 +231,11 @@ export default function OverviewClient() {
               <BarChart data={byMonth} margin={{ top: 4, right: 8, bottom: 4, left: 0 }}>
                 <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
                 <XAxis dataKey="month_label" tick={{ fontSize: 12 }} />
-                <YAxis tick={{ fontSize: 11 }} width={44} tickFormatter={v => `${v}%`} domain={[0, 100]} />
-                <Tooltip
-                  formatter={(value: number, name: string) => [
-                    `${value.toFixed(1)}%`,
-                    name === 'new_pct' ? 'New' : 'Retention',
-                  ]}
-                />
-                <Legend
-                  formatter={(value: string) => value === 'new_pct' ? 'New' : 'Retention'}
-                />
-                <Bar dataKey="new_pct"       name="new_pct"       stackId="a" fill="#22c55e" />
-                <Bar dataKey="retention_pct" name="retention_pct" stackId="a" fill="#3b82f6" radius={[4, 4, 0, 0]} />
+                <YAxis tick={{ fontSize: 11 }} width={40} />
+                <Tooltip />
+                <Legend />
+                <Bar dataKey="new_customers" name="New"       stackId="a" fill="#22c55e" />
+                <Bar dataKey="retention"     name="Retention" stackId="a" fill="#3b82f6" radius={[4, 4, 0, 0]} />
               </BarChart>
             </ResponsiveContainer>
           </CardContent>
@@ -240,7 +266,7 @@ export default function OverviewClient() {
         </CardHeader>
         <CardContent>
           <DataTable
-            key={filterCmg}
+            key={`${filterFrom}|${filterTo}|${filterCmg}`}
             columns={overviewColumns}
             data={filtered}
           />
