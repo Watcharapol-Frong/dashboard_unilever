@@ -79,16 +79,34 @@ export default function OverviewClient() {
   const months     = useMemo(() => [...new Set(rows.map(r => r.month))].sort(), [rows])
   const cmgOptions = useMemo(() => [...new Set(rows.map(r => r.dynamic_cmg))], [rows])
 
-  const [filterFrom, setFilterFrom] = useState('all')
-  const [filterTo,   setFilterTo]   = useState('all')
-  const [filterCmg,  setFilterCmg]  = useState('all')
+  const [rangeFrom,   setRangeFrom]   = useState<string | null>(null)
+  const [rangeTo,     setRangeTo]     = useState<string | null>(null)
+  const [hoverMonth,  setHoverMonth]  = useState<string | null>(null)
+  const [filterCmg,   setFilterCmg]   = useState('all')
 
-  const filtered = useMemo(() => rows.filter(r => {
-    if (filterCmg  !== 'all' && r.dynamic_cmg !== filterCmg) return false
-    if (filterFrom !== 'all' && r.month < filterFrom)         return false
-    if (filterTo   !== 'all' && r.month > filterTo)           return false
-    return true
-  }), [rows, filterCmg, filterFrom, filterTo])
+  const handleChipClick = (m: string) => {
+    if (!rangeFrom || (rangeFrom && rangeTo)) {
+      setRangeFrom(m); setRangeTo(null)
+    } else if (m === rangeFrom) {
+      setRangeFrom(null); setRangeTo(null)
+    } else if (m < rangeFrom) {
+      setRangeFrom(m); setRangeTo(rangeFrom)
+    } else {
+      setRangeTo(m)
+    }
+  }
+
+  const filtered = useMemo(() => {
+    const effectiveTo = rangeTo ?? (rangeFrom ? hoverMonth : null)
+    return rows.filter(r => {
+      if (filterCmg !== 'all' && r.dynamic_cmg !== filterCmg) return false
+      if (rangeFrom) {
+        if (!effectiveTo) return r.month === rangeFrom
+        if (r.month < rangeFrom || r.month > effectiveTo) return false
+      }
+      return true
+    })
+  }, [rows, filterCmg, rangeFrom, rangeTo, hoverMonth])
 
   const kpi = useMemo(() => aggregate(filtered), [filtered])
 
@@ -123,38 +141,45 @@ export default function OverviewClient() {
     <div className="space-y-5">
 
       {/* Filters */}
-      <div className="flex flex-wrap gap-2 items-center">
-        <Select value={filterFrom} onValueChange={setFilterFrom}>
-          <SelectTrigger className="h-8 w-full sm:w-36 text-sm">
-            <SelectValue placeholder="From month" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">From month</SelectItem>
-            {months.map(m => (
-              <SelectItem key={m} value={m}>
-                {new Date(m).toLocaleDateString('en-GB', { month: 'short', year: 'numeric' })}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
+      <div className="flex flex-wrap items-center gap-3">
 
-        <Select value={filterTo} onValueChange={setFilterTo}>
-          <SelectTrigger className="h-8 w-full sm:w-36 text-sm">
-            <SelectValue placeholder="To month" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">To month</SelectItem>
-            {months.map(m => (
-              <SelectItem key={m} value={m}>
-                {new Date(m).toLocaleDateString('en-GB', { month: 'short', year: 'numeric' })}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
+        {/* Month chip grid */}
+        <div className="flex items-center gap-1 flex-wrap">
+          {months.map(m => {
+            const effectiveTo = rangeTo ?? (rangeFrom ? hoverMonth : null)
+            const isFrom    = m === rangeFrom
+            const isTo      = m === rangeTo
+            const inRange   = rangeFrom && effectiveTo && m > rangeFrom && m < effectiveTo
+            const isPreview = !rangeTo && rangeFrom && hoverMonth && m > rangeFrom && m <= hoverMonth
 
+            const active = isFrom || isTo
+            const mid    = inRange || isPreview
+
+            return (
+              <button
+                key={m}
+                onClick={() => handleChipClick(m)}
+                onMouseEnter={() => setHoverMonth(m)}
+                onMouseLeave={() => setHoverMonth(null)}
+                className={[
+                  'px-3 py-1 rounded-full text-xs font-medium transition-colors select-none',
+                  active ? 'bg-primary text-primary-foreground shadow-sm'
+                  : mid   ? 'bg-primary/20 text-primary'
+                  :         'bg-muted text-muted-foreground hover:bg-muted/80 hover:text-foreground',
+                ].join(' ')}
+              >
+                {new Date(m).toLocaleDateString('en-GB', { month: 'short' })}
+              </button>
+            )
+          })}
+        </div>
+
+        <div className="w-px h-5 bg-border hidden sm:block" />
+
+        {/* CMG filter */}
         <Select value={filterCmg} onValueChange={setFilterCmg}>
           <SelectTrigger className="h-8 w-full sm:w-44 text-sm">
-            <SelectValue placeholder="Dynamic CMG" />
+            <SelectValue placeholder="All CMG" />
           </SelectTrigger>
           <SelectContent>
             <SelectItem value="all">All CMG</SelectItem>
@@ -162,12 +187,12 @@ export default function OverviewClient() {
           </SelectContent>
         </Select>
 
-        {(filterFrom !== 'all' || filterTo !== 'all' || filterCmg !== 'all') && (
+        {(rangeFrom || filterCmg !== 'all') && (
           <button
-            onClick={() => { setFilterFrom('all'); setFilterTo('all'); setFilterCmg('all') }}
+            onClick={() => { setRangeFrom(null); setRangeTo(null); setFilterCmg('all') }}
             className="text-xs text-muted-foreground underline"
           >
-            Clear filters
+            Clear
           </button>
         )}
       </div>
