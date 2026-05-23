@@ -4,12 +4,11 @@ import useSWR from 'swr'
 import { useMemo, useState } from 'react'
 import {
   ComposedChart, Bar, Line, XAxis, YAxis, CartesianGrid, Tooltip,
-  Legend, ResponsiveContainer, LineChart, BarChart,
+  Legend, ResponsiveContainer,
 } from 'recharts'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
-import { DataTable } from '@/components/ui/data-table'
-import { overviewColumns, type OverviewRow } from './columns'
+import { type OverviewRow } from './columns'
 
 type Agg = {
   hoc_sales: number
@@ -220,58 +219,6 @@ export default function OverviewClient() {
         </CardContent>
       </Card>
 
-      {/* New vs Retention + ROI */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-sm font-medium">New vs Retention Customers</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <ResponsiveContainer width="100%" height={240}>
-              <BarChart data={byMonth} margin={{ top: 4, right: 8, bottom: 4, left: 0 }}>
-                <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
-                <XAxis dataKey="month_label" tick={{ fontSize: 12 }} />
-                <YAxis tick={{ fontSize: 11 }} width={40} />
-                <Tooltip />
-                <Legend />
-                <Bar dataKey="new_customers" name="New"       stackId="a" fill="#22c55e" />
-                <Bar dataKey="retention"     name="Retention" stackId="a" fill="#3b82f6" radius={[4, 4, 0, 0]} />
-              </BarChart>
-            </ResponsiveContainer>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-sm font-medium">ROI by Month</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <ResponsiveContainer width="100%" height={240}>
-              <LineChart data={byMonth} margin={{ top: 4, right: 8, bottom: 4, left: 0 }}>
-                <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
-                <XAxis dataKey="month_label" tick={{ fontSize: 12 }} />
-                <YAxis tick={{ fontSize: 11 }} width={44} tickFormatter={v => `${v}x`} />
-                <Tooltip formatter={(v: number) => [`${v.toFixed(2)}x`, 'ROI']} />
-                <Line dataKey="roi" name="ROI" type="monotone" stroke="#8b5cf6" strokeWidth={2} dot={{ r: 4 }} />
-              </LineChart>
-            </ResponsiveContainer>
-          </CardContent>
-        </Card>
-      </div>
-
-      {/* Detail Table */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-sm font-medium">Detail</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <DataTable
-            key={`${filterFrom}|${filterTo}|${filterCmg}`}
-            columns={overviewColumns}
-            data={filtered}
-          />
-        </CardContent>
-      </Card>
     </div>
   )
 }
