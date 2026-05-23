@@ -3,6 +3,7 @@
 import { ColumnDef } from "@tanstack/react-table"
 import { DataTableColumnHeader } from "@/components/ui/data-table-column-header"
 import { cn } from "@/lib/utils"
+import { fmtBaht } from "@/lib/formatters"
 
 export type Lead = {
   mmid: string
@@ -36,12 +37,6 @@ const CONV_COLOR: Record<string, string> = {
   not_converted: 'bg-orange-100 text-orange-700',
   no_hoc_order:  'bg-slate-100 text-slate-500',
 }
-
-const fmt = (n: number) =>
-  n >= 1_000_000 ? `${(n / 1_000_000).toFixed(2)}M`
-  : n >= 1_000   ? `${(n / 1_000).toFixed(1)}K`
-  : n.toFixed(0)
-const fmtBaht = (n: number) => `฿${fmt(n)}`
 
 export const leadsColumns: ColumnDef<Lead>[] = [
   {
