@@ -6,61 +6,112 @@ import { KpiCard } from '@/components/dashboard/KpiCard'
 import { KpiGrid } from '@/components/dashboard/KpiGrid'
 import { FilterBar } from '@/components/dashboard/FilterBar'
 import { FilterSelect } from '@/components/dashboard/FilterSelect'
-import { PageLoading, PageEmpty, PageError } from '@/components/dashboard/PageState'
-import { useDashboardSWR } from '@/hooks/useDashboardSWR'
+import { PageLoadingTable, PageEmpty, PageError } from '@/components/dashboard/PageState'
 import { fmtPct } from '@/lib/formatters'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Filter, Users, PhoneCall, Award, ShoppingBag } from 'lucide-react'
 import { leadsColumns, type Lead } from './columns'
+import { ChevronLeft, ChevronRight } from 'lucide-react'
+
+interface Summary {
+  kpi: { total: number; contacted: number; converted: number; orders: number }
+  filters: { tiers: string[]; cmgs: string[]; agents: string[] }
+}
+
+interface LeadsPage {
+  data: Lead[]
+  total: number
+  page: number
+  limit: number
+}
+
+const fetcher = async (url: string) => {
+  const res  = await fetch(url)
+  const json = await res.json()
+  if (!res.ok || !json.ok) throw new Error(json.error ?? `HTTP ${res.status}`)
+  return json
+}
+
+function buildUrl(base: string, params: Record<string, string | number>) {
+  const sp = new URLSearchParams()
+  for (const [k, v] of Object.entries(params)) {
+    if (v !== '' && v !== 'all') sp.set(k, String(v))
+  }
+  return `${base}?${sp.toString()}`
+}
 
 export default function LeadsClient() {
-  const { data: rows = [], isLoading, error } = useDashboardSWR<Lead[]>('/api/data/leads')
-
   const [search,        setSearch]        = useState('')
+  const [debouncedSearch, setDebouncedSearch] = useState('')
   const [filterTier,    setFilterTier]    = useState('all')
   const [filterContact, setFilterContact] = useState('all')
   const [filterConv,    setFilterConv]    = useState('all')
   const [filterCmg,     setFilterCmg]     = useState('all')
   const [filterAgent,   setFilterAgent]   = useState('all')
+  const [page,          setPage]          = useState(1)
 
-  const tierOptions  = useMemo(() => [...new Set(rows.map(r => r.lead_customers))].sort(), [rows])
-  const cmgOptions   = useMemo(() => [...new Set(rows.map(r => r.dynamic_cmg).filter(Boolean) as string[])].sort(), [rows])
-  const agentOptions = useMemo(() => [...new Set(rows.map(r => r.agent).filter(Boolean) as string[])].sort(), [rows])
+  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  useEffect(() => {
+    if (debounceRef.current) clearTimeout(debounceRef.current)
+    debounceRef.current = setTimeout(() => {
+      setDebouncedSearch(search)
+      setPage(1)
+    }, 350)
+    return () => { if (debounceRef.current) clearTimeout(debounceRef.current) }
+  }, [search])
 
-  const kpi = useMemo(() => {
-    const total     = rows.length
-    const contacted = rows.filter(r => r.contact_status !== 'not_called').length
-    const converted = rows.filter(r => r.conversion_status === 'converted').length
-    const orders    = rows.reduce((sum, r) => sum + r.hoc_orders, 0)
-    return { total, contacted, converted, orders }
-  }, [rows])
+  useEffect(() => { setPage(1) }, [filterTier, filterContact, filterConv, filterCmg, filterAgent])
 
-  const filtered = useMemo(() => {
-    const q = search.toLowerCase()
-    return rows.filter(r => {
-      if (filterTier    !== 'all' && r.lead_customers    !== filterTier)   return false
-      if (filterContact !== 'all' && r.contact_status    !== filterContact) return false
-      if (filterConv    !== 'all' && r.conversion_status !== filterConv)   return false
-      if (filterCmg     !== 'all' && r.dynamic_cmg       !== filterCmg)   return false
-      if (filterAgent   !== 'all' && r.agent             !== filterAgent)  return false
-      if (q && !r.mmid.toLowerCase().includes(q) && !r.cust_name.toLowerCase().includes(q)) return false
-      return true
+  const { data: summary, isLoading: summaryLoading, error: summaryError } =
+    useSWR<Summary>('/api/data/leads/summary', fetcher, {
+      revalidateOnFocus: false,
+      revalidateOnReconnect: false,
+      dedupingInterval: 300_000,
     })
-  }, [rows, search, filterTier, filterContact, filterConv, filterCmg, filterAgent])
+
+  const pageUrl = useMemo(() => buildUrl('/api/data/leads', {
+    page,
+    search:  debouncedSearch,
+    tier:    filterTier,
+    contact: filterContact,
+    conv:    filterConv,
+    cmg:     filterCmg,
+    agent:   filterAgent,
+  }), [page, debouncedSearch, filterTier, filterContact, filterConv, filterCmg, filterAgent])
+
+  const { data: leadsPage, isLoading: pageLoading, error: pageError } =
+    useSWR<LeadsPage>(pageUrl, fetcher, {
+      revalidateOnFocus: false,
+      revalidateOnReconnect: false,
+      keepPreviousData: true,
+    })
+
+  const kpi        = summary?.kpi
+  const tiers      = summary?.filters.tiers  ?? []
+  const cmgs       = summary?.filters.cmgs   ?? []
+  const agents     = summary?.filters.agents ?? []
+  const rows       = leadsPage?.data ?? []
+  const total      = leadsPage?.total ?? 0
+  const limit      = leadsPage?.limit ?? 500
+  const totalPages = Math.max(1, Math.ceil(total / limit))
 
   const hasFilter = !!(search || filterTier !== 'all' || filterContact !== 'all' ||
                     filterConv !== 'all' || filterCmg !== 'all' || filterAgent !== 'all')
 
-  if (isLoading) return <PageLoading />
-  if (error)     return <PageError message={error.message} />
-  if (rows.length === 0) return (
+  const clearFilters = () => {
+    setSearch(''); setFilterTier('all'); setFilterContact('all')
+    setFilterConv('all'); setFilterCmg('all'); setFilterAgent('all')
+  }
+
+  if (summaryLoading) return <PageLoadingTable kpiCols={4} rows={8} />
+  if (summaryError)   return <PageError message={summaryError.message} />
+  if (!kpi || kpi.total === 0) return (
     <PageEmpty message="No data available" hint="Upload a leads file and run Build Mart first" />
   )
 
   return (
     <div className="space-y-6">
 
-      {/* KPI Cards */}
       <KpiGrid cols={4}>
         <KpiCard
           title="Total Leads"

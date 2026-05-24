@@ -1,11 +1,40 @@
-import { NextResponse } from 'next/server'
+import { NextRequest, NextResponse } from 'next/server'
 import { withAdmin } from '@/lib/auth'
 import { query } from '@/lib/db'
 
 export const dynamic = 'force-dynamic'
 
-export async function GET() {
+const PAGE_SIZE = 500
+
+export async function GET(req: NextRequest) {
   return withAdmin(async () => {
+    const sp      = req.nextUrl.searchParams
+    const page    = Math.max(1, Number(sp.get('page')  ?? 1))
+    const limit   = Math.min(PAGE_SIZE, Math.max(1, Number(sp.get('limit') ?? PAGE_SIZE)))
+    const search  = sp.get('search')?.trim()  || null
+    const tier    = sp.get('tier')            || null
+    const contact = sp.get('contact')         || null
+    const conv    = sp.get('conv')            || null
+    const cmg     = sp.get('cmg')             || null
+    const agent   = sp.get('agent')           || null
+
+    const offset = (page - 1) * limit
+
+    const params: (string | number | null)[] = []
+    const conditions: string[] = []
+
+    if (tier)    { params.push(tier);    conditions.push(`l.lead_customers = $${params.length}`) }
+    if (contact) { params.push(contact); conditions.push(`COALESCE(cs.contact_status,'not_called') = $${params.length}`) }
+    if (conv)    { params.push(conv);    conditions.push(`CASE WHEN os.is_converted THEN 'converted' WHEN os.mmid IS NOT NULL THEN 'not_converted' ELSE 'no_hoc_order' END = $${params.length}`) }
+    if (cmg)     { params.push(cmg);     conditions.push(`os.dynamic_cmg = $${params.length}`) }
+    if (agent)   { params.push(agent);   conditions.push(`cs.agent = $${params.length}`) }
+    if (search)  { params.push(`%${search}%`); conditions.push(`(l.mmid ILIKE $${params.length} OR COALESCE(l.cust_name,'') ILIKE $${params.length})`) }
+
+    const whereClause = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : ''
+
+    params.push(limit);  const limitIdx  = params.length
+    params.push(offset); const offsetIdx = params.length
+
     const rows = await query<{
       mmid:              string
       cust_name:         string | null
@@ -16,6 +45,7 @@ export async function GET() {
       conversion_status: string
       hoc_orders:        string
       hoc_sales:         string
+      total_count:       string
     }>(`
       WITH cs AS (
         SELECT mmid,
@@ -39,28 +69,35 @@ export async function GET() {
           MAX(dynamic_cmg) AS dynamic_cmg
         FROM mart_telesales_orders
         GROUP BY mmid
+      ),
+      base AS (
+        SELECT
+          l.mmid,
+          l.cust_name,
+          l.lead_customers,
+          COALESCE(cs.contact_status, 'not_called') AS contact_status,
+          cs.agent,
+          os.dynamic_cmg,
+          CASE
+            WHEN os.is_converted      THEN 'converted'
+            WHEN os.mmid IS NOT NULL  THEN 'not_converted'
+            ELSE                           'no_hoc_order'
+          END AS conversion_status,
+          COALESCE(os.hoc_orders, 0) AS hoc_orders,
+          COALESCE(os.hoc_sales,  0) AS hoc_sales
+        FROM leads l
+        LEFT JOIN cs ON cs.mmid = l.mmid
+        LEFT JOIN os ON os.mmid = l.mmid
+        ${whereClause}
       )
-      SELECT
-        l.mmid,
-        l.cust_name,
-        l.lead_customers,
-        COALESCE(cs.contact_status, 'not_called') AS contact_status,
-        cs.agent,
-        os.dynamic_cmg,
-        CASE
-          WHEN os.is_converted      THEN 'converted'
-          WHEN os.mmid IS NOT NULL  THEN 'not_converted'
-          ELSE                           'no_hoc_order'
-        END AS conversion_status,
-        COALESCE(os.hoc_orders, 0) AS hoc_orders,
-        COALESCE(os.hoc_sales,  0) AS hoc_sales
-      FROM leads l
-      LEFT JOIN cs ON cs.mmid = l.mmid
-      LEFT JOIN os ON os.mmid = l.mmid
-      ORDER BY l.lead_customers, l.mmid
-    `)
+      SELECT *, COUNT(*) OVER() AS total_count
+      FROM base
+      ORDER BY lead_customers, mmid
+      LIMIT $${limitIdx} OFFSET $${offsetIdx}
+    `, params)
 
-    const data = rows.map(r => ({
+    const total = rows.length > 0 ? Number(rows[0].total_count) : 0
+    const data  = rows.map(r => ({
       mmid:              r.mmid,
       cust_name:         r.cust_name ?? '',
       lead_customers:    r.lead_customers,
@@ -72,8 +109,8 @@ export async function GET() {
       hoc_sales:         Number(r.hoc_sales),
     }))
 
-    const res = NextResponse.json({ ok: true, data })
-    res.headers.set('Cache-Control', 'public, s-maxage=300, stale-while-revalidate=600')
+    const res = NextResponse.json({ ok: true, data, total, page, limit })
+    res.headers.set('Cache-Control', 'public, s-maxage=60, stale-while-revalidate=120')
     return res
   })
 }
