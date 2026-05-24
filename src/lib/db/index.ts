@@ -28,3 +28,8 @@ export async function queryCount(text: string, params?: unknown[]): Promise<numb
   const { rows } = await pool.query(text, params)
   return Number(rows[0]?.count ?? rows[0]?.total ?? 0)
 }
+
+export async function queryRowCount(text: string, params?: unknown[]): Promise<number> {
+  const result = await pool.query(text, params)
+  return result.rowCount ?? 0
+}

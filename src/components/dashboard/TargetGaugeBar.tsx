@@ -1,6 +1,7 @@
 'use client'
 import { Progress } from '@/components/ui/progress'
-import { formatTHB, formatNumber, getProgressColor, cn } from '@/lib/utils'
+import { formatTHB, formatNumber } from '@/lib/formatters'
+import { getProgressColor, cn } from '@/lib/utils'
 
 interface TargetGaugeBarProps {
   label: string

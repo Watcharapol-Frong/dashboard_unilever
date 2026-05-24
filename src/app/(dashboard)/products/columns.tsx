@@ -2,7 +2,7 @@
 
 import { ColumnDef } from "@tanstack/react-table"
 import { Badge } from "@/components/ui/badge"
-import { formatTHB, formatNumber, formatPct } from "@/lib/utils"
+import { formatTHB, formatNumber, formatPct } from "@/lib/formatters"
 import { ProductRow } from "@/types"
 import { DataTableColumnHeader } from "@/components/ui/data-table-column-header"
 

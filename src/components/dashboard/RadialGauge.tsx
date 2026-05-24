@@ -2,7 +2,7 @@
 
 import { Label, PolarGrid, PolarRadiusAxis, RadialBar, RadialBarChart } from "recharts"
 import { ChartContainer, ChartTooltip, ChartTooltipContent, type ChartConfig } from "@/components/ui/chart"
-import { formatTHB } from "@/lib/utils"
+import { formatTHB } from "@/lib/formatters"
 
 interface RadialGaugeProps {
   online: number
