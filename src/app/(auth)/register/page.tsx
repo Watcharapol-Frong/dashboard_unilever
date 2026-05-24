@@ -8,6 +8,7 @@ import { Loader2 } from 'lucide-react'
 export default function RegisterPage() {
   const router = useRouter()
 
+  const [name,       setName]       = useState('')
   const [email,      setEmail]      = useState('')
   const [inviteCode, setInviteCode] = useState('')
   const [error,      setError]      = useState('')
@@ -21,7 +22,7 @@ export default function RegisterPage() {
       const res  = await fetch('/api/auth/register', {
         method:  'POST',
         headers: { 'Content-Type': 'application/json' },
-        body:    JSON.stringify({ email, inviteCode }),
+        body:    JSON.stringify({ name, email, inviteCode }),
       })
       const data = await res.json()
       if (!res.ok) { setError(data.error ?? 'Registration failed'); return }
@@ -43,10 +44,10 @@ export default function RegisterPage() {
         </div>
 
         {/* Card */}
-        <div className="bg-white rounded-2xl shadow-2xl p-8 space-y-5">
+        <div className="bg-white rounded-2xl shadow-2xl p-8 space-y-6">
           <div>
             <h2 className="text-xl font-semibold text-gray-800">Register</h2>
-            <p className="text-sm text-gray-500 mt-1">
+            <p className="text-sm text-gray-400 mt-1">
               After registering, sign in with a magic link sent to your email.
             </p>
           </div>
@@ -58,9 +59,25 @@ export default function RegisterPage() {
           )}
 
           <form onSubmit={handleSubmit} className="space-y-4">
+            {/* Name */}
+            <div className="space-y-1.5">
+              <label className="text-sm font-medium text-gray-700">
+                Name
+              </label>
+              <input
+                type="text"
+                value={name}
+                onChange={e => setName(e.target.value)}
+                placeholder="Your full name"
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#003DA6]/30 focus:border-[#003DA6] transition"
+              />
+            </div>
+
             {/* Email */}
             <div className="space-y-1.5">
-              <label className="text-sm font-medium text-gray-700">Email address</label>
+              <label className="text-sm font-medium text-gray-700">
+                Email address <span className="text-red-500">*</span>
+              </label>
               <input
                 type="email"
                 required
@@ -73,7 +90,9 @@ export default function RegisterPage() {
 
             {/* Invite Code */}
             <div className="space-y-1.5">
-              <label className="text-sm font-medium text-gray-700">Invite code</label>
+              <label className="text-sm font-medium text-gray-700">
+                Invite code <span className="text-red-500">*</span>
+              </label>
               <input
                 type="text"
                 required
@@ -89,7 +108,7 @@ export default function RegisterPage() {
             <button
               type="submit"
               disabled={loading}
-              className="w-full py-2.5 bg-[#003DA6] hover:bg-[#002d80] disabled:opacity-60 text-white font-semibold rounded-lg text-sm transition flex items-center justify-center gap-2"
+              className="w-full py-2.5 bg-[#003DA6] hover:bg-[#002d80] disabled:opacity-60 text-white font-semibold rounded-lg text-sm transition flex items-center justify-center gap-2 mt-2"
             >
               {loading && <Loader2 className="h-4 w-4 animate-spin" />}
               {loading ? 'Creating account…' : 'Create account'}

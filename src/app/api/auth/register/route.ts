@@ -12,7 +12,7 @@ function getRole(code: string): 'viewer' | 'admin' | null {
 
 export async function POST(request: Request) {
   try {
-    const { email, inviteCode } = await request.json()
+    const { name, email, inviteCode } = await request.json()
 
     if (!email || !inviteCode) {
       return NextResponse.json({ error: 'email and inviteCode are required' }, { status: 400 })
@@ -23,9 +23,17 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Invalid invite code' }, { status: 400 })
     }
 
+    // Split name into first / last (best-effort)
+    const trimmedName  = typeof name === 'string' ? name.trim() : ''
+    const spaceIndex   = trimmedName.indexOf(' ')
+    const firstName    = spaceIndex === -1 ? trimmedName : trimmedName.slice(0, spaceIndex)
+    const lastName     = spaceIndex === -1 ? ''          : trimmedName.slice(spaceIndex + 1)
+
     const client = await clerkClient()
     await client.users.createUser({
       emailAddress: [email],
+      ...(firstName && { firstName }),
+      ...(lastName  && { lastName  }),
       publicMetadata: { role },
       // No password — user signs in via magic link / email OTP (Clerk handles it)
     })
