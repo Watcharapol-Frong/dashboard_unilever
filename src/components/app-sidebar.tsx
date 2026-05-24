@@ -93,6 +93,7 @@ const data = {
       name: "Exports",
       url: "/exports",
       icon: IconFileExport,
+      desktopOnly: true,
     },
   ],
 }
