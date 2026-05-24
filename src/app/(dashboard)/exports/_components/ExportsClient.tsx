@@ -50,11 +50,11 @@ export default function ExportsClient() {
   const [selColumns,   setSelColumns]   = useState<Set<string>>(
     () => new Set(DEFAULT_METRICS['month'])
   )
-  const [filterStart,  setFilterStart]  = useState('')
-  const [filterEnd,    setFilterEnd]    = useState('')
-  const [filterCmg,    setFilterCmg]    = useState('')
-  const [filterChannel,setFilterChannel]= useState('')
-  const [filterCustType,setFilterCustType] = useState('')
+  const [filterStart,  setFilterStart]  = useState('all')
+  const [filterEnd,    setFilterEnd]    = useState('all')
+  const [filterCmg,    setFilterCmg]    = useState('all')
+  const [filterChannel,setFilterChannel]= useState('all')
+  const [filterCustType,setFilterCustType] = useState('all')
 
   const [preview,      setPreview]      = useState<PreviewResult | null>(null)
   const [previewError, setPreviewError] = useState<string | null>(null)
@@ -95,11 +95,11 @@ export default function ExportsClient() {
     granularity,
     columns: isRaw ? [] : Array.from(selColumns),
     filters: {
-      startMonth:   filterStart  || undefined,
-      endMonth:     filterEnd    || undefined,
-      cmg:          filterCmg    || undefined,
-      channel:      filterChannel || undefined,
-      customerType: filterCustType || undefined,
+      startMonth:   filterStart   !== 'all' ? filterStart   : undefined,
+      endMonth:     filterEnd     !== 'all' ? filterEnd     : undefined,
+      cmg:          filterCmg     !== 'all' ? filterCmg     : undefined,
+      channel:      filterChannel !== 'all' ? filterChannel : undefined,
+      customerType: filterCustType !== 'all' ? filterCustType : undefined,
     },
     format: fmt,
   })
@@ -276,7 +276,7 @@ export default function ExportsClient() {
                         <SelectValue placeholder="From" />
                       </SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="">All</SelectItem>
+                        <SelectItem value="all">All</SelectItem>
                         {(opts?.months ?? []).map(m => (
                           <SelectItem key={m} value={m}>{m}</SelectItem>
                         ))}
@@ -288,7 +288,7 @@ export default function ExportsClient() {
                         <SelectValue placeholder="To" />
                       </SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="">All</SelectItem>
+                        <SelectItem value="all">All</SelectItem>
                         {(opts?.months ?? []).map(m => (
                           <SelectItem key={m} value={m}>{m}</SelectItem>
                         ))}
@@ -310,7 +310,7 @@ export default function ExportsClient() {
                     <SelectValue placeholder="All CMGs" />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="">All</SelectItem>
+                    <SelectItem value="all">All</SelectItem>
                     {(opts?.cmgs ?? []).map(c => (
                       <SelectItem key={c} value={c}>{c}</SelectItem>
                     ))}
@@ -327,7 +327,7 @@ export default function ExportsClient() {
                   <SelectValue placeholder="All channels" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="">All</SelectItem>
+                  <SelectItem value="all">All</SelectItem>
                   <SelectItem value="online">Online</SelectItem>
                   <SelectItem value="offline">Offline</SelectItem>
                 </SelectContent>
@@ -343,7 +343,7 @@ export default function ExportsClient() {
                     <SelectValue placeholder="All types" />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="">All</SelectItem>
+                    <SelectItem value="all">All</SelectItem>
                     <SelectItem value="new_customer">New Customer</SelectItem>
                     <SelectItem value="retention">Retention</SelectItem>
                     <SelectItem value="first_order_not_converted">First Order (Not Converted)</SelectItem>
