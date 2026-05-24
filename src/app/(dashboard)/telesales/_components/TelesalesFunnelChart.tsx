@@ -1,9 +1,9 @@
 'use client'
 
 import { useMemo } from 'react'
+import { ResponsiveSankey } from '@nivo/sankey'
 import { useDashboardSWR } from '@/hooks/useDashboardSWR'
 import { formatNumber, formatPct } from '@/lib/formatters'
-import { SankeyChart, SankeyNode, SankeyLink, SankeyTooltip } from '@bklitui/ui/charts'
 
 // ─── Funnel Node Colors ───────────────────────────────────────────────────────
 const NODE_COLORS: Record<string, string> = {
@@ -88,8 +88,12 @@ export function TelesalesFunnelChart() {
   const sankeyData = useMemo(() => {
     if (!data) return null
     return {
-      nodes: data.nodes.map((n) => ({ name: n.name })),
-      links: data.links,
+      nodes: data.nodes.map((n) => ({ id: n.name })),
+      links: data.links.map((l) => ({
+        source: data.nodes[l.source].name,
+        target: data.nodes[l.target].name,
+        value: l.value,
+      })),
     }
   }, [data])
 
@@ -190,29 +194,50 @@ export function TelesalesFunnelChart() {
       </div>
 
       {/* ── Sankey Chart ── */}
-      <SankeyChart
-        animationDuration={900}
-        aspectRatio="16 / 6"
-        className="min-h-[320px]"
-        data={sankeyData}
-        margin={{ top: 16, right: 160, bottom: 16, left: 160 }}
-        nodePadding={20}
-        nodeWidth={14}
-      >
-        <SankeyNode
-          getNodeColor={(node) => getNodeColor(node.name ?? '')}
-          lineCap={4}
-          showLabels
-        />
-        <SankeyLink
-          fadedOpacity={0.08}
-          strokeOpacity={0.45}
-          useGradient
-        />
-        <SankeyTooltip
-          formatValue={(v) => formatNumber(Math.round(v))}
-        />
-      </SankeyChart>
+      <div className="h-[350px] w-full">
+        {sankeyData && (
+          <ResponsiveSankey
+            data={sankeyData}
+            margin={{ top: 16, right: 160, bottom: 16, left: 160 }}
+            align="justify"
+            colors={(node) => getNodeColor(node.id as string)}
+            nodeOpacity={1}
+            nodeHoverOthersOpacity={0.35}
+            nodeThickness={14}
+            nodeSpacing={20}
+            nodeBorderWidth={0}
+            nodeBorderRadius={3}
+            linkOpacity={0.45}
+            linkHoverOthersOpacity={0.1}
+            linkContract={3}
+            enableLinkGradient={true}
+            labelPosition="outside"
+            labelOrientation="horizontal"
+            label={(node) => `${node.id} (${formatNumber(node.value)})`}
+            labelPadding={16}
+            theme={{
+              labels: {
+                text: {
+                  fontSize: 11,
+                  fill: 'hsl(var(--foreground))',
+                  fontWeight: 500,
+                }
+              },
+              tooltip: {
+                container: {
+                  background: 'hsl(var(--card))',
+                  color: 'hsl(var(--card-foreground))',
+                  fontSize: 11,
+                  borderRadius: 4,
+                  boxShadow: '0 4px 12px rgba(0, 0, 0, 0.1)',
+                  border: '1px solid hsl(var(--border))',
+                  padding: '8px 12px',
+                }
+              }
+            }}
+          />
+        )}
+      </div>
 
       {/* ── Stage Labels ── */}
       <div className="flex justify-between px-2 text-[10px] text-muted-foreground font-medium uppercase tracking-wider">
