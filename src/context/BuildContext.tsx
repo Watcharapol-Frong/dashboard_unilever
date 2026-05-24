@@ -1,12 +1,6 @@
 'use client'
-import { createContext, useContext, useState, useCallback } from 'react'
+import { createContext, useContext, useState, useCallback, useEffect, useRef } from 'react'
 import { mutate as swrMutate } from 'swr'
-
-export interface BuildProgress {
-  current: number
-  total: number
-  phase: 'chunking' | 'finalizing'
-}
 
 export interface BuildResult {
   ok: boolean
@@ -17,7 +11,7 @@ export interface BuildResult {
 
 interface BuildContextValue {
   buildLoading: boolean
-  buildProgress: BuildProgress | null
+  elapsedSeconds: number
   buildResult: BuildResult | null
   clearBuildResult: () => void
   startBuild: (effectiveDays: number) => Promise<void>
@@ -25,16 +19,17 @@ interface BuildContextValue {
 
 const BuildContext = createContext<BuildContextValue>({
   buildLoading: false,
-  buildProgress: null,
+  elapsedSeconds: 0,
   buildResult: null,
   clearBuildResult: () => {},
   startBuild: async () => {},
 })
 
 export function BuildProvider({ children }: { children: React.ReactNode }) {
-  const [buildLoading, setBuildLoading]   = useState(false)
-  const [buildProgress, setBuildProgress] = useState<BuildProgress | null>(null)
-  const [buildResult, setBuildResult]     = useState<BuildResult | null>(null)
+  const [buildLoading, setBuildLoading] = useState(false)
+  const [elapsedSeconds, setElapsedSeconds] = useState(0)
+  const [buildResult, setBuildResult]   = useState<BuildResult | null>(null)
+  const timerRef = useRef<ReturnType<typeof setInterval> | null>(null)
 
   const clearBuildResult = useCallback(() => setBuildResult(null), [])
 
@@ -42,79 +37,41 @@ export function BuildProvider({ children }: { children: React.ReactNode }) {
     if (buildLoading) return
     setBuildLoading(true)
     setBuildResult(null)
-    setBuildProgress(null)
+    setElapsedSeconds(0)
 
-    const LIMIT    = 750
-    const PARALLEL = 2
-    let offset = 0
-    let martMainRows = 0
+    timerRef.current = setInterval(() => setElapsedSeconds(s => s + 1), 1000)
 
     try {
-      while (true) {
-        const promises = []
-        for (let i = 0; i < PARALLEL; i++) {
-          const currentOffset = offset + i * LIMIT
-          promises.push(
-            fetch('/api/data/refresh-mart/chunk', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({
-                offset: currentOffset,
-                limit: LIMIT,
-                attribution_days: effectiveDays,
-                truncate: currentOffset === 0,
-              }),
-            }).then(res => res.json())
-          )
-        }
+      const res: Response = await fetch('/api/data/refresh-mart', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ attribution_days: effectiveDays }),
+      })
+      const data = await res.json() as { ok: boolean; mart_main?: number; performance?: number; error?: string }
 
-        const results = await Promise.all(promises)
-
-        let anyDone = false
-        let lastNextOffset = offset
-        let totalCount = 0
-
-        for (const data of results) {
-          if (!data.ok) {
-            setBuildResult({ ok: false, error: data.error ?? 'Chunk failed' })
-            return
-          }
-          martMainRows  += data.processed
-          lastNextOffset = Math.max(lastNextOffset, data.next_offset)
-          totalCount     = data.total
-          if (data.done) anyDone = true
-        }
-
-        setBuildProgress({ current: lastNextOffset, total: totalCount, phase: 'chunking' })
-
-        if (anyDone) break
-        offset = lastNextOffset
-      }
-
-      setBuildProgress({ current: 0, total: 0, phase: 'finalizing' })
-      const finalRes  = await fetch('/api/data/refresh-mart/finalize', { method: 'POST' })
-      const finalData = await finalRes.json()
-      if (!finalRes.ok || !finalData.ok) {
-        setBuildResult({ ok: false, error: finalData.error ?? 'Finalize failed' })
+      if (!data.ok) {
+        setBuildResult({ ok: false, error: data.error ?? 'Build failed' })
         return
       }
 
       setBuildResult({
         ok: true,
         attribution_days: effectiveDays,
-        rows: { mart_main: martMainRows, performance: finalData.performance },
+        rows: { mart_main: data.mart_main ?? 0, performance: data.performance ?? 0 },
       })
       swrMutate('/api/data/mart-status')
     } catch {
       setBuildResult({ ok: false, error: 'Network error' })
     } finally {
       setBuildLoading(false)
-      setBuildProgress(null)
+      if (timerRef.current) clearInterval(timerRef.current)
     }
   }, [buildLoading])
 
+  useEffect(() => () => { if (timerRef.current) clearInterval(timerRef.current) }, [])
+
   return (
-    <BuildContext.Provider value={{ buildLoading, buildProgress, buildResult, clearBuildResult, startBuild }}>
+    <BuildContext.Provider value={{ buildLoading, elapsedSeconds, buildResult, clearBuildResult, startBuild }}>
       {children}
     </BuildContext.Provider>
   )

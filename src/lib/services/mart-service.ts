@@ -1,6 +1,16 @@
-import { query, queryOne } from '@/lib/db'
+import { query, queryOne, queryRowCount } from '@/lib/db'
 
-const buildInsertSQL = (withMmidFilter: boolean) => `
+const ON_CONFLICT_CLAUSE = `
+  ON CONFLICT (mmid, order_number, prod_num) DO UPDATE SET
+    days_to_order       = EXCLUDED.days_to_order,
+    order_seq_in_window = EXCLUDED.order_seq_in_window,
+    is_first_ever_order = EXCLUDED.is_first_ever_order,
+    customer_type       = EXCLUDED.customer_type,
+    month_label         = EXCLUDED.month_label,
+    week_label          = EXCLUDED.week_label,
+    refreshed_at        = EXCLUDED.refreshed_at`
+
+const buildInsertSQL = (withMmidFilter: boolean, upsert = true) => `
   WITH base AS (
     SELECT
       tc.mmid, tc.first_connected_date, tc.agent, tc.call_status, tc.lead_customers,
@@ -48,21 +58,12 @@ const buildInsertSQL = (withMmidFilter: boolean) => `
       || '-' || TO_CHAR(DATE_TRUNC('week', order_date)::DATE + 6, 'DD/Mon') AS week_label,
     NOW() AS refreshed_at
   FROM ranked
-  ON CONFLICT (mmid, order_number, prod_num) DO UPDATE SET
-    days_to_order       = EXCLUDED.days_to_order,
-    order_seq_in_window = EXCLUDED.order_seq_in_window,
-    is_first_ever_order = EXCLUDED.is_first_ever_order,
-    customer_type       = EXCLUDED.customer_type,
-    month_label         = EXCLUDED.month_label,
-    week_label          = EXCLUDED.week_label,
-    refreshed_at        = EXCLUDED.refreshed_at
+  ${upsert ? ON_CONFLICT_CLAUSE : ''}
 `
 
 export async function buildMartMain(attributionDays = 14): Promise<number> {
-  await query(`TRUNCATE TABLE mart_telesales_orders`)
-  await query(buildInsertSQL(false), [attributionDays])
-  const row = await queryOne<{ cnt: string }>(`SELECT COUNT(*) AS cnt FROM mart_telesales_orders`)
-  return Number(row?.cnt ?? 0)
+  await query(`DELETE FROM mart_telesales_orders WHERE true`)
+  return queryRowCount(buildInsertSQL(false, false), [attributionDays])
 }
 
 export async function refreshMartForMmids(mmids: string[], attributionDays = 14): Promise<number> {
@@ -78,13 +79,15 @@ export async function refreshMartChunk(
   limit: number,
   attributionDays = 14,
   truncate = false,
+  precomputedTotal?: number,
 ): Promise<{ processed: number; done: boolean; next_offset: number; total: number }> {
-  if (truncate) await query(`DELETE FROM mart_telesales_orders WHERE true`)
+  if (truncate) await query(`TRUNCATE TABLE mart_telesales_orders`)
 
-  const totalRow = await queryOne<{ cnt: string }>(
-    `SELECT COUNT(*) AS cnt FROM telesales_calls WHERE first_connected_date IS NOT NULL`
-  )
-  const total = Number(totalRow?.cnt ?? 0)
+  const total = (precomputedTotal !== undefined && precomputedTotal > 0)
+    ? precomputedTotal
+    : await queryOne<{ cnt: string }>(
+        `SELECT COUNT(*) AS cnt FROM telesales_calls WHERE first_connected_date IS NOT NULL`
+      ).then(r => Number(r?.cnt ?? 0))
 
   const rows = await query<{ mmid: string }>(
     `SELECT mmid FROM telesales_calls WHERE first_connected_date IS NOT NULL ORDER BY mmid LIMIT $1 OFFSET $2`,
@@ -111,6 +114,8 @@ export async function buildMartPerformance(): Promise<number> {
       ordered            INTEGER,
       new_customers      INTEGER,
       retention          INTEGER,
+      not_conv_new       INTEGER,
+      not_conv_retention INTEGER,
       hoc_orders         INTEGER,
       hoc_sales          NUMERIC,
       sales_target       NUMERIC,
@@ -144,11 +149,13 @@ export async function buildMartPerformance(): Promise<number> {
     telesales_metrics AS (
       SELECT
         month, dynamic_cmg,
-        COUNT(DISTINCT mmid) FILTER (WHERE customer_type IN ('new_customer','retention'))         AS ordered,
-        COUNT(DISTINCT mmid) FILTER (WHERE customer_type = 'new_customer')                        AS new_customers,
-        COUNT(DISTINCT mmid) FILTER (WHERE customer_type = 'retention')                           AS retention,
-        COUNT(DISTINCT order_number) FILTER (WHERE customer_type IN ('new_customer','retention')) AS hoc_orders,
-        COALESCE(SUM(sales_in_vat) FILTER (WHERE customer_type IN ('new_customer','retention')), 0) AS hoc_sales
+        COUNT(DISTINCT mmid) FILTER (WHERE customer_type IN ('new_customer','retention'))                  AS ordered,
+        COUNT(DISTINCT mmid) FILTER (WHERE customer_type = 'new_customer')                                AS new_customers,
+        COUNT(DISTINCT mmid) FILTER (WHERE customer_type = 'retention')                                   AS retention,
+        COUNT(DISTINCT mmid) FILTER (WHERE customer_type = 'first_order_not_converted')                   AS not_conv_new,
+        COUNT(DISTINCT mmid) FILTER (WHERE customer_type = 'retention_not_converted')                     AS not_conv_retention,
+        COUNT(DISTINCT order_number) FILTER (WHERE customer_type IN ('new_customer','retention'))         AS hoc_orders,
+        COALESCE(SUM(sales_in_vat) FILTER (WHERE customer_type IN ('new_customer','retention')), 0)      AS hoc_sales
       FROM mart_telesales_orders
       GROUP BY month, dynamic_cmg
     ),
@@ -195,7 +202,9 @@ export async function buildMartPerformance(): Promise<number> {
         tm.month, tm.dynamic_cmg,
         COALESCE(tc.total_calls, 0) AS total_calls,
         COALESCE(tc.reached,     0) AS reached,
-        tm.ordered, tm.new_customers, tm.retention, tm.hoc_orders, tm.hoc_sales,
+        tm.ordered, tm.new_customers, tm.retention,
+        tm.not_conv_new, tm.not_conv_retention,
+        tm.hoc_orders, tm.hoc_sales,
         COALESCE(tg.sales_target, 0) AS sales_target,
         CASE WHEN COALESCE(tg.sales_target, 0) > 0
              THEN tm.hoc_sales / tg.sales_target ELSE 0 END AS achievement_ratio,
@@ -210,7 +219,7 @@ export async function buildMartPerformance(): Promise<number> {
     )
     INSERT INTO mart_performance (
       month, dynamic_cmg, total_calls, reached, ordered,
-      new_customers, retention, hoc_orders, hoc_sales,
+      new_customers, retention, not_conv_new, not_conv_retention, hoc_orders, hoc_sales,
       sales_target, achievement_ratio,
       incentive_per_head, total_incentive,
       cost_per_agent, cost_per_supervisor, supervisor_count, agent_count,
@@ -219,7 +228,9 @@ export async function buildMartPerformance(): Promise<number> {
     SELECT
       b.month, b.dynamic_cmg,
       b.total_calls, b.reached,
-      b.ordered, b.new_customers, b.retention, b.hoc_orders, b.hoc_sales,
+      b.ordered, b.new_customers, b.retention,
+      b.not_conv_new, b.not_conv_retention,
+      b.hoc_orders, b.hoc_sales,
       b.sales_target, b.achievement_ratio,
       b.incentive_per_head,
       COALESCE(ah.agent_count, 0) * b.incentive_per_head                                        AS total_incentive,
@@ -242,6 +253,8 @@ export async function buildMartPerformance(): Promise<number> {
       ordered             = EXCLUDED.ordered,
       new_customers       = EXCLUDED.new_customers,
       retention           = EXCLUDED.retention,
+      not_conv_new        = EXCLUDED.not_conv_new,
+      not_conv_retention  = EXCLUDED.not_conv_retention,
       hoc_orders          = EXCLUDED.hoc_orders,
       hoc_sales           = EXCLUDED.hoc_sales,
       sales_target        = EXCLUDED.sales_target,

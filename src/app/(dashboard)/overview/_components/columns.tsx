@@ -22,6 +22,14 @@ export type OverviewRow = {
   total_agent_cost: number
   total_expense: number
   roi: number
+  online_sales: number
+  offline_sales: number
+  online_orders: number
+  offline_orders: number
+  online_new_customers: number
+  offline_new_customers: number
+  online_retention: number
+  offline_retention: number
 }
 
 export const overviewColumns: ColumnDef<OverviewRow>[] = [

@@ -3,6 +3,11 @@
 CREATE INDEX IF NOT EXISTS idx_online_sales_prod_num  ON online_sales(prod_num);
 CREATE INDEX IF NOT EXISTS idx_offline_sales_prod_num ON offline_sales(prod_num);
 
+-- Composite index for mart build JOIN: telesales_calls ⟶ sales_hoc_all
+-- ON s.mmid = tc.mmid AND s.order_date >= tc.first_connected_date
+CREATE INDEX IF NOT EXISTS idx_online_sales_mmid_date  ON online_sales  (mmid, order_date);
+CREATE INDEX IF NOT EXISTS idx_offline_sales_mmid_date ON offline_sales (mmid, order_date);
+
 -- ── Gold View: sales_hoc_all ─────────────────────────────────────
 -- INNER JOIN products ensures only HOC Unilever products are included
 -- (product_name_en IS NOT NULL = HOC Unilever)

@@ -8,6 +8,8 @@ import type { UploadFileType } from '@/lib/upload/config'
 import { query } from '@/lib/db'
 import { withAdmin } from '@/lib/auth'
 
+export const dynamic = 'force-dynamic'
+
 const ALLOWED_TABLES = [
   'online_sales', 'offline_sales', 'leads', 'products',
   'telesales_calls', 'targets', 'costs', 'incentives',

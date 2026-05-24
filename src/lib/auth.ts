@@ -27,6 +27,7 @@ export async function withAdmin(
   } catch (err) {
     if (err instanceof UnauthorizedError) return unauthorizedResponse()
     if (err instanceof ForbiddenError) return forbiddenResponse()
-    throw err
+    console.error('[withAdmin] handler error:', err)
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
   }
 }
