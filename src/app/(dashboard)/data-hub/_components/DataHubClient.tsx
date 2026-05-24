@@ -108,7 +108,7 @@ const fetcher = (url: string) => fetch(url, { cache: 'no-store' }).then(r => r.j
 
 export function DataHubClient() {
   const { jobs, enqueueJob, dismissJob } = useUploadQueue()
-  const { buildLoading, buildProgress, buildResult, clearBuildResult, startBuild } = useBuild()
+  const { buildLoading, elapsedSeconds, buildResult, clearBuildResult, startBuild } = useBuild()
 
   // ── Form state (current file being prepared) ───────────────
   const [fileType, setFileType]         = useState<UploadFileType>('online_sales')
@@ -1457,28 +1457,16 @@ export function DataHubClient() {
                 {buildLoading ? 'Building Mart Models…' : 'Build Tables'}
               </button>
 
-              {buildLoading && buildProgress && (
-                <div className="rounded-xl border border-blue-200 bg-blue-50/50 p-4 space-y-3 shadow-xs">
-                  <div className="flex justify-between items-center text-sm text-blue-800">
-                    <span className="font-medium">
-                      {buildProgress.phase === 'chunking'
-                        ? `Processing customers… ${buildProgress.current.toLocaleString()} / ${buildProgress.total.toLocaleString()}`
-                        : 'Finalizing cost & incentive mart…'}
-                    </span>
-                    {buildProgress.phase === 'chunking' && buildProgress.total > 0 && (
-                      <span className="font-bold tabular-nums">
-                        {Math.round((buildProgress.current / buildProgress.total) * 100)}%
-                      </span>
-                    )}
+              {buildLoading && (
+                <div className="rounded-lg border border-blue-200 bg-blue-50 p-4 flex items-center gap-3">
+                  <RefreshCw className="h-4 w-4 text-blue-600 animate-spin shrink-0" />
+                  <div className="flex-1">
+                    <p className="text-sm text-blue-700 font-medium">Building mart tables…</p>
+                    <p className="text-xs text-blue-500 mt-0.5">Running directly in CockroachDB — this may take 30–90 seconds</p>
                   </div>
-                  {buildProgress.phase === 'chunking' && buildProgress.total > 0 && (
-                    <div className="h-2 w-full rounded-full bg-blue-150 overflow-hidden shadow-inner">
-                      <div
-                        className="h-full rounded-full bg-[#003DA6] transition-all duration-300"
-                        style={{ width: `${Math.round((buildProgress.current / buildProgress.total) * 100)}%` }}
-                      />
-                    </div>
-                  )}
+                  <span className="text-sm font-mono text-blue-600 shrink-0">
+                    {String(Math.floor(elapsedSeconds / 60)).padStart(2, '0')}:{String(elapsedSeconds % 60).padStart(2, '0')}
+                  </span>
                 </div>
               )}
 

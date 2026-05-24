@@ -4,13 +4,12 @@ import { query, queryOne } from '@/lib/db'
 export const dynamic = 'force-dynamic'
 
 export async function GET() {
+  try {
   const [
     summaries,
     lastUploads,
     onlineDates,
     offlineDates,
-    leadsCount,
-    productsCount,
     productsBrands,
     telesales,
     teleAgents,
@@ -19,40 +18,28 @@ export async function GET() {
     incentiveRows,
     batches,
   ] = await Promise.all([
-    // table_summaries: row counts + sales totals (online/offline/etc.)
     query<{ table_name: string; total_rows: string; total_sales: string }>(
       `SELECT table_name, total_rows, total_sales FROM table_summaries`
     ),
-    // last successful upload per table
     query<{ table_name: string; uploaded_at: string }>(
       `SELECT DISTINCT ON (table_name) table_name, uploaded_at
        FROM upload_batches WHERE status IN ('success','partial')
        ORDER BY table_name, uploaded_at DESC`
     ),
-    // online_sales: min + max date in one query
     queryOne<{ min_d: string | null; max_d: string | null }>(
       `SELECT MIN(order_date)::text AS min_d, MAX(order_date)::text AS max_d FROM online_sales`
     ),
-    // offline_sales: min + max date in one query
     queryOne<{ min_d: string | null; max_d: string | null }>(
       `SELECT MIN(order_date)::text AS min_d, MAX(order_date)::text AS max_d FROM offline_sales`
     ),
-    // leads count (fallback if not in table_summaries)
-    queryOne<{ cnt: string }>(`SELECT COUNT(*) AS cnt FROM leads`),
-    // products count (fallback)
-    queryOne<{ cnt: string }>(`SELECT COUNT(*) AS cnt FROM products`),
-    // products: distinct brands
     query<{ brands: string }>(`SELECT DISTINCT brands FROM products WHERE brands IS NOT NULL`),
-    // telesales: count + date range in one query (not from table_summaries — always real)
     queryOne<{ cnt: string; min_d: string | null; max_d: string | null }>(
       `SELECT COUNT(*) AS cnt,
               MIN(first_connected_date)::text AS min_d,
               MAX(first_connected_date)::text AS max_d
        FROM telesales_calls`
     ),
-    // telesales: distinct agents (separate — DISTINCT pattern)
     query<{ agent: string }>(`SELECT DISTINCT agent FROM telesales_calls WHERE agent IS NOT NULL`),
-    // targets: count + date range + sum in one query
     queryOne<{ cnt: string; min_d: string | null; max_d: string | null; total: string }>(
       `SELECT COUNT(*) AS cnt,
               MIN(month)::text AS min_d,
@@ -60,16 +47,13 @@ export async function GET() {
               COALESCE(SUM(sales_target), 0)::text AS total
        FROM targets`
     ),
-    // costs: count + date range in one query
     queryOne<{ cnt: string; min_d: string | null; max_d: string | null }>(
       `SELECT COUNT(*) AS cnt,
               MIN(month)::text AS min_d,
               MAX(month)::text AS max_d
        FROM costs`
     ),
-    // incentives: tiers
     query<{ tier: number }>(`SELECT tier FROM incentives ORDER BY tier`),
-    // upload history (last 50)
     query<{
       id: string; table_name: string; filename: string | null
       row_count: number | null; error_count: number
@@ -107,11 +91,11 @@ export async function GET() {
       last_uploaded: lastUpload['offline_sales'] ?? null,
     },
     leads: {
-      total_rows:    summaryMap['leads']?.total_rows ?? Number(leadsCount?.cnt ?? 0),
+      total_rows:    summaryMap['leads']?.total_rows ?? 0,
       last_uploaded: lastUpload['leads'] ?? null,
     },
     products: {
-      total_rows:    summaryMap['products']?.total_rows ?? Number(productsCount?.cnt ?? 0),
+      total_rows:    summaryMap['products']?.total_rows ?? 0,
       total_brands:  new Set(productsBrands.map(r => r.brands)).size,
       last_uploaded: lastUpload['products'] ?? null,
     },
@@ -142,5 +126,11 @@ export async function GET() {
     },
   }
 
-  return NextResponse.json({ status, history: batches })
+  const res = NextResponse.json({ status, history: batches })
+  res.headers.set('Cache-Control', 'public, s-maxage=30, stale-while-revalidate=60')
+  return res
+  } catch (err) {
+    console.error('[dashboard]', err)
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
+  }
 }
