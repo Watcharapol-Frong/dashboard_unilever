@@ -45,7 +45,7 @@ function buildWhere(
 async function fetchKpis(where: string, params: any[]) {
   return queryOne<{
     total_sales: string; online_sales: string; offline_sales: string
-    total_orders: string; new_customers: string; converted_customers: string; total_qty: string
+    total_orders: string; new_customers: string; retention_customers: string; total_qty: string
   }>(`
     SELECT
       COALESCE(SUM(sales_in_vat), 0)::text                                                       AS total_sales,
@@ -53,7 +53,7 @@ async function fetchKpis(where: string, params: any[]) {
       COALESCE(SUM(CASE WHEN channel='offline' THEN sales_in_vat ELSE 0 END), 0)::text           AS offline_sales,
       COUNT(DISTINCT order_number)::text                                                          AS total_orders,
       COUNT(DISTINCT mmid) FILTER (WHERE customer_type='new_customer')::text                     AS new_customers,
-      COUNT(DISTINCT mmid) FILTER (WHERE customer_type IN ('new_customer','retention'))::text     AS converted_customers,
+      COUNT(DISTINCT mmid) FILTER (WHERE customer_type='retention')::text                        AS retention_customers,
       COALESCE(SUM(sales_qty), 0)::text                                                          AS total_qty
     FROM mart_telesales_orders
     ${where}
@@ -65,14 +65,14 @@ async function fetchLastTwoPeriods(interval: Interval, where: string, params: an
   const grp = periodExpr(interval)
   return query<{
     period: string; total_sales: string; total_orders: string
-    new_customers: string; converted_customers: string
+    new_customers: string; retention_customers: string
   }>(`
     SELECT
       ${grp} AS period,
       SUM(sales_in_vat)::text                                                         AS total_sales,
       COUNT(DISTINCT order_number)::text                                              AS total_orders,
       COUNT(DISTINCT mmid) FILTER (WHERE customer_type='new_customer')::text          AS new_customers,
-      COUNT(DISTINCT mmid) FILTER (WHERE customer_type IN ('new_customer','retention'))::text AS converted_customers
+      COUNT(DISTINCT mmid) FILTER (WHERE customer_type='retention')::text             AS retention_customers
     FROM mart_telesales_orders
     ${where}
     GROUP BY ${grp}
@@ -175,13 +175,13 @@ export async function GET(request: Request) {
 
     // Parse current KPI
     const c = {
-      total_sales:         Number(currKpi?.total_sales         ?? 0),
-      online_sales:        Number(currKpi?.online_sales        ?? 0),
-      offline_sales:       Number(currKpi?.offline_sales       ?? 0),
-      total_orders:        Number(currKpi?.total_orders        ?? 0),
-      new_customers:       Number(currKpi?.new_customers       ?? 0),
-      converted_customers: Number(currKpi?.converted_customers ?? 0),
-      total_qty:           Number(currKpi?.total_qty           ?? 0),
+      total_sales:          Number(currKpi?.total_sales          ?? 0),
+      online_sales:         Number(currKpi?.online_sales         ?? 0),
+      offline_sales:        Number(currKpi?.offline_sales        ?? 0),
+      total_orders:         Number(currKpi?.total_orders         ?? 0),
+      new_customers:        Number(currKpi?.new_customers        ?? 0),
+      retention_customers:  Number(currKpi?.retention_customers  ?? 0),
+      total_qty:            Number(currKpi?.total_qty            ?? 0),
     }
     const avgOV = c.total_orders > 0 ? c.total_sales / c.total_orders : 0
 
@@ -189,37 +189,35 @@ export async function GET(request: Request) {
     let cmpSales: number | null = null
     let cmpOrders: number | null = null
     let cmpNew: number | null = null
-    let cmpConverted: number | null = null
+    let cmpRetention: number | null = null
     let cmpAov: number | null = null
 
     if (hasDateRange) {
-      // prevOrPeriods is the result of fetchKpis (single row queryOne)
       const p = prevOrPeriods as Awaited<ReturnType<typeof fetchKpis>>
       if (p) {
-        const ps = Number(p.total_sales ?? 0)
-        const po = Number(p.total_orders ?? 0)
-        const pn = Number(p.new_customers ?? 0)
-        const pc = Number(p.converted_customers ?? 0)
+        const ps   = Number(p.total_sales        ?? 0)
+        const po   = Number(p.total_orders       ?? 0)
+        const pn   = Number(p.new_customers      ?? 0)
+        const pr   = Number(p.retention_customers ?? 0)
         const paov = po > 0 ? ps / po : 0
-        cmpSales     = cmpRatio(c.total_sales,         ps)
-        cmpOrders    = cmpRatio(c.total_orders,        po)
-        cmpNew       = cmpRatio(c.new_customers,       pn)
-        cmpConverted = cmpRatio(c.converted_customers, pc)
-        cmpAov       = cmpRatio(avgOV,                 paov)
+        cmpSales     = cmpRatio(c.total_sales,        ps)
+        cmpOrders    = cmpRatio(c.total_orders,       po)
+        cmpNew       = cmpRatio(c.new_customers,      pn)
+        cmpRetention = cmpRatio(c.retention_customers, pr)
+        cmpAov       = cmpRatio(avgOV,                paov)
       }
     } else {
-      // prevOrPeriods is an array from fetchLastTwoPeriods
       const rows = prevOrPeriods as Awaited<ReturnType<typeof fetchLastTwoPeriods>>
       if (Array.isArray(rows) && rows.length >= 2) {
         const [r0, r1] = rows
-        const s0 = Number(r0.total_sales ?? 0), s1 = Number(r1.total_sales ?? 0)
-        const o0 = Number(r0.total_orders ?? 0), o1 = Number(r1.total_orders ?? 0)
+        const s0 = Number(r0.total_sales ?? 0),  s1 = Number(r1.total_sales ?? 0)
+        const o0 = Number(r0.total_orders ?? 0),  o1 = Number(r1.total_orders ?? 0)
         const n0 = Number(r0.new_customers ?? 0), n1 = Number(r1.new_customers ?? 0)
-        const c0 = Number(r0.converted_customers ?? 0), c1 = Number(r1.converted_customers ?? 0)
+        const rt0 = Number(r0.retention_customers ?? 0), rt1 = Number(r1.retention_customers ?? 0)
         cmpSales     = cmpRatio(s0, s1)
         cmpOrders    = cmpRatio(o0, o1)
         cmpNew       = cmpRatio(n0, n1)
-        cmpConverted = cmpRatio(c0, c1)
+        cmpRetention = cmpRatio(rt0, rt1)
         cmpAov       = cmpRatio(o0 > 0 ? s0/o0 : 0, o1 > 0 ? s1/o1 : 0)
       }
     }
@@ -230,12 +228,12 @@ export async function GET(request: Request) {
         kpi: {
           ...c,
           avg_order_value: avgOV,
-          cmp_total_sales:         cmpSales,
-          cmp_total_orders:        cmpOrders,
-          cmp_new_customers:       cmpNew,
-          cmp_avg_order_value:     cmpAov,
-          cmp_converted_customers: cmpConverted,
-          comparison_label:        comparisonLabel,
+          cmp_total_sales:        cmpSales,
+          cmp_total_orders:       cmpOrders,
+          cmp_new_customers:      cmpNew,
+          cmp_retention_customers: cmpRetention,
+          cmp_avg_order_value:    cmpAov,
+          comparison_label:       comparisonLabel,
         },
         by_period: periodsRaw.map(r => ({
           period:       r.period,

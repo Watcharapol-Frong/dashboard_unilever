@@ -15,18 +15,18 @@ import { DateRangePicker } from '@/components/dashboard/DateRangePicker'
 import { fmtBaht, fmt } from '@/lib/formatters'
 import { cn } from '@/lib/utils'
 import { columns } from '../columns'
-import { ShoppingBag, TrendingUp, UserPlus, UserCheck } from 'lucide-react'
+import { ShoppingBag, TrendingUp, UserPlus, Users, CreditCard } from 'lucide-react'
 import { CHART_AXIS_CLS, CHART_TOOLTIP_STYLE } from '@/lib/chart-utils'
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
 interface SalesKpi {
   total_sales: number; online_sales: number; offline_sales: number
-  total_orders: number; new_customers: number; converted_customers: number
+  total_orders: number; new_customers: number; retention_customers: number
   total_qty: number; avg_order_value: number
   cmp_total_sales: number | null; cmp_total_orders: number | null
   cmp_new_customers: number | null; cmp_avg_order_value: number | null
-  cmp_converted_customers: number | null; comparison_label: string | null
+  cmp_retention_customers: number | null; comparison_label: string | null
 }
 
 interface SalesData {
@@ -211,11 +211,11 @@ export default function SalesClient() {
           comparisonLabel={kpi.comparison_label ?? undefined}
         />
         <KpiCard
-          title="Total Orders"
-          value={kpi.total_orders.toLocaleString()}
-          subtitle={`Avg ${fmtBaht(kpi.avg_order_value)} / order`}
-          icon={ShoppingBag}
-          comparison={kpi.cmp_total_orders ?? undefined}
+          title="Avg Order Value"
+          value={fmtBaht(kpi.avg_order_value)}
+          subtitle={`${kpi.total_orders.toLocaleString()} orders total`}
+          icon={CreditCard}
+          comparison={kpi.cmp_avg_order_value ?? undefined}
           comparisonLabel={kpi.comparison_label ?? undefined}
         />
         <KpiCard
@@ -227,11 +227,11 @@ export default function SalesClient() {
           comparisonLabel={kpi.comparison_label ?? undefined}
         />
         <KpiCard
-          title="Converted Customers"
-          value={kpi.converted_customers.toLocaleString()}
-          subtitle="New + retention customers"
-          icon={UserCheck}
-          comparison={kpi.cmp_converted_customers ?? undefined}
+          title="Retention Customers"
+          value={kpi.retention_customers.toLocaleString()}
+          subtitle="Repeat telesales buyers"
+          icon={Users}
+          comparison={kpi.cmp_retention_customers ?? undefined}
           comparisonLabel={kpi.comparison_label ?? undefined}
         />
       </KpiGrid>
