@@ -151,19 +151,13 @@ export default function LeadsClient() {
           </div>
         </CardHeader>
         <CardContent>
-          <FilterBar
-            hasFilter={hasFilter}
-            onClear={() => {
-              setSearch(''); setFilterTier('all'); setFilterContact('all')
-              setFilterConv('all'); setFilterCmg('all'); setFilterAgent('all')
-            }}
-          >
+          <FilterBar hasFilter={hasFilter} onClear={clearFilters}>
             {/* No search input here anymore, moved to DataTable */}
             <FilterSelect
               label="All Tiers"
               value={filterTier}
               onChange={setFilterTier}
-              options={tierOptions.map(v => ({ value: v, label: v }))}
+              options={tiers.map(v => ({ value: v, label: v }))}
             />
             <FilterSelect
               label="Contact"
@@ -189,26 +183,51 @@ export default function LeadsClient() {
               label="All CMG"
               value={filterCmg}
               onChange={setFilterCmg}
-              options={cmgOptions.map(v => ({ value: v, label: v }))}
+              options={cmgs.map(v => ({ value: v, label: v }))}
             />
             <FilterSelect
               label="All Agents"
               value={filterAgent}
               onChange={setFilterAgent}
-              options={agentOptions.map(v => ({ value: v, label: v }))}
+              options={agents.map(v => ({ value: v, label: v }))}
             />
           </FilterBar>
         </CardContent>
       </Card>
 
-      <DataTable
-        key={`${filterTier}|${filterContact}|${filterConv}|${filterCmg}|${filterAgent}`}
-        columns={leadsColumns}
-        data={filtered}
-        searchValue={search}
-        onSearchChange={setSearch}
-        searchPlaceholder="Search MMID / Name..."
-      />
+      {pageError && <PageError message={pageError.message} />}
+
+      <div className={pageLoading ? 'opacity-60 pointer-events-none' : ''}>
+        <DataTable
+          key={pageUrl}
+          columns={leadsColumns}
+          data={rows}
+        />
+      </div>
+
+      {totalPages > 1 && (
+        <div className="flex items-center justify-between text-sm text-muted-foreground">
+          <span>
+            {total.toLocaleString()} results · page {page} of {totalPages}
+          </span>
+          <div className="flex items-center gap-1">
+            <button
+              onClick={() => setPage(p => Math.max(1, p - 1))}
+              disabled={page <= 1}
+              className="h-8 w-8 flex items-center justify-center rounded border hover:bg-muted disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+            >
+              <ChevronLeft className="h-4 w-4" />
+            </button>
+            <button
+              onClick={() => setPage(p => Math.min(totalPages, p + 1))}
+              disabled={page >= totalPages}
+              className="h-8 w-8 flex items-center justify-center rounded border hover:bg-muted disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+            >
+              <ChevronRight className="h-4 w-4" />
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
