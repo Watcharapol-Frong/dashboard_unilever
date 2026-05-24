@@ -2,6 +2,8 @@ import { NextResponse } from 'next/server'
 import { withAdmin } from '@/lib/auth'
 import { buildMartPerformance } from '@/lib/services/mart-service'
 
+export const dynamic = 'force-dynamic'
+
 export async function POST() {
   return withAdmin(async () => {
     const start = Date.now()

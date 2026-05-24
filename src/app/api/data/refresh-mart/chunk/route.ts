@@ -2,6 +2,8 @@ import { NextResponse } from 'next/server'
 import { withAdmin } from '@/lib/auth'
 import { refreshMartChunk } from '@/lib/services/mart-service'
 
+export const dynamic = 'force-dynamic'
+
 export async function POST(request: Request) {
   return withAdmin(async () => {
     const body = await request.json().catch(() => ({}))

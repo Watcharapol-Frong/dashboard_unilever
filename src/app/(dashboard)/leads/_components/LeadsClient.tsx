@@ -1,7 +1,6 @@
 'use client'
 
 import { useMemo, useState } from 'react'
-import { Input } from '@/components/ui/input'
 import { DataTable } from '@/components/ui/data-table'
 import { KpiCard } from '@/components/dashboard/KpiCard'
 import { KpiGrid } from '@/components/dashboard/KpiGrid'
@@ -10,6 +9,8 @@ import { FilterSelect } from '@/components/dashboard/FilterSelect'
 import { PageLoading, PageEmpty, PageError } from '@/components/dashboard/PageState'
 import { useDashboardSWR } from '@/hooks/useDashboardSWR'
 import { fmtPct } from '@/lib/formatters'
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { Filter, Users, PhoneCall, Award, ShoppingBag } from 'lucide-react'
 import { leadsColumns, type Lead } from './columns'
 
 export default function LeadsClient() {
@@ -57,88 +58,104 @@ export default function LeadsClient() {
   )
 
   return (
-    <div className="space-y-5">
+    <div className="space-y-6">
 
       {/* KPI Cards */}
       <KpiGrid cols={4}>
-        <KpiCard title="Total Leads" value={kpi.total.toLocaleString()} />
+        <KpiCard
+          title="Total Leads"
+          value={kpi.total.toLocaleString()}
+          subtitle="Assigned telesales leads"
+          icon={Users}
+        />
         <KpiCard
           title="Contacted"
           value={kpi.contacted.toLocaleString()}
           subtitle={fmtPct(kpi.contacted, kpi.total)}
+          icon={PhoneCall}
         />
         <KpiCard
           title="Conversion"
           value={kpi.converted.toLocaleString()}
           subtitle={fmtPct(kpi.converted, kpi.total)}
           valueClassName="text-blue-600"
+          icon={Award}
         />
         <KpiCard
           title="Orders"
           value={kpi.orders.toLocaleString()}
           subtitle={kpi.converted > 0 ? `avg ${(kpi.orders / kpi.converted).toFixed(1)}x / person` : undefined}
           valueClassName="text-green-600"
+          icon={ShoppingBag}
         />
       </KpiGrid>
 
-      {/* Filters */}
-      <FilterBar
-        hasFilter={hasFilter}
-        onClear={() => {
-          setSearch(''); setFilterTier('all'); setFilterContact('all')
-          setFilterConv('all'); setFilterCmg('all'); setFilterAgent('all')
-        }}
-      >
-        <Input
-          placeholder="Search MMID / Name..."
-          value={search}
-          onChange={e => setSearch(e.target.value)}
-          className="h-8 w-full sm:w-48 text-sm"
-        />
-        <FilterSelect
-          label="All Tiers"
-          value={filterTier}
-          onChange={setFilterTier}
-          options={tierOptions.map(v => ({ value: v, label: v }))}
-        />
-        <FilterSelect
-          label="Contact"
-          value={filterContact}
-          onChange={setFilterContact}
-          options={[
-            { value: 'reached',            label: 'Reached' },
-            { value: 'called_not_reached', label: 'Not Reached' },
-            { value: 'not_called',         label: 'Not Called' },
-          ]}
-        />
-        <FilterSelect
-          label="Conversion"
-          value={filterConv}
-          onChange={setFilterConv}
-          options={[
-            { value: 'converted',     label: 'Converted' },
-            { value: 'not_converted', label: 'Not Converted' },
-            { value: 'no_hoc_order',  label: 'No Order' },
-          ]}
-        />
-        <FilterSelect
-          label="All CMG"
-          value={filterCmg}
-          onChange={setFilterCmg}
-          options={cmgOptions.map(v => ({ value: v, label: v }))}
-        />
-        <FilterSelect
-          label="All Agents"
-          value={filterAgent}
-          onChange={setFilterAgent}
-          options={agentOptions.map(v => ({ value: v, label: v }))}
-        />
-      </FilterBar>
+      {/* Filters Card */}
+      <Card>
+        <CardHeader className="pb-3">
+          <div className="flex items-center gap-2">
+            <Filter className="h-4 w-4 text-[#003DA6]" />
+            <CardTitle className="text-sm font-medium">Filter & Search Selection</CardTitle>
+          </div>
+        </CardHeader>
+        <CardContent>
+          <FilterBar
+            hasFilter={hasFilter}
+            onClear={() => {
+              setSearch(''); setFilterTier('all'); setFilterContact('all')
+              setFilterConv('all'); setFilterCmg('all'); setFilterAgent('all')
+            }}
+          >
+            {/* No search input here anymore, moved to DataTable */}
+            <FilterSelect
+              label="All Tiers"
+              value={filterTier}
+              onChange={setFilterTier}
+              options={tierOptions.map(v => ({ value: v, label: v }))}
+            />
+            <FilterSelect
+              label="Contact"
+              value={filterContact}
+              onChange={setFilterContact}
+              options={[
+                { value: 'reached',            label: 'Reached' },
+                { value: 'called_not_reached', label: 'Not Reached' },
+                { value: 'not_called',         label: 'Not Called' },
+              ]}
+            />
+            <FilterSelect
+              label="Conversion"
+              value={filterConv}
+              onChange={setFilterConv}
+              options={[
+                { value: 'converted',     label: 'Converted' },
+                { value: 'not_converted', label: 'Not Converted' },
+                { value: 'no_hoc_order',  label: 'No Order' },
+              ]}
+            />
+            <FilterSelect
+              label="All CMG"
+              value={filterCmg}
+              onChange={setFilterCmg}
+              options={cmgOptions.map(v => ({ value: v, label: v }))}
+            />
+            <FilterSelect
+              label="All Agents"
+              value={filterAgent}
+              onChange={setFilterAgent}
+              options={agentOptions.map(v => ({ value: v, label: v }))}
+            />
+          </FilterBar>
+        </CardContent>
+      </Card>
 
       <DataTable
-        key={`${search}|${filterTier}|${filterContact}|${filterConv}|${filterCmg}|${filterAgent}`}
+        key={`${filterTier}|${filterContact}|${filterConv}|${filterCmg}|${filterAgent}`}
         columns={leadsColumns}
         data={filtered}
+        searchValue={search}
+        onSearchChange={setSearch}
+        searchPlaceholder="Search MMID / Name..."
       />
     </div>
   )

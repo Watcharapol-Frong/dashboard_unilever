@@ -33,12 +33,18 @@ interface DataTableProps<TData, TValue> {
   columns: ColumnDef<TData, TValue>[]
   data: TData[]
   searchKey?: string
+  searchValue?: string
+  onSearchChange?: (v: string) => void
+  searchPlaceholder?: string
 }
 
 export function DataTable<TData, TValue>({
   columns,
   data,
   searchKey,
+  searchValue,
+  onSearchChange,
+  searchPlaceholder,
 }: DataTableProps<TData, TValue>) {
   const [rowSelection, setRowSelection] = React.useState({})
   const [columnVisibility, setColumnVisibility] =
@@ -81,6 +87,14 @@ export function DataTable<TData, TValue>({
               onChange={(event) =>
                 table.getColumn(searchKey)?.setFilterValue(event.target.value)
               }
+              className="h-8 w-[150px] lg:w-[250px]"
+            />
+          )}
+          {searchValue !== undefined && onSearchChange && (
+            <Input
+              placeholder={searchPlaceholder || "Search..."}
+              value={searchValue}
+              onChange={(event) => onSearchChange(event.target.value)}
               className="h-8 w-[150px] lg:w-[250px]"
             />
           )}
