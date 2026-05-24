@@ -16,6 +16,7 @@ import { CHART_AXIS_CLS, CHART_TOOLTIP_STYLE } from '@/lib/chart-utils'
 import { formatNumber, formatPct, colorRate } from '@/lib/formatters'
 import { columns } from '../columns'
 import { Phone, PhoneCall, UserCheck, Users } from 'lucide-react'
+import { TelesalesFunnelChart } from './TelesalesFunnelChart'
 
 interface AgentPerformance {
   agent: string
@@ -131,6 +132,19 @@ export default function TelesalesClient() {
           </BarChart>
         </ChartCard>
       </div>
+
+      {/* ── Telesales Funnel ── */}
+      <Card>
+        <CardHeader className="pb-2">
+          <CardTitle className="text-sm font-medium">Telesales Conversion Funnel</CardTitle>
+          <p className="text-xs text-muted-foreground mt-0.5">
+            Lead-to-order journey: All Leads → Contacted → Answered → Engaged → Converted
+          </p>
+        </CardHeader>
+        <CardContent>
+          <TelesalesFunnelChart />
+        </CardContent>
+      </Card>
 
       <Card>
         <CardHeader>

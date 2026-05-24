@@ -26,6 +26,9 @@
     "paths": {
       "@/*": [
         "./src/*"
+      ],
+      "@bklitui/ui/charts": [
+        "./src/components/charts/sankey/index.ts"
       ]
     }
   },
