@@ -110,50 +110,13 @@ export default function SalesClient() {
   return (
     <div className="space-y-6">
 
-      {/* ── Filter Bar ────────────────────────────────────────────────────── */}
+      {/* ── Filter Bar (dimension filters only) ──────────────────────────── */}
       <Card>
         <CardHeader className="pb-3">
-          <CardTitle className="text-sm font-medium">Filter & Date Range</CardTitle>
+          <CardTitle className="text-sm font-medium">Filters</CardTitle>
         </CardHeader>
         <CardContent>
           <div className="flex flex-wrap items-center gap-3">
-
-            {/* Interval tabs */}
-            <div className="flex items-center bg-gray-100/80 p-0.5 rounded-lg border border-gray-200">
-              {(['monthly', 'weekly', 'custom'] as const).map(v => (
-                <button
-                  key={v}
-                  onClick={() => setInterval(v)}
-                  className={cn(
-                    'px-3 py-1 rounded-md text-xs font-bold transition-all duration-200 capitalize',
-                    interval === v
-                      ? 'bg-white text-[#003DA6] shadow-xs'
-                      : 'text-muted-foreground hover:text-foreground'
-                  )}
-                >
-                  {v.charAt(0).toUpperCase() + v.slice(1)}
-                </button>
-              ))}
-            </div>
-
-            {interval === 'custom' && (
-              <div className="flex items-center gap-2 animate-in fade-in slide-in-from-left-2 duration-200">
-                <DateRangePicker
-                  from={customStart}
-                  to={customEnd}
-                  onFromChange={setCustomStart}
-                  onToChange={setCustomEnd}
-                />
-                {durationDays > 0 && (
-                  <span className="text-[9px] bg-blue-50 text-[#003DA6] px-1.5 py-0.5 rounded font-bold uppercase">
-                    {calculatedInterval} · {durationDays}d
-                  </span>
-                )}
-              </div>
-            )}
-
-            <div className="w-px h-5 bg-border hidden sm:block" />
-
             <Select value={channel} onValueChange={v => setChannel(v as Channel)}>
               <SelectTrigger className="h-7 text-xs w-[130px]"><SelectValue placeholder="All Channels" /></SelectTrigger>
               <SelectContent>
@@ -241,10 +204,46 @@ export default function SalesClient() {
 
         {/* Sales Trend — area line chart */}
         <Card className="lg:col-span-2">
-          <CardHeader>
+          <CardHeader className="flex sm:flex-row flex-col justify-between sm:items-center items-start gap-3 pb-2">
             <CardTitle className="text-sm font-medium">Sales Trend (Telesales Activity)</CardTitle>
+            <div className="flex items-center gap-2 flex-wrap">
+              {/* Interval tabs */}
+              <div className="flex items-center bg-gray-100/80 p-0.5 rounded-lg border border-gray-200">
+                {(['monthly', 'weekly', 'custom'] as const).map(v => (
+                  <button
+                    key={v}
+                    onClick={() => setInterval(v)}
+                    className={cn(
+                      'px-3 py-1 rounded-md text-xs font-bold transition-all duration-200 capitalize',
+                      interval === v
+                        ? 'bg-white text-[#003DA6] shadow-xs'
+                        : 'text-muted-foreground hover:text-foreground'
+                    )}
+                  >
+                    {v.charAt(0).toUpperCase() + v.slice(1)}
+                  </button>
+                ))}
+              </div>
+
+              {/* Date picker (custom only) */}
+              {interval === 'custom' && (
+                <div className="flex items-center gap-2 animate-in fade-in slide-in-from-right-2 duration-200">
+                  <DateRangePicker
+                    from={customStart}
+                    to={customEnd}
+                    onFromChange={setCustomStart}
+                    onToChange={setCustomEnd}
+                  />
+                  {durationDays > 0 && (
+                    <span className="text-[9px] bg-blue-50 text-[#003DA6] px-1.5 py-0.5 rounded font-bold uppercase">
+                      {calculatedInterval} · {durationDays}d
+                    </span>
+                  )}
+                </div>
+              )}
+            </div>
           </CardHeader>
-          <CardContent className="h-[300px]">
+          <CardContent className="h-[300px] pt-2">
             <AreaChart data={chartData} width={0} height={280} style={{ width: '100%' }}
               margin={{ top: 10, right: 10, left: 10, bottom: 0 }}>
               <defs>
