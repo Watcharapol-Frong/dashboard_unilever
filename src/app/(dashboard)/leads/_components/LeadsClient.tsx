@@ -1,6 +1,7 @@
 'use client'
 
 import { useMemo, useState, useEffect, useRef } from 'react'
+import useSWR from 'swr'
 import { DataTable } from '@/components/ui/data-table'
 import { KpiCard } from '@/components/dashboard/KpiCard'
 import { KpiGrid } from '@/components/dashboard/KpiGrid'
