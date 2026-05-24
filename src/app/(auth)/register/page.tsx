@@ -4,10 +4,12 @@ import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { Loader2 } from 'lucide-react'
+import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
+import { Field, FieldDescription, FieldGroup, FieldLabel } from '@/components/ui/field'
 
 export default function RegisterPage() {
   const router = useRouter()
-
   const [name,       setName]       = useState('')
   const [email,      setEmail]      = useState('')
   const [inviteCode, setInviteCode] = useState('')
@@ -35,92 +37,86 @@ export default function RegisterPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-[#003DA6] to-[#001e6e] flex items-center justify-center p-4">
-      <div className="w-full max-w-md">
-        {/* Header */}
-        <div className="text-center mb-8">
-          <h1 className="text-3xl font-bold text-white">Unilever Project</h1>
-          <p className="text-white/60 mt-2">Create your account</p>
-        </div>
+    <div className="flex min-h-svh flex-col items-center justify-center gap-6 bg-background p-6 md:p-10">
+      <div className="w-full max-w-sm">
+        <div className="flex flex-col gap-6">
 
-        {/* Card */}
-        <div className="bg-white rounded-2xl shadow-2xl p-8 space-y-6">
-          <div>
-            <h2 className="text-xl font-semibold text-gray-800">Register</h2>
-            <p className="text-sm text-gray-400 mt-1">
-              After registering, sign in with a magic link sent to your email.
-            </p>
-          </div>
+          <form onSubmit={handleSubmit}>
+            <FieldGroup>
+              {/* Header */}
+              <div className="flex flex-col items-center gap-2 text-center">
+                <div className="flex size-10 items-center justify-center rounded-md bg-[#003DA6] text-white font-bold text-lg select-none">
+                  U
+                </div>
+                <h1 className="text-xl font-bold">Create an account</h1>
+                <FieldDescription>
+                  Already have an account?{' '}
+                  <Link href="/login">Sign in</Link>
+                </FieldDescription>
+              </div>
 
-          {error && (
-            <div className="bg-red-50 border border-red-200 text-red-700 text-sm rounded-lg px-4 py-3">
-              {error}
-            </div>
-          )}
+              {/* Error */}
+              {error && (
+                <p className="text-sm text-destructive text-center">{error}</p>
+              )}
 
-          <form onSubmit={handleSubmit} className="space-y-4">
-            {/* Name */}
-            <div className="space-y-1.5">
-              <label className="text-sm font-medium text-gray-700">
-                Name
-              </label>
-              <input
-                type="text"
-                value={name}
-                onChange={e => setName(e.target.value)}
-                placeholder="Your full name"
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#003DA6]/30 focus:border-[#003DA6] transition"
-              />
-            </div>
+              <Field>
+                <FieldLabel htmlFor="name">Name</FieldLabel>
+                <Input
+                  id="name"
+                  type="text"
+                  value={name}
+                  onChange={e => setName(e.target.value)}
+                  placeholder="Your full name"
+                />
+              </Field>
 
-            {/* Email */}
-            <div className="space-y-1.5">
-              <label className="text-sm font-medium text-gray-700">
-                Email address <span className="text-red-500">*</span>
-              </label>
-              <input
-                type="email"
-                required
-                value={email}
-                onChange={e => setEmail(e.target.value)}
-                placeholder="you@example.com"
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#003DA6]/30 focus:border-[#003DA6] transition"
-              />
-            </div>
+              <Field>
+                <FieldLabel htmlFor="email">
+                  Email <span className="text-destructive">*</span>
+                </FieldLabel>
+                <Input
+                  id="email"
+                  type="email"
+                  required
+                  value={email}
+                  onChange={e => setEmail(e.target.value)}
+                  placeholder="you@example.com"
+                />
+              </Field>
 
-            {/* Invite Code */}
-            <div className="space-y-1.5">
-              <label className="text-sm font-medium text-gray-700">
-                Invite code <span className="text-red-500">*</span>
-              </label>
-              <input
-                type="text"
-                required
-                value={inviteCode}
-                onChange={e => setInviteCode(e.target.value)}
-                placeholder="Enter your invite code"
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm font-mono focus:outline-none focus:ring-2 focus:ring-[#003DA6]/30 focus:border-[#003DA6] transition"
-              />
-              <p className="text-xs text-gray-400">Contact your administrator to get an invite code.</p>
-            </div>
+              <Field>
+                <FieldLabel htmlFor="invite-code">
+                  Invite code <span className="text-destructive">*</span>
+                </FieldLabel>
+                <Input
+                  id="invite-code"
+                  type="text"
+                  required
+                  value={inviteCode}
+                  onChange={e => setInviteCode(e.target.value)}
+                  placeholder="Enter your invite code"
+                  className="font-mono"
+                />
+                <FieldDescription>Contact your administrator to get an invite code.</FieldDescription>
+              </Field>
 
-            {/* Submit */}
-            <button
-              type="submit"
-              disabled={loading}
-              className="w-full py-2.5 bg-[#003DA6] hover:bg-[#002d80] disabled:opacity-60 text-white font-semibold rounded-lg text-sm transition flex items-center justify-center gap-2 mt-2"
-            >
-              {loading && <Loader2 className="h-4 w-4 animate-spin" />}
-              {loading ? 'Creating account…' : 'Create account'}
-            </button>
+              <Field>
+                <Button type="submit" className="w-full" disabled={loading}>
+                  {loading && <Loader2 className="h-4 w-4 animate-spin" />}
+                  {loading ? 'Creating account…' : 'Create account'}
+                </Button>
+              </Field>
+            </FieldGroup>
           </form>
 
-          <p className="text-center text-sm text-gray-500">
-            Already have an account?{' '}
-            <Link href="/login" className="text-[#003DA6] font-semibold hover:underline">
-              Sign in
-            </Link>
-          </p>
+          {/* Terms */}
+          <FieldDescription className="text-center px-6">
+            By continuing, you agree to our{' '}
+            <Link href="/terms">Terms of Service</Link>{' '}
+            and <Link href="/privacy">Privacy Policy</Link>.
+          </FieldDescription>
+
         </div>
       </div>
     </div>
