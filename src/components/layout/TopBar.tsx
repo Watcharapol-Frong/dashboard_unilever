@@ -13,6 +13,7 @@ const PAGE_LABELS: Record<string, string> = {
   '/leads':      'Leads',
   '/incentives': 'Incentives',
   '/data-hub':   'Data Hub',
+  '/exports':    'Exports',
 }
 
 function getPageLabel(pathname: string) {
