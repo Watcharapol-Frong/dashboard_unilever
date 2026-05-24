@@ -27,7 +27,7 @@ import {
   DEFAULT_METRICS,
   type GranularityId,
 } from '@/lib/pivot-config'
-import { Download, FileSpreadsheet, AlertCircle, ChevronDown } from 'lucide-react'
+import { Download, FileSpreadsheet, AlertCircle, ChevronDown, Monitor } from 'lucide-react'
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 interface FilterOptions {
@@ -155,7 +155,19 @@ export default function ExportsClient() {
   }
 
   return (
-    <div className="flex flex-col gap-3 p-4 sm:p-6 h-full">
+    <>
+      {/* Mobile / tablet — desktop-only notice */}
+      <div className="flex lg:hidden flex-col items-center justify-center gap-4 h-64 text-center px-6">
+        <Monitor className="h-10 w-10 text-muted-foreground opacity-40" />
+        <div>
+          <p className="text-sm font-medium">Desktop only</p>
+          <p className="text-xs text-muted-foreground mt-1">
+            หน้า Exports ต้องใช้บน Desktop เท่านั้น
+          </p>
+        </div>
+      </div>
+
+    <div className="hidden lg:flex flex-col gap-3 p-4 sm:p-6 h-full">
 
       {/* ── Row granularity — horizontal strip ─────────────────────────────── */}
       <Card>
@@ -457,5 +469,6 @@ export default function ExportsClient() {
         </Card>
       </div>
     </div>
+    </>
   )
 }
