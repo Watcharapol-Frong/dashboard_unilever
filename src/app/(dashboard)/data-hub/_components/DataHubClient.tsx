@@ -70,23 +70,6 @@ interface UploadBatch {
   uploaded_at: string; uploaded_by: string | null
 }
 
-interface ReplayResult {
-  ok: boolean
-  replayed_files: number
-  inserted: number
-  errors?: string[]
-}
-
-const REPLAY_TABLES: { value: string; label: string }[] = [
-  { value: 'online_sales',    label: 'Online Sales' },
-  { value: 'offline_sales',   label: 'Offline Sales' },
-  { value: 'leads',           label: 'Lead Customers' },
-  { value: 'products',        label: 'Products' },
-  { value: 'telesales_calls', label: 'Telesales Calls (CSV + Apps Script)' },
-  { value: 'targets',         label: 'Targets' },
-  { value: 'costs',           label: 'Costs' },
-  { value: 'incentives',      label: 'Incentives' },
-]
 
 const fetcher = (url: string) => fetch(url, { cache: 'no-store' }).then(r => r.json())
 
@@ -105,36 +88,11 @@ export function DataHubClient() {
   const [dragOver, setDragOver]         = useState(false)
   const [pendingFiles, setPendingFiles] = useState<PendingFile[]>([])
 
-  // ── Recovery state ─────────────────────────────────────────
-  const [replayTable, setReplayTable]   = useState('telesales_calls')
-  const [replayLoading, setReplayLoading] = useState(false)
-  const [replayResult, setReplayResult] = useState<ReplayResult | null>(null)
-
   // ── Build state (lives in BuildContext — persists across navigation) ──
   const [attributionDays, setAttributionDays] = useState<number | 'custom'>(14)
   const [customDays, setCustomDays]           = useState('')
 
   const effectiveDays = attributionDays === 'custom' ? Number(customDays) || 14 : attributionDays
-
-
-  const startReplay = async () => {
-    setReplayLoading(true)
-    setReplayResult(null)
-    try {
-      const res = await fetch('/api/data/upload/replay', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ table: replayTable }),
-      })
-      const data = await res.json()
-      setReplayResult(data)
-      mutate()
-    } catch {
-      setReplayResult({ ok: false, replayed_files: 0, inserted: 0, errors: ['Network error'] })
-    } finally {
-      setReplayLoading(false)
-    }
-  }
 
   const inputRef = useRef<HTMLInputElement>(null)
 
@@ -333,7 +291,7 @@ export function DataHubClient() {
             onDrop={onDrop}
             onClick={() => inputRef.current?.click()}
             className={cn(
-              'border-2 border-dashed rounded-xl p-10 text-center cursor-pointer transition-colors',
+              'border-2 border-dashed rounded-xl p-6 sm:p-10 text-center cursor-pointer transition-colors',
               dragOver ? 'border-[#003DA6] bg-blue-50' : 'border-gray-200 hover:border-[#003DA6] hover:bg-gray-50',
               step !== 'select' && 'border-solid border-gray-200',
             )}
@@ -577,12 +535,11 @@ export function DataHubClient() {
 
       {/* Overview + Data Status + Upload History Tabs */}
       <Tabs defaultValue="overview" className="gap-4">
-        <div className="flex items-center justify-between">
-          <TabsList>
+        <div className="flex items-center justify-between gap-2 overflow-x-auto">
+          <TabsList className="shrink-0">
             <TabsTrigger value="overview">Overview</TabsTrigger>
             <TabsTrigger value="status">Data Status</TabsTrigger>
             <TabsTrigger value="history">History</TabsTrigger>
-            <TabsTrigger value="recovery">Recovery</TabsTrigger>
             <TabsTrigger value="build">Build</TabsTrigger>
           </TabsList>
 
@@ -1117,79 +1074,6 @@ export function DataHubClient() {
 
         </TabsContent>
 
-        {/* Tab: Recovery */}
-        <TabsContent value="recovery">
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-base">Replay from R2 Storage</CardTitle>
-              <p className="text-sm text-muted-foreground">
-                Re-process encrypted backups from R2 into the database. Safe to run multiple times — uses ON CONFLICT upsert.
-              </p>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="space-y-2">
-                <label className="text-sm font-medium">Select Table</label>
-                <select
-                  value={replayTable}
-                  onChange={e => { setReplayTable(e.target.value); setReplayResult(null) }}
-                  disabled={replayLoading}
-                  className="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#003DA6] disabled:opacity-50"
-                >
-                  {REPLAY_TABLES.map(t => (
-                    <option key={t.value} value={t.value}>{t.label}</option>
-                  ))}
-                </select>
-                {replayTable === 'telesales_calls' && (
-                  <p className="text-xs text-muted-foreground">
-                    Will scan both <code className="bg-muted px-1 rounded">telesales/</code> (CSV uploads) and <code className="bg-muted px-1 rounded">leads-activity/</code> (Apps Script)
-                  </p>
-                )}
-              </div>
-
-              <button
-                onClick={startReplay}
-                disabled={replayLoading}
-                className="flex items-center gap-2 px-5 py-2 rounded-lg bg-[#003DA6] text-white text-sm font-medium hover:bg-[#002d80] transition-colors disabled:opacity-50"
-              >
-                {replayLoading && <RefreshCw className="h-4 w-4 animate-spin" />}
-                {replayLoading ? 'Replaying…' : 'Start Replay'}
-              </button>
-
-              {replayResult && (
-                <div className={cn(
-                  'rounded-lg border p-4 space-y-2',
-                  replayResult.ok ? 'border-green-200 bg-green-50' : 'border-red-200 bg-red-50',
-                )}>
-                  <div className="flex items-center gap-2">
-                    {replayResult.ok
-                      ? <CheckCircle className="h-4 w-4 text-green-600 shrink-0" />
-                      : <XCircle className="h-4 w-4 text-red-500 shrink-0" />}
-                    <p className="text-sm font-medium">
-                      {replayResult.ok ? 'Replay complete' : 'Replay completed with errors'}
-                    </p>
-                  </div>
-                  <div className="grid grid-cols-2 gap-2 text-sm">
-                    <div className="rounded bg-white/60 border px-3 py-2 text-center">
-                      <p className="text-xl font-bold tabular-nums">{replayResult.replayed_files}</p>
-                      <p className="text-xs text-muted-foreground">Files replayed</p>
-                    </div>
-                    <div className="rounded bg-white/60 border px-3 py-2 text-center">
-                      <p className="text-xl font-bold tabular-nums">{replayResult.inserted.toLocaleString()}</p>
-                      <p className="text-xs text-muted-foreground">Rows upserted</p>
-                    </div>
-                  </div>
-                  {(replayResult.errors?.length ?? 0) > 0 && (
-                    <div className="space-y-1 pt-1 border-t border-dashed border-red-200">
-                      {replayResult.errors!.map((e, i) => (
-                        <p key={i} className="text-xs text-red-600 break-all">{e}</p>
-                      ))}
-                    </div>
-                  )}
-                </div>
-              )}
-            </CardContent>
-          </Card>
-        </TabsContent>
 
       </Tabs>
     </div>

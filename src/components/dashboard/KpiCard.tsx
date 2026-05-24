@@ -19,9 +19,10 @@ interface KpiCardProps {
   extras?: KpiExtra[]
   loading?: boolean
   className?: string
+  valueClassName?: string   // extra classes on the value text (e.g. color)
 }
 
-export function KpiCard({ title, value, comparison, comparisonLabel, subtitle, icon: Icon, extras, loading, className }: KpiCardProps) {
+export function KpiCard({ title, value, comparison, comparisonLabel, subtitle, icon: Icon, extras, loading, className, valueClassName }: KpiCardProps) {
   if (loading) {
     return (
       <Card className={className}>
@@ -57,7 +58,7 @@ export function KpiCard({ title, value, comparison, comparisonLabel, subtitle, i
           )}
         </div>
 
-        <div className="text-2xl font-bold mt-1 tabular-nums">{value}</div>
+        <div className={cn('text-2xl font-bold mt-1 tabular-nums', valueClassName)}>{value}</div>
 
         {subtitle && (
           <p className="text-xs text-muted-foreground mt-0.5">{subtitle}</p>

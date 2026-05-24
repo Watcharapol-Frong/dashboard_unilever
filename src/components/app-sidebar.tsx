@@ -34,7 +34,7 @@ const data = {
   },
   navMain: [
     {
-      title: "Dashboard",
+      title: "Overview",
       url: "/overview",
       icon: IconDashboard,
     },
@@ -79,7 +79,7 @@ const data = {
   ],
   documents: [
     {
-      name: "Leads Management",
+      name: "Leads",
       url: "/leads",
       icon: IconUsers,
     },
