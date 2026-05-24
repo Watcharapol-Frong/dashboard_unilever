@@ -32,7 +32,8 @@ import {
 import { Skeleton } from '@/components/ui/skeleton'
 import { FILE_TYPE_CONFIGS, validateHeaders } from '@/lib/upload/config'
 import type { UploadFileType } from '@/lib/upload/config'
-import { cn, formatTHB, formatNumber } from '@/lib/utils'
+import { cn } from '@/lib/utils'
+import { formatTHB, formatNumber } from '@/lib/formatters'
 import { useUploadQueue, MAX_CONCURRENT } from '@/context/UploadQueueContext'
 import { useBuild } from '@/context/BuildContext'
 

@@ -1,17 +1,17 @@
 'use client'
 
 import { useMemo } from 'react'
-import {
-  AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend
-} from 'recharts'
+import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip } from 'recharts'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { KpiCard } from '@/components/dashboard/KpiCard'
 import { KpiGrid } from '@/components/dashboard/KpiGrid'
+import { ChartCard } from '@/components/dashboard/ChartCard'
 import { DataTable } from '@/components/ui/data-table'
 import { PageLoading, PageEmpty } from '@/components/dashboard/PageState'
 import { useDashboardSWR } from '@/hooks/useDashboardSWR'
+import { CHART_AXIS_CLS, CHART_TOOLTIP_STYLE } from '@/lib/chart-utils'
+import { formatTHB, formatNumber, colorAchievement } from '@/lib/formatters'
 import { columns } from '../columns'
-import { formatTHB, formatNumber } from '@/lib/utils'
 import { ShoppingBag, TrendingUp, CreditCard, Layers } from 'lucide-react'
 
 interface SalesData {
@@ -36,7 +36,6 @@ export default function SalesClient() {
       name: new Date(p.period).toLocaleDateString('en-GB', { month: 'short', year: 'numeric' }),
       Online: p.online,
       Offline: p.offline,
-      Total: p.online + p.offline,
     }))
   }, [data])
 
@@ -45,12 +44,11 @@ export default function SalesClient() {
     return <PageEmpty message="No sales data available" hint="Please upload sales data and build mart." />
   }
 
-  const onlinePct = data.total_sales > 0 ? (data.total_sales_online / data.total_sales) * 100 : 0
+  const onlinePct  = data.total_sales > 0 ? (data.total_sales_online  / data.total_sales) * 100 : 0
   const offlinePct = data.total_sales > 0 ? (data.total_sales_offline / data.total_sales) * 100 : 0
 
   return (
     <div className="space-y-6">
-      {/* Sales KPIs */}
       <KpiGrid cols={4}>
         <KpiCard
           title="Total Sales Revenue"
@@ -62,7 +60,7 @@ export default function SalesClient() {
           title="Target Achievement"
           value={`${(data.target_pct * 100).toFixed(1)}%`}
           subtitle={data.target_pct >= 1 ? 'Target Reached ✓' : 'Below target period'}
-          valueClassName={data.target_pct >= 1 ? 'text-green-600' : data.target_pct >= 0.8 ? 'text-yellow-600' : 'text-red-500'}
+          valueClassName={colorAchievement(data.target_pct * 100)}
           icon={Layers}
         />
         <KpiCard
@@ -79,101 +77,68 @@ export default function SalesClient() {
         />
       </KpiGrid>
 
-      {/* Grid: Chart and Channel breakdown */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* Sales Trend Chart */}
-        <Card className="lg:col-span-2">
-          <CardHeader>
-            <CardTitle className="text-sm font-medium">Sales Trend (Online vs Offline)</CardTitle>
-          </CardHeader>
-          <CardContent className="pt-2">
-            <div className="h-[300px] w-full">
-              <ResponsiveContainer width="100%" height="100%">
-                <AreaChart data={chartData} margin={{ top: 10, right: 10, left: 10, bottom: 0 }}>
-                  <defs>
-                    <linearGradient id="colorOnline" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="5%" stopColor="#003DA6" stopOpacity={0.8}/>
-                      <stop offset="95%" stopColor="#003DA6" stopOpacity={0}/>
-                    </linearGradient>
-                    <linearGradient id="colorOffline" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="5%" stopColor="#EE2737" stopOpacity={0.8}/>
-                      <stop offset="95%" stopColor="#EE2737" stopOpacity={0}/>
-                    </linearGradient>
-                  </defs>
-                  <CartesianGrid strokeDasharray="3 3" vertical={false} className="stroke-muted" />
-                  <XAxis dataKey="name" tickLine={false} axisLine={false} className="text-[10px] fill-muted-foreground font-medium" />
-                  <YAxis tickLine={false} axisLine={false} className="text-[10px] fill-muted-foreground font-medium" tickFormatter={(v) => `฿${(v / 1000).toFixed(0)}k`} />
-                  <Tooltip
-                    contentStyle={{ background: 'hsl(var(--background))', borderColor: 'hsl(var(--border))', borderRadius: 'hsl(var(--radius))' }}
-                    labelClassName="text-xs font-bold"
-                    formatter={(value: any) => [formatTHB(Number(value)), '']}
-                  />
-                  <Legend verticalAlign="top" height={36} iconType="circle" className="text-xs" />
-                  <Area type="monotone" dataKey="Online" stroke="#003DA6" fillOpacity={1} fill="url(#colorOnline)" strokeWidth={2} />
-                  <Area type="monotone" dataKey="Offline" stroke="#EE2737" fillOpacity={1} fill="url(#colorOffline)" strokeWidth={2} />
-                </AreaChart>
-              </ResponsiveContainer>
-            </div>
-          </CardContent>
-        </Card>
+        <ChartCard title="Sales Trend (Online vs Offline)" height={300} className="lg:col-span-2">
+          <AreaChart data={chartData} margin={{ top: 10, right: 10, left: 10, bottom: 0 }}>
+            <defs>
+              <linearGradient id="colorOnline" x1="0" y1="0" x2="0" y2="1">
+                <stop offset="5%" stopColor="#003DA6" stopOpacity={0.8}/>
+                <stop offset="95%" stopColor="#003DA6" stopOpacity={0}/>
+              </linearGradient>
+              <linearGradient id="colorOffline" x1="0" y1="0" x2="0" y2="1">
+                <stop offset="5%" stopColor="#EE2737" stopOpacity={0.8}/>
+                <stop offset="95%" stopColor="#EE2737" stopOpacity={0}/>
+              </linearGradient>
+            </defs>
+            <CartesianGrid strokeDasharray="3 3" vertical={false} className="stroke-muted" />
+            <XAxis dataKey="name" tickLine={false} axisLine={false} tickMargin={8} className={CHART_AXIS_CLS} />
+            <YAxis tickLine={false} axisLine={false} tickMargin={8} className={CHART_AXIS_CLS}
+              tickFormatter={v => `฿${(v / 1000).toFixed(0)}k`} />
+            <Tooltip contentStyle={CHART_TOOLTIP_STYLE} labelClassName="text-xs font-bold"
+              formatter={(value: any) => [formatTHB(Number(value)), '']} />
+            <Area type="monotone" dataKey="Online"  stroke="#003DA6" fillOpacity={1} fill="url(#colorOnline)"  strokeWidth={2} />
+            <Area type="monotone" dataKey="Offline" stroke="#EE2737" fillOpacity={1} fill="url(#colorOffline)" strokeWidth={2} />
+          </AreaChart>
+        </ChartCard>
 
-        {/* Channel Breakdown */}
         <Card>
           <CardHeader>
             <CardTitle className="text-sm font-medium">Channel Distribution</CardTitle>
           </CardHeader>
           <CardContent className="flex flex-col justify-center h-[300px]">
             <div className="space-y-6">
-              {/* Online Channel */}
-              <div className="space-y-2">
-                <div className="flex justify-between items-center text-sm">
-                  <div className="flex items-center gap-2">
-                    <div className="h-3.5 w-3.5 rounded-full bg-[#003DA6]" />
-                    <span className="font-semibold">Online Channel</span>
+              {[
+                { label: 'Online Channel',  color: '#003DA6', pct: onlinePct,  value: data.total_sales_online },
+                { label: 'Offline Channel', color: '#EE2737', pct: offlinePct, value: data.total_sales_offline },
+              ].map(({ label, color, pct, value }) => (
+                <div key={label} className="space-y-2">
+                  <div className="flex justify-between items-center text-sm">
+                    <div className="flex items-center gap-2">
+                      <div className="h-3.5 w-3.5 rounded-full" style={{ backgroundColor: color }} />
+                      <span className="font-semibold">{label}</span>
+                    </div>
+                    <span className="font-bold">{pct.toFixed(1)}%</span>
                   </div>
-                  <span className="font-bold">{onlinePct.toFixed(1)}%</span>
-                </div>
-                <div className="h-3 w-full bg-muted rounded-full overflow-hidden">
-                  <div className="h-full bg-[#003DA6] transition-all" style={{ width: `${onlinePct}%` }} />
-                </div>
-                <div className="flex justify-between text-xs text-muted-foreground">
-                  <span>Revenue</span>
-                  <span className="font-medium">{formatTHB(data.total_sales_online)}</span>
-                </div>
-              </div>
-
-              {/* Offline Channel */}
-              <div className="space-y-2">
-                <div className="flex justify-between items-center text-sm">
-                  <div className="flex items-center gap-2">
-                    <div className="h-3.5 w-3.5 rounded-full bg-[#EE2737]" />
-                    <span className="font-semibold">Offline Channel</span>
+                  <div className="h-3 w-full bg-muted rounded-full overflow-hidden">
+                    <div className="h-full transition-all duration-500" style={{ width: `${pct}%`, backgroundColor: color }} />
                   </div>
-                  <span className="font-bold">{offlinePct.toFixed(1)}%</span>
+                  <div className="flex justify-between text-xs text-muted-foreground">
+                    <span>Revenue</span>
+                    <span className="font-medium">{formatTHB(value)}</span>
+                  </div>
                 </div>
-                <div className="h-3 w-full bg-muted rounded-full overflow-hidden">
-                  <div className="h-full bg-[#EE2737] transition-all" style={{ width: `${offlinePct}%` }} />
-                </div>
-                <div className="flex justify-between text-xs text-muted-foreground">
-                  <span>Revenue</span>
-                  <span className="font-medium">{formatTHB(data.total_sales_offline)}</span>
-                </div>
-              </div>
+              ))}
             </div>
           </CardContent>
         </Card>
       </div>
 
-      {/* Recent Orders Table */}
       <Card>
         <CardHeader>
           <CardTitle className="text-sm font-medium">Recent HOC Orders</CardTitle>
         </CardHeader>
         <CardContent>
-          <DataTable
-            columns={columns}
-            data={data.recent_orders}
-          />
+          <DataTable columns={columns} data={data.recent_orders} />
         </CardContent>
       </Card>
     </div>

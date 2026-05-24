@@ -2,7 +2,7 @@
 
 import { ColumnDef } from "@tanstack/react-table"
 import { Badge } from "@/components/ui/badge"
-import { formatTHB, formatNumber, formatDate } from "@/lib/utils"
+import { formatTHB, formatNumber, formatDate } from "@/lib/formatters"
 import { RecentOrder } from "@/types"
 import { DataTableColumnHeader } from "@/components/ui/data-table-column-header"
 

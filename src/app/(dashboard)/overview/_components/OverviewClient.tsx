@@ -10,7 +10,7 @@ import { FilterSelect } from '@/components/dashboard/FilterSelect'
 import { PageLoading, PageEmpty } from '@/components/dashboard/PageState'
 
 import { useDashboardSWR } from '@/hooks/useDashboardSWR'
-import { fmtBaht } from '@/lib/formatters'
+import { fmtBaht, colorAchievement, colorRoi } from '@/lib/formatters'
 import { type OverviewRow } from './columns'
 import {
   TrendingUp, Target, Users, UserPlus, PhoneCall,
@@ -61,19 +61,6 @@ function aggregate(rows: OverviewRow[]): Agg {
     online_sales, offline_sales,
   }
 }
-
-function achievementColor(v: number) {
-  if (v >= 100) return 'text-green-600'
-  if (v >= 80)  return 'text-yellow-600'
-  return 'text-red-500'
-}
-function roiColor(v: number) {
-  if (v >= 10) return 'text-green-600'
-  if (v >= 5)  return 'text-yellow-600'
-  if (v > 0)   return 'text-red-500'
-  return ''
-}
-
 
 export default function OverviewClient() {
   const { data: rows = [], isLoading } = useDashboardSWR<OverviewRow[]>('/api/data/overview')
@@ -284,7 +271,7 @@ export default function OverviewClient() {
           title="Achievement"
           value={`${kpi.achievement.toFixed(1)}%`}
           subtitle={kpi.achievement >= 100 ? 'Target reached ✓' : 'Below target'}
-          valueClassName={achievementColor(kpi.achievement)}
+          valueClassName={colorAchievement(kpi.achievement)}
           icon={Target}
         />
         <KpiCard
@@ -309,7 +296,7 @@ export default function OverviewClient() {
           title="Program ROI"
           value={kpi.roi > 0 ? `${kpi.roi.toFixed(2)}x` : '—'}
           subtitle="Sales / Expense multiplier"
-          valueClassName={roiColor(kpi.roi)}
+          valueClassName={colorRoi(kpi.roi)}
           icon={Calculator}
         />
       </KpiGrid>

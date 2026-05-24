@@ -1,7 +1,7 @@
 "use client"
 
 import { ColumnDef } from "@tanstack/react-table"
-import { formatTHB, formatDate } from "@/lib/utils"
+import { formatTHB, formatDate } from "@/lib/formatters"
 import { DataTableColumnHeader } from "@/components/ui/data-table-column-header"
 
 interface Incentive {

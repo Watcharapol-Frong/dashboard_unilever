@@ -1,19 +1,19 @@
 'use client'
 
 import { useMemo, useState } from 'react'
-import {
-  ComposedChart, Bar, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend
-} from 'recharts'
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { ComposedChart, Bar, Line, XAxis, YAxis, CartesianGrid, Tooltip } from 'recharts'
+import { Card, CardContent } from '@/components/ui/card'
 import { KpiCard } from '@/components/dashboard/KpiCard'
 import { KpiGrid } from '@/components/dashboard/KpiGrid'
+import { ChartCard } from '@/components/dashboard/ChartCard'
 import { DataTable } from '@/components/ui/data-table'
 import { PageLoading, PageEmpty } from '@/components/dashboard/PageState'
 import { useDashboardSWR } from '@/hooks/useDashboardSWR'
-import { formatTHB, formatNumber, formatPeriodLabel } from '@/lib/utils'
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
+import { CHART_AXIS_CLS, CHART_TOOLTIP_STYLE } from '@/lib/chart-utils'
+import { formatTHB, formatNumber, formatPeriodLabel, colorAchievement, colorRoi } from '@/lib/formatters'
 import { PiggyBank, Briefcase, Calculator, TrendingUp } from 'lucide-react'
 import { ColumnDef } from '@tanstack/react-table'
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 
 interface IncentiveTier {
   tier: number
@@ -96,7 +96,7 @@ const summaryColumns: ColumnDef<MonthlySummary>[] = [
     accessorKey: 'achievement_ratio',
     header: 'Sales Achievement',
     cell: ({ row }) => (
-      <span className={row.original.achievement_ratio >= 100 ? 'text-green-600 font-semibold' : row.original.achievement_ratio >= 80 ? 'text-yellow-600 font-semibold' : 'text-red-500 font-semibold'}>
+      <span className={`font-semibold transition-colors ${colorAchievement(row.original.achievement_ratio)}`}>
         {row.original.achievement_ratio.toFixed(1)}%
       </span>
     ),
@@ -145,16 +145,14 @@ export default function IncentivesClient() {
     return <PageEmpty message="No incentive data available" hint="Please upload agent headcounts, costs, targets & incentives data and rebuild mart." />
   }
 
-  // Calculate grand totals across all months
   const totalIncentive = data.monthly_summary.reduce((sum, m) => sum + m.total_incentive, 0)
   const totalAgentCost = data.monthly_summary.reduce((sum, m) => sum + m.total_agent_cost, 0)
-  const totalExpense = data.monthly_summary.reduce((sum, m) => sum + m.total_expense, 0)
-  const totalSales = data.monthly_summary.reduce((sum, m) => sum + m.hoc_sales, 0)
-  const grandRoi = totalExpense > 0 ? (totalSales / totalExpense) : 0
+  const totalExpense   = data.monthly_summary.reduce((sum, m) => sum + m.total_expense,   0)
+  const totalSales     = data.monthly_summary.reduce((sum, m) => sum + m.hoc_sales,       0)
+  const grandRoi       = totalExpense > 0 ? totalSales / totalExpense : 0
 
   return (
     <div className="space-y-6">
-      {/* Incentives KPIs */}
       <KpiGrid cols={4}>
         <KpiCard
           title="Total Incentives Paid"
@@ -178,38 +176,25 @@ export default function IncentivesClient() {
           title="Overall Program ROI"
           value={grandRoi > 0 ? `${grandRoi.toFixed(2)}x` : '—'}
           subtitle="Unilever HOC sales / Expense"
-          valueClassName={grandRoi >= 10 ? 'text-green-600' : grandRoi >= 5 ? 'text-yellow-600' : 'text-red-500'}
+          valueClassName={colorRoi(grandRoi)}
           icon={TrendingUp}
         />
       </KpiGrid>
 
-      {/* Expense vs ROI Chart */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-sm font-medium">Monthly Expense vs Program ROI</CardTitle>
-        </CardHeader>
-        <CardContent className="pt-2">
-          <div className="h-[300px] w-full">
-            <ResponsiveContainer width="100%" height="100%">
-              <ComposedChart data={chartData} margin={{ top: 10, right: 10, left: 10, bottom: 0 }}>
-                <CartesianGrid strokeDasharray="3 3" vertical={false} className="stroke-muted" />
-                <XAxis dataKey="name" tickLine={false} axisLine={false} className="text-[10px] fill-muted-foreground font-medium" />
-                <YAxis yAxisId="expense" tickLine={false} axisLine={false} className="text-[10px] fill-muted-foreground font-medium" tickFormatter={(v) => `฿${(v / 1000).toFixed(0)}k`} />
-                <YAxis yAxisId="roi" orientation="right" tickLine={false} axisLine={false} className="text-[10px] fill-muted-foreground font-medium" tickFormatter={(v) => `${v}x`} />
-                <Tooltip
-                  contentStyle={{ background: 'hsl(var(--background))', borderColor: 'hsl(var(--border))', borderRadius: 'hsl(var(--radius))' }}
-                  labelClassName="text-xs font-bold"
-                />
-                <Legend verticalAlign="top" height={36} iconType="circle" className="text-xs" />
-                <Bar yAxisId="expense" dataKey="Expense" name="Total Expense" fill="#003DA6" radius={[4, 4, 0, 0]} barSize={24} />
-                <Line yAxisId="roi" type="monotone" dataKey="ROI" name="ROI (Multiplier)" stroke="#EE2737" strokeWidth={3} dot={{ r: 4 }} />
-              </ComposedChart>
-            </ResponsiveContainer>
-          </div>
-        </CardContent>
-      </Card>
+      <ChartCard title="Monthly Expense vs Program ROI" height={300}>
+        <ComposedChart data={chartData} margin={{ top: 10, right: 10, left: 10, bottom: 0 }}>
+          <CartesianGrid strokeDasharray="3 3" vertical={false} className="stroke-muted" />
+          <XAxis dataKey="name" tickLine={false} axisLine={false} tickMargin={8} className={CHART_AXIS_CLS} />
+          <YAxis yAxisId="expense" tickLine={false} axisLine={false} tickMargin={8} className={CHART_AXIS_CLS}
+            tickFormatter={v => `฿${(v / 1000).toFixed(0)}k`} />
+          <YAxis yAxisId="roi" orientation="right" tickLine={false} axisLine={false} tickMargin={8} className={CHART_AXIS_CLS}
+            tickFormatter={v => `${v}x`} />
+          <Tooltip contentStyle={CHART_TOOLTIP_STYLE} labelClassName="text-xs font-bold" />
+          <Bar yAxisId="expense" dataKey="Expense" name="Total Expense" fill="#003DA6" radius={[4, 4, 0, 0]} barSize={24} />
+          <Line yAxisId="roi" type="monotone" dataKey="ROI" name="ROI (Multiplier)" stroke="#EE2737" strokeWidth={3} dot={{ r: 4 }} />
+        </ComposedChart>
+      </ChartCard>
 
-      {/* Tabs and Data Tables */}
       <Card>
         <CardContent className="pt-6">
           <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-4">
@@ -219,22 +204,13 @@ export default function IncentivesClient() {
               <TabsTrigger value="tiers">Incentive Tier Configuration</TabsTrigger>
             </TabsList>
             <TabsContent value="summary" className="pt-2">
-              <DataTable
-                columns={summaryColumns}
-                data={data.monthly_summary}
-              />
+              <DataTable columns={summaryColumns} data={data.monthly_summary} />
             </TabsContent>
             <TabsContent value="headcount" className="pt-2">
-              <DataTable
-                columns={headcountColumns}
-                data={data.headcount_costs}
-              />
+              <DataTable columns={headcountColumns} data={data.headcount_costs} />
             </TabsContent>
             <TabsContent value="tiers" className="pt-2">
-              <DataTable
-                columns={tierColumns}
-                data={data.incentive_tiers}
-              />
+              <DataTable columns={tierColumns} data={data.incentive_tiers} />
             </TabsContent>
           </Tabs>
         </CardContent>

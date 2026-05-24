@@ -1,20 +1,20 @@
 'use client'
 
 import { useMemo, useState } from 'react'
-import {
-  BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer
-} from 'recharts'
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip } from 'recharts'
+import { Card, CardContent } from '@/components/ui/card'
 import { KpiCard } from '@/components/dashboard/KpiCard'
 import { KpiGrid } from '@/components/dashboard/KpiGrid'
+import { ChartCard } from '@/components/dashboard/ChartCard'
 import { DataTable } from '@/components/ui/data-table'
 import { PageLoading, PageEmpty } from '@/components/dashboard/PageState'
 import { useDashboardSWR } from '@/hooks/useDashboardSWR'
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
+import { CHART_AXIS_CLS, CHART_TOOLTIP_STYLE } from '@/lib/chart-utils'
+import { formatTHB, formatNumber, formatPct } from '@/lib/formatters'
 import { columns as productColumns } from '../columns'
-import { formatTHB, formatNumber, formatPct } from '@/lib/utils'
 import { Package, Percent, LayoutGrid, Award } from 'lucide-react'
 import { ColumnDef } from '@tanstack/react-table'
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 
 interface ProductRow {
   prod_num: string
@@ -78,12 +78,7 @@ export default function ProductsClient() {
 
   const brandChartData = useMemo(() => {
     if (!data?.by_brand) return []
-    return data.by_brand
-      .slice(0, 10)
-      .map(b => ({
-        name: b.brands,
-        Sales: b.total_sales,
-      }))
+    return data.by_brand.slice(0, 10).map(b => ({ name: b.brands, Sales: b.total_sales }))
   }, [data])
 
   if (isLoading) return <PageLoading />
@@ -93,7 +88,6 @@ export default function ProductsClient() {
 
   return (
     <div className="space-y-6">
-      {/* Product KPIs */}
       <KpiGrid cols={4}>
         <KpiCard
           title="Grand Category Revenue"
@@ -122,31 +116,18 @@ export default function ProductsClient() {
         />
       </KpiGrid>
 
-      {/* Brand Sales Chart */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-sm font-medium">Unilever HOC Revenue by Brand</CardTitle>
-        </CardHeader>
-        <CardContent className="pt-2">
-          <div className="h-[280px] w-full">
-            <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={brandChartData} margin={{ top: 10, right: 10, left: 10, bottom: 0 }}>
-                <CartesianGrid strokeDasharray="3 3" vertical={false} className="stroke-muted" />
-                <XAxis dataKey="name" tickLine={false} axisLine={false} className="text-[10px] fill-muted-foreground font-medium" />
-                <YAxis tickLine={false} axisLine={false} className="text-[10px] fill-muted-foreground font-medium" tickFormatter={(v) => `฿${(v / 1000).toFixed(0)}k`} />
-                <Tooltip
-                  contentStyle={{ background: 'hsl(var(--background))', borderColor: 'hsl(var(--border))', borderRadius: 'hsl(var(--radius))' }}
-                  labelClassName="text-xs font-bold"
-                  formatter={(value: any) => [formatTHB(Number(value)), '']}
-                />
-                <Bar dataKey="Sales" fill="#003DA6" radius={[4, 4, 0, 0]} barSize={32} />
-              </BarChart>
-            </ResponsiveContainer>
-          </div>
-        </CardContent>
-      </Card>
+      <ChartCard title="Unilever HOC Revenue by Brand" height={280}>
+        <BarChart data={brandChartData} margin={{ top: 10, right: 10, left: 10, bottom: 0 }}>
+          <CartesianGrid strokeDasharray="3 3" vertical={false} className="stroke-muted" />
+          <XAxis dataKey="name" tickLine={false} axisLine={false} tickMargin={8} className={CHART_AXIS_CLS} />
+          <YAxis tickLine={false} axisLine={false} tickMargin={8} className={CHART_AXIS_CLS}
+            tickFormatter={v => `฿${(v / 1000).toFixed(0)}k`} />
+          <Tooltip contentStyle={CHART_TOOLTIP_STYLE} labelClassName="text-xs font-bold"
+            formatter={(value: any) => [formatTHB(Number(value)), '']} />
+          <Bar dataKey="Sales" fill="#003DA6" radius={[4, 4, 0, 0]} barSize={32} />
+        </BarChart>
+      </ChartCard>
 
-      {/* Tables for Products and Brands */}
       <Card>
         <CardContent className="pt-6">
           <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-4">
@@ -155,16 +136,10 @@ export default function ProductsClient() {
               <TabsTrigger value="brands">Top Brands Performance</TabsTrigger>
             </TabsList>
             <TabsContent value="products" className="pt-2">
-              <DataTable
-                columns={productColumns}
-                data={data.by_product}
-              />
+              <DataTable columns={productColumns} data={data.by_product} />
             </TabsContent>
             <TabsContent value="brands" className="pt-2">
-              <DataTable
-                columns={brandColumns}
-                data={data.by_brand}
-              />
+              <DataTable columns={brandColumns} data={data.by_brand} />
             </TabsContent>
           </Tabs>
         </CardContent>
