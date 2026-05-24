@@ -9,6 +9,7 @@ import {
   IconGift,
   IconUsers,
   IconUpload,
+  IconFileExport,
 } from "@tabler/icons-react"
 
 import { NavDocuments } from "@/components/nav-documents"
@@ -88,7 +89,12 @@ const data = {
       url: "/data-hub",
       icon: IconUpload,
     },
-
+    {
+      name: "Exports",
+      url: "/exports",
+      icon: IconFileExport,
+      desktopOnly: true,
+    },
   ],
 }
 

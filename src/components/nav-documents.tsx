@@ -20,6 +20,7 @@ export function NavDocuments({
     name: string
     url: string
     icon: LucideIcon
+    desktopOnly?: boolean
   }[]
 }) {
   const pathname = usePathname()
@@ -29,7 +30,7 @@ export function NavDocuments({
       <SidebarGroupLabel>Admin</SidebarGroupLabel>
       <SidebarMenu>
         {items.map((item) => (
-          <SidebarMenuItem key={item.name}>
+          <SidebarMenuItem key={item.name} className={item.desktopOnly ? 'hidden lg:block' : undefined}>
             <SidebarMenuButton asChild tooltip={item.name} isActive={pathname === item.url}>
               <Link href={item.url}>
                 <item.icon />

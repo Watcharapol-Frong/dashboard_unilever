@@ -1,17 +1,17 @@
 import { clerkMiddleware, createRouteMatcher } from '@clerk/nextjs/server'
 import { NextResponse } from 'next/server'
 
-export const ADMIN_PATHS = ['/leads', '/data-hub']
+export const ADMIN_PATHS = ['/leads', '/data-hub', '/exports']
 
 const isProtectedRoute = createRouteMatcher([
   '/overview(.*)', '/sales(.*)', '/telesales(.*)',
-  '/products(.*)', '/leads(.*)', '/incentives(.*)', '/data-hub(.*)',
+  '/products(.*)', '/leads(.*)', '/incentives(.*)', '/data-hub(.*)', '/exports(.*)',
   '/api/data/(.*)',
 ])
 
 const isAdminOnlyRoute = createRouteMatcher([
-  '/leads(.*)', '/data-hub(.*)',
-  '/api/data/upload/(.*)', '/api/data/dashboard(.*)', '/api/data/refresh-mart/(.*)',
+  '/leads(.*)', '/data-hub(.*)', '/exports(.*)',
+  '/api/data/upload/(.*)', '/api/data/dashboard(.*)', '/api/data/refresh-mart/(.*)', '/api/data/export/(.*)',
 ])
 
 export default clerkMiddleware(async (auth, request) => {
