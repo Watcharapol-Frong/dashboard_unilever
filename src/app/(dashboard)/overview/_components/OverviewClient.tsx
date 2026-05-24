@@ -87,10 +87,9 @@ export default function OverviewClient() {
 
   const calculatedInterval = useMemo(() => {
     if (cohortInterval !== 'custom') return cohortInterval
-    // Auto granularity: daily ≤32 days, weekly 33–180 days, monthly >180 days
+    // Auto granularity: daily ≤32 days, weekly ≥33 days
     if (durationDays <= 32) return 'daily'
-    if (durationDays <= 180) return 'weekly'
-    return 'monthly'
+    return 'weekly'
   }, [cohortInterval, durationDays])
 
   const cohortsQuery = `/api/data/cohorts?interval=${calculatedInterval}&cmg=${filterCmg}&channel=${filterChannel}` +

@@ -327,10 +327,10 @@ export function OverviewChart({
                 }}
               />
               <ChartTooltip cursor={false} content={<OverviewTooltip />} />
-              <Bar dataKey="new_customers"         fill="#10b981" stackId="cohort" barSize={calculatedInterval === 'weekly' ? 24 : 48}>
+              <Bar dataKey="new_customers"         fill="#10b981" stackId="cohort" barSize={calculatedInterval === 'daily' ? 12 : calculatedInterval === 'weekly' ? 24 : 48}>
                 <LabelList dataKey="new_customers"         content={renderLabel('#065f46')} />
               </Bar>
-              <Bar dataKey="reactivated_customers" fill="#3b82f6" stackId="cohort" barSize={calculatedInterval === 'weekly' ? 24 : 48}>
+              <Bar dataKey="reactivated_customers" fill="#3b82f6" stackId="cohort" barSize={calculatedInterval === 'daily' ? 12 : calculatedInterval === 'weekly' ? 24 : 48}>
                 <LabelList dataKey="reactivated_customers" content={renderLabel('#1e3a8a')} />
               </Bar>
             </ComposedChart>
