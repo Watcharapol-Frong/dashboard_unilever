@@ -119,33 +119,43 @@ export async function GET(request: Request) {
         ORDER BY SUM(m.sales_in_vat) DESC
       `, filterParams),
 
-      // ── Brand revenue trend — top 5 brands × month ───────────────────────
+      // ── Brand revenue trend — top 3 brands × month + Other ─────────────
       query<{
         month: string
         month_label: string
         brands: string
         total_sales: string
       }>(`
-        WITH top5 AS (
+        WITH top3 AS (
           SELECT COALESCE(p.brands, 'Unknown') AS brands
           FROM mart_telesales_orders m
           LEFT JOIN products p ON m.prod_num = p.prod_num
           WHERE true ${extraWhere}
           GROUP BY 1
           ORDER BY SUM(m.sales_in_vat) DESC
-          LIMIT 5
+          LIMIT 3
         )
         SELECT
-          m.month::text                                                                   AS month,
-          MAX(m.month_label) || ' ' || EXTRACT(YEAR FROM MAX(m.order_date))::text        AS month_label,
-          COALESCE(p.brands, 'Unknown')                                                  AS brands,
-          SUM(m.sales_in_vat)::text                                                      AS total_sales
+          m.month::text                                                                AS month,
+          MAX(m.month_label) || ' ' || EXTRACT(YEAR FROM MAX(m.order_date))::text     AS month_label,
+          CASE
+            WHEN COALESCE(p.brands, 'Unknown') IN (SELECT brands FROM top3)
+            THEN COALESCE(p.brands, 'Unknown')
+            ELSE 'Other'
+          END                                                                          AS brands,
+          SUM(m.sales_in_vat)::text                                                   AS total_sales
         FROM mart_telesales_orders m
         LEFT JOIN products p ON m.prod_num = p.prod_num
-        WHERE COALESCE(p.brands, 'Unknown') IN (SELECT brands FROM top5) ${extraWhere}
-        GROUP BY m.month, COALESCE(p.brands, 'Unknown')
+        WHERE true ${extraWhere}
+        GROUP BY
+          m.month,
+          CASE
+            WHEN COALESCE(p.brands, 'Unknown') IN (SELECT brands FROM top3)
+            THEN COALESCE(p.brands, 'Unknown')
+            ELSE 'Other'
+          END
         ORDER BY m.month
-      `, [...filterParams, ...filterParams]),
+      `, filterParams),
 
       // ── Filter options ───────────────────────────────────────────────────
       query<{
@@ -215,8 +225,11 @@ export async function GET(request: Request) {
     })
 
     // Pivot brand trend: [{ month_label, Brand_A: n, Brand_B: n, ... }]
-    const monthOrder = [...new Set(brandTrendRows.map(r => r.month))].sort()
-    const top5Brands = [...new Set(brandTrendRows.map(r => r.brands))]
+    const monthOrder   = [...new Set(brandTrendRows.map(r => r.month))].sort()
+    // Keep top3 in descending-sales order, "Other" always last
+    const namedBrands  = [...new Set(brandTrendRows.filter(r => r.brands !== 'Other').map(r => r.brands))]
+    const hasOther     = brandTrendRows.some(r => r.brands === 'Other')
+    const top5Brands   = hasOther ? [...namedBrands, 'Other'] : namedBrands
     const by_brand_trend = monthOrder.map(month => {
       const label = brandTrendRows.find(r => r.month === month)?.month_label ?? month
       const row: Record<string, string | number> = { month, month_label: label }

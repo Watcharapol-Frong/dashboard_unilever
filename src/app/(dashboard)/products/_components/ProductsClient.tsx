@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from 'react'
 import {
-  BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend,
+  LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend,
   ResponsiveContainer,
 } from 'recharts'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
@@ -479,7 +479,7 @@ export default function ProductsClient() {
         </CardHeader>
         <CardContent className="pt-0">
           <ResponsiveContainer width="100%" height={300}>
-            <BarChart data={trendData} margin={{ top: 10, right: 10, left: 10, bottom: 0 }}>
+            <LineChart data={trendData} margin={{ top: 10, right: 10, left: 10, bottom: 0 }}>
               <CartesianGrid strokeDasharray="3 3" vertical={false} className="stroke-muted" />
               <XAxis dataKey="month_label" tickLine={false} axisLine={false} tickMargin={8} className={CHART_AXIS_CLS} />
               <YAxis tickLine={false} axisLine={false} tickMargin={8} className={CHART_AXIS_CLS}
@@ -490,16 +490,30 @@ export default function ProductsClient() {
                 formatter={(value: any, name: string) => [formatTHB(Number(value)), name]}
               />
               <Legend wrapperStyle={{ fontSize: '11px', paddingTop: '8px' }} />
-              {top5.map((brand, i) => (
-                <Bar
+              {top5.filter(b => b !== 'Other').map((brand, i) => (
+                <Line
                   key={brand}
+                  type="monotone"
                   dataKey={brand}
-                  stackId="revenue"
-                  fill={BRAND_COLORS[i % BRAND_COLORS.length]}
-                  radius={i === top5.length - 1 ? [4, 4, 0, 0] : [0, 0, 0, 0]}
+                  stroke={BRAND_COLORS[i % BRAND_COLORS.length]}
+                  strokeWidth={2.5}
+                  dot={false}
+                  activeDot={{ r: 4 }}
                 />
               ))}
-            </BarChart>
+              {top5.includes('Other') && (
+                <Line
+                  key="Other"
+                  type="monotone"
+                  dataKey="Other"
+                  stroke="#9ca3af"
+                  strokeWidth={2}
+                  strokeDasharray="5 3"
+                  dot={false}
+                  activeDot={{ r: 4 }}
+                />
+              )}
+            </LineChart>
           </ResponsiveContainer>
         </CardContent>
       </Card>
