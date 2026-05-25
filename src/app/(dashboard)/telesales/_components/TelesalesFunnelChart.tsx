@@ -29,15 +29,12 @@ interface FunnelSummary {
   leadsAll: number
   contacted: number
   notContacted: number
-  reached: number
-  notReached: number
   engaged: number
   notEngaged: number
   totalConverted: number
   newConverted: number
   repeatConverted: number
   contactRate: number
-  reachRate: number
   engageRate: number
   conversionRate: number
 }
@@ -81,9 +78,33 @@ function MetricStrip({
   )
 }
 
+interface TelesalesFunnelChartProps {
+  startDate: string
+  endDate: string
+  channel: string
+  cmg: string
+  agent: string
+}
+
 // ─── Main Component ───────────────────────────────────────────────────────────
-export function TelesalesFunnelChart() {
-  const { data, isLoading } = useDashboardSWR<FunnelData>('/api/data/telesales/funnel')
+export function TelesalesFunnelChart({
+  startDate,
+  endDate,
+  channel,
+  cmg,
+  agent,
+}: TelesalesFunnelChartProps) {
+  const apiUrl = useMemo(() => {
+    const p = new URLSearchParams()
+    if (startDate) p.set('startDate', startDate)
+    if (endDate)   p.set('endDate',   endDate)
+    if (channel && channel !== 'all') p.set('channel', channel)
+    if (cmg && cmg !== 'all')         p.set('cmg', cmg)
+    if (agent && agent !== 'all')     p.set('agent', agent)
+    return `/api/data/telesales/funnel?${p.toString()}`
+  }, [startDate, endDate, channel, cmg, agent])
+
+  const { data, isLoading } = useDashboardSWR<FunnelData>(apiUrl)
 
   const sankeyData = useMemo(() => {
     if (!data) return null
@@ -139,19 +160,6 @@ export function TelesalesFunnelChart() {
           label="Contacted"
           rate={s.contactRate}
           value={s.contacted}
-        />
-        <div className="flex items-center gap-1 self-center">
-          <div className="h-px w-6 bg-border" />
-          <span className="text-[10px] text-muted-foreground font-medium">
-            {formatPct(s.reachRate)}
-          </span>
-          <div className="h-px w-6 bg-border" />
-        </div>
-        <MetricStrip
-          color={NODE_COLORS['Answered']}
-          label="Answered"
-          rate={s.reachRate}
-          value={s.reached}
         />
         <div className="flex items-center gap-1 self-center">
           <div className="h-px w-6 bg-border" />
@@ -243,7 +251,6 @@ export function TelesalesFunnelChart() {
       <div className="flex justify-between px-2 text-[10px] text-muted-foreground font-medium uppercase tracking-wider">
         <span>All Leads</span>
         <span>Contacted</span>
-        <span>Answered</span>
         <span>Engaged</span>
         <span>Converted</span>
         <span>Customer Type</span>

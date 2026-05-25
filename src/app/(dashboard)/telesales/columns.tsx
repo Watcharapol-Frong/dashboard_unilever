@@ -28,7 +28,7 @@ export const columns: ColumnDef<AgentPerformance>[] = [
   {
     accessorKey: "reached",
     header: ({ column }) => (
-      <DataTableColumnHeader column={column} title="Reached" className="justify-end" />
+      <DataTableColumnHeader column={column} title="Engaged" className="justify-end" />
     ),
     cell: ({ row }) => (
       <div className="text-right">
@@ -39,7 +39,7 @@ export const columns: ColumnDef<AgentPerformance>[] = [
   {
     accessorKey: "not_reached",
     header: ({ column }) => (
-      <DataTableColumnHeader column={column} title="Not Reached" className="justify-end" />
+      <DataTableColumnHeader column={column} title="Not Engaged" className="justify-end" />
     ),
     cell: ({ row }) => (
       <div className="text-right">
@@ -50,7 +50,7 @@ export const columns: ColumnDef<AgentPerformance>[] = [
   {
     accessorKey: "reach_rate",
     header: ({ column }) => (
-      <DataTableColumnHeader column={column} title="Reach Rate" className="justify-end" />
+      <DataTableColumnHeader column={column} title="Engage Rate" className="justify-end" />
     ),
     cell: ({ row }) => (
       <div className="flex justify-end">

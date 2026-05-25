@@ -63,8 +63,8 @@ export default function SalesClient() {
   const [hoverMonth,  setHoverMonth]  = useState<string | null>(null)
 
   // Trend interval state
-  const [interval,    setInterval]    = useState<Interval>('weekly')
-  const [customStart, setCustomStart] = useState('2026-02-01')
+  const [interval,    setInterval]    = useState<Interval>('custom')
+  const [customStart, setCustomStart] = useState('2026-05-01')
   const [customEnd,   setCustomEnd]   = useState('2026-05-31')
 
   // Dimension filters
@@ -100,9 +100,17 @@ export default function SalesClient() {
   }, [interval, customStart, customEnd])
 
   const calculatedInterval = useMemo<'daily' | 'weekly' | 'monthly'>(() => {
-    if (interval !== 'custom') return interval
-    return durationDays <= 32 ? 'daily' : 'weekly'
-  }, [interval, durationDays])
+    if (interval === 'custom') {
+      return 'daily'
+    }
+    if (rangeFrom) {
+      if (!rangeTo || rangeFrom === rangeTo) {
+        return 'daily'
+      }
+      return 'monthly'
+    }
+    return 'daily'
+  }, [interval, rangeFrom, rangeTo])
 
   // Effective dates: chips take priority over custom date picker
   const effectiveStart = rangeFrom ?? (interval === 'custom' ? customStart : null)
@@ -138,7 +146,7 @@ export default function SalesClient() {
   const onlinePct  = kpi.total_sales > 0 ? (kpi.online_sales  / kpi.total_sales) * 100 : 0
   const offlinePct = kpi.total_sales > 0 ? (kpi.offline_sales / kpi.total_sales) * 100 : 0
   const hasFilter  = channel !== 'all' || cmg !== 'all' || agent !== 'all' || conversion !== 'all'
-  const hasRange   = !!(rangeFrom || (interval === 'custom' && customStart))
+  const hasRange   = !!(rangeFrom || (interval === 'custom' && (customStart !== '2026-05-01' || customEnd !== '2026-05-31')))
 
   const activeRangeLabel = (() => {
     if (!rangeFrom) return 'All available periods'
@@ -166,83 +174,112 @@ export default function SalesClient() {
           </div>
         </CardHeader>
         <CardContent>
-          <div className="flex flex-wrap items-center gap-4">
-            {/* Month chips */}
-            <div className="flex items-center gap-1.5 flex-wrap">
-              {months.map(m => {
-                const effectiveTo = rangeTo ?? (rangeFrom ? hoverMonth : null)
-                const active  = m === rangeFrom || m === rangeTo
-                const inRange = !!(rangeFrom && effectiveTo && m > rangeFrom && m < effectiveTo)
-                const preview = !!(!rangeTo && rangeFrom && hoverMonth && m > rangeFrom && m <= hoverMonth)
-                return (
-                  <button
-                    key={m}
-                    onClick={() => handleChipClick(m)}
-                    onMouseEnter={() => setHoverMonth(m)}
-                    onMouseLeave={() => setHoverMonth(null)}
-                    className={[
-                      'px-3.5 py-1.5 rounded-full text-xs font-semibold transition-all select-none border',
-                      active
-                        ? 'bg-[#003DA6] text-white border-[#003DA6] shadow-sm'
-                        : inRange || preview
-                        ? 'bg-[#003DA6]/10 text-[#003DA6] border-[#003DA6]/20'
-                        : 'bg-background text-muted-foreground border-gray-200 hover:bg-gray-50 hover:text-foreground',
-                    ].join(' ')}
-                  >
-                    {new Date(m).toLocaleDateString('en-GB', { month: 'short', year: '2-digit' })}
-                  </button>
-                )
-              })}
+          <div className="space-y-4">
+            {/* Row 1: Date & Range Selection */}
+            <div className="flex flex-wrap items-center gap-4">
+              {/* Month chips */}
+              <div className="flex items-center gap-1.5 flex-wrap">
+                {months.map(m => {
+                  const effectiveTo = rangeTo ?? (rangeFrom ? hoverMonth : null)
+                  const active  = m === rangeFrom || m === rangeTo
+                  const inRange = !!(rangeFrom && effectiveTo && m > rangeFrom && m < effectiveTo)
+                  const preview = !!(!rangeTo && rangeFrom && hoverMonth && m > rangeFrom && m <= hoverMonth)
+                  return (
+                    <button
+                      key={m}
+                      onClick={() => handleChipClick(m)}
+                      onMouseEnter={() => setHoverMonth(m)}
+                      onMouseLeave={() => setHoverMonth(null)}
+                      className={[
+                        'px-3.5 py-1.5 rounded-full text-xs font-semibold transition-all select-none border',
+                        active
+                          ? 'bg-[#003DA6] text-white border-[#003DA6] shadow-sm'
+                          : inRange || preview
+                          ? 'bg-[#003DA6]/10 text-[#003DA6] border-[#003DA6]/20'
+                          : 'bg-background text-muted-foreground border-gray-200 hover:bg-gray-50 hover:text-foreground',
+                      ].join(' ')}
+                    >
+                      {new Date(m).toLocaleDateString('en-GB', { month: 'short', year: '2-digit' })}
+                    </button>
+                  )
+                })}
+              </div>
+
+              {/* Custom Date Range Picker */}
+              <div className="flex items-center gap-2">
+                <DateRangePicker
+                  from={interval === 'custom' ? customStart : ''}
+                  to={interval === 'custom' ? customEnd : ''}
+                  onFromChange={(start) => {
+                    setCustomStart(start)
+                    setRangeFrom(null)
+                    setRangeTo(null)
+                    setInterval('custom')
+                  }}
+                  onToChange={(end) => {
+                    setCustomEnd(end)
+                    setRangeFrom(null)
+                    setRangeTo(null)
+                    setInterval('custom')
+                  }}
+                />
+                {interval === 'custom' && durationDays > 0 && (
+                  <span className="text-[9px] bg-blue-50 text-[#003DA6] px-1.5 py-0.5 rounded font-bold uppercase shrink-0">
+                    {calculatedInterval} · {durationDays}d
+                  </span>
+                )}
+              </div>
             </div>
 
-            <div className="w-px h-6 bg-border hidden lg:block" />
+            {/* Row 2: Dropdown Filters */}
+            <div className="flex flex-wrap items-center gap-4">
+              <Select value={channel} onValueChange={v => setChannel(v as Channel)}>
+                <SelectTrigger className="h-7 text-xs w-[130px]"><SelectValue placeholder="All Channels" /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All Channels</SelectItem>
+                  <SelectItem value="online">Online</SelectItem>
+                  <SelectItem value="offline">Offline</SelectItem>
+                </SelectContent>
+              </Select>
 
-            {/* Dimension filters */}
-            <Select value={channel} onValueChange={v => setChannel(v as Channel)}>
-              <SelectTrigger className="h-7 text-xs w-[130px]"><SelectValue placeholder="All Channels" /></SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">All Channels</SelectItem>
-                <SelectItem value="online">Online</SelectItem>
-                <SelectItem value="offline">Offline</SelectItem>
-              </SelectContent>
-            </Select>
+              <Select value={cmg} onValueChange={setCmg}>
+                <SelectTrigger className="h-7 text-xs w-[150px]"><SelectValue placeholder="All CMG" /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All CMG</SelectItem>
+                  {options.cmg.map(v => <SelectItem key={v} value={v}>{v}</SelectItem>)}
+                </SelectContent>
+              </Select>
 
-            <Select value={cmg} onValueChange={setCmg}>
-              <SelectTrigger className="h-7 text-xs w-[150px]"><SelectValue placeholder="All CMG" /></SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">All CMG</SelectItem>
-                {options.cmg.map(v => <SelectItem key={v} value={v}>{v}</SelectItem>)}
-              </SelectContent>
-            </Select>
+              <Select value={agent} onValueChange={setAgent}>
+                <SelectTrigger className="h-7 text-xs w-[150px]"><SelectValue placeholder="All Agents" /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All Agents</SelectItem>
+                  {options.agents.map(v => <SelectItem key={v} value={v}>{v}</SelectItem>)}
+                </SelectContent>
+              </Select>
 
-            <Select value={agent} onValueChange={setAgent}>
-              <SelectTrigger className="h-7 text-xs w-[150px]"><SelectValue placeholder="All Agents" /></SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">All Agents</SelectItem>
-                {options.agents.map(v => <SelectItem key={v} value={v}>{v}</SelectItem>)}
-              </SelectContent>
-            </Select>
+              <Select value={conversion} onValueChange={v => setConversion(v as Conversion)}>
+                <SelectTrigger className="h-7 text-xs w-[155px]"><SelectValue placeholder="All Customers" /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All Customers</SelectItem>
+                  <SelectItem value="converted">Converted Only</SelectItem>
+                  <SelectItem value="not_converted">Not Converted</SelectItem>
+                </SelectContent>
+              </Select>
 
-            <Select value={conversion} onValueChange={v => setConversion(v as Conversion)}>
-              <SelectTrigger className="h-7 text-xs w-[155px]"><SelectValue placeholder="All Customers" /></SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">All Customers</SelectItem>
-                <SelectItem value="converted">Converted Only</SelectItem>
-                <SelectItem value="not_converted">Not Converted</SelectItem>
-              </SelectContent>
-            </Select>
-
-            {(hasFilter || hasRange) && (
-              <button
-                onClick={() => {
-                  setChannel('all'); setCmg('all'); setAgent('all'); setConversion('all')
-                  setRangeFrom(null); setRangeTo(null); setInterval('monthly')
-                }}
-                className="text-xs text-[#003DA6] hover:underline font-semibold"
-              >
-                Reset All
-              </button>
-            )}
+              {(hasFilter || hasRange) && (
+                <button
+                  onClick={() => {
+                    setChannel('all'); setCmg('all'); setAgent('all'); setConversion('all')
+                    setRangeFrom(null); setRangeTo(null); setInterval('custom')
+                    setCustomStart('2026-05-01'); setCustomEnd('2026-05-31')
+                  }}
+                  className="text-xs text-[#003DA6] hover:underline font-semibold"
+                >
+                  Reset All
+                </button>
+              )}
+            </div>
           </div>
 
           {rangeFrom && (
@@ -296,40 +333,15 @@ export default function SalesClient() {
         <Card className="lg:col-span-2">
           <CardHeader className="flex sm:flex-row flex-col justify-between sm:items-center items-start gap-3 pb-2">
             <CardTitle className="text-sm font-medium">Sales Trend (Telesales Activity)</CardTitle>
-            <div className="flex items-center gap-2 flex-wrap">
-              <div className="flex items-center bg-gray-100/80 p-0.5 rounded-lg border border-gray-200">
-                {(['monthly', 'weekly', 'custom'] as const).map(v => (
-                  <button
-                    key={v}
-                    onClick={() => handleIntervalChange(v)}
-                    className={cn(
-                      'px-3 py-1 rounded-md text-xs font-bold transition-all duration-200 capitalize',
-                      interval === v
-                        ? 'bg-white text-[#003DA6] shadow-xs'
-                        : 'text-muted-foreground hover:text-foreground'
-                    )}
-                  >
-                    {v.charAt(0).toUpperCase() + v.slice(1)}
-                  </button>
-                ))}
-              </div>
-
-              {interval === 'custom' && (
-                <div className="flex items-center gap-2 animate-in fade-in slide-in-from-right-2 duration-200">
-                  <DateRangePicker
-                    from={customStart}
-                    to={customEnd}
-                    onFromChange={setCustomStart}
-                    onToChange={setCustomEnd}
-                  />
-                  {durationDays > 0 && (
-                    <span className="text-[9px] bg-blue-50 text-[#003DA6] px-1.5 py-0.5 rounded font-bold uppercase">
-                      {calculatedInterval} · {durationDays}d
-                    </span>
-                  )}
-                </div>
-              )}
-            </div>
+            {interval === 'custom' && durationDays > 0 ? (
+              <span className="text-[9px] bg-blue-50 text-[#003DA6] px-1.5 py-0.5 rounded font-bold uppercase animate-in fade-in duration-200">
+                {calculatedInterval} · {durationDays}d
+              </span>
+            ) : (
+              <span className="text-[9px] bg-blue-50 text-[#003DA6] px-1.5 py-0.5 rounded font-bold uppercase animate-in fade-in duration-200">
+                {calculatedInterval} View
+              </span>
+            )}
           </CardHeader>
           <CardContent className="pt-2">
             <ResponsiveContainer width="100%" height={280}>
@@ -410,7 +422,12 @@ export default function SalesClient() {
           <CardTitle className="text-sm font-medium">Recent Telesales Orders</CardTitle>
         </CardHeader>
         <CardContent>
-          <DataTable columns={columns} data={recent_orders} />
+          <DataTable
+            columns={columns}
+            data={recent_orders}
+            searchKey="mmid"
+            searchPlaceholder="Search MMID..."
+          />
         </CardContent>
       </Card>
     </div>

@@ -82,7 +82,7 @@ export function DataTable<TData, TValue>({
         <div className="flex flex-1 items-center space-x-2">
           {searchKey && (
             <Input
-              placeholder={`Filter ${searchKey}...`}
+              placeholder={searchPlaceholder || `Filter ${searchKey}...`}
               value={(table.getColumn(searchKey)?.getFilterValue() as string) ?? ""}
               onChange={(event) =>
                 table.getColumn(searchKey)?.setFilterValue(event.target.value)
