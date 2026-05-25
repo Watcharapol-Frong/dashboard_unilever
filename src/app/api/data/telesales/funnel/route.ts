@@ -89,16 +89,13 @@ export async function GET(request: Request) {
         GROUP BY mmid
       ),
       conversions AS (
-        -- We map customer outcomes from mart_telesales_orders
+        -- We map customer outcomes flags from mart_telesales_orders
         SELECT
           mmid,
-          -- Top outcome priority per mmid
-          CASE
-            WHEN BOOL_OR(customer_type = 'new_customer')              THEN 'new_customer'
-            WHEN BOOL_OR(customer_type = 'retention')                 THEN 'retention'
-            WHEN BOOL_OR(customer_type = 'retention_not_converted')   THEN 'retention_not_converted'
-            ELSE                                                           'first_order_not_converted'
-          END AS outcome
+          BOOL_OR(customer_type = 'new_customer')             AS is_new,
+          BOOL_OR(customer_type = 'retention')                AS is_repeat,
+          BOOL_OR(customer_type = 'first_order_not_converted') AS is_not_conv_new,
+          BOOL_OR(customer_type = 'retention_not_converted')   AS is_not_conv_ret
         FROM mart_telesales_orders
         WHERE customer_type IN ('new_customer', 'retention', 'first_order_not_converted', 'retention_not_converted')
           ${orderExtra}
@@ -111,16 +108,16 @@ export async function GET(request: Request) {
         COUNT(DISTINCT c.mmid) FILTER (WHERE c.engagement_status = 'not_engaged')::text AS not_engaged,
 
         -- Engaged path outcomes
-        COUNT(DISTINCT CASE WHEN c.engagement_status = 'engaged'     AND cv.outcome = 'new_customer'              THEN c.mmid END)::text AS new_conv_engaged,
-        COUNT(DISTINCT CASE WHEN c.engagement_status = 'engaged'     AND cv.outcome = 'retention'                 THEN c.mmid END)::text AS repeat_conv_engaged,
-        COUNT(DISTINCT CASE WHEN c.engagement_status = 'engaged'     AND cv.outcome = 'first_order_not_converted' THEN c.mmid END)::text AS not_conv_new_engaged,
-        COUNT(DISTINCT CASE WHEN c.engagement_status = 'engaged'     AND cv.outcome = 'retention_not_converted'   THEN c.mmid END)::text AS not_conv_ret_engaged,
+        COUNT(DISTINCT CASE WHEN c.engagement_status = 'engaged'     AND cv.is_new          THEN c.mmid END)::text AS new_conv_engaged,
+        COUNT(DISTINCT CASE WHEN c.engagement_status = 'engaged'     AND cv.is_repeat       THEN c.mmid END)::text AS repeat_conv_engaged,
+        COUNT(DISTINCT CASE WHEN c.engagement_status = 'engaged'     AND cv.is_not_conv_new THEN c.mmid END)::text AS not_conv_new_engaged,
+        COUNT(DISTINCT CASE WHEN c.engagement_status = 'engaged'     AND cv.is_not_conv_ret THEN c.mmid END)::text AS not_conv_ret_engaged,
 
         -- Not Engaged path outcomes
-        COUNT(DISTINCT CASE WHEN c.engagement_status = 'not_engaged' AND cv.outcome = 'new_customer'              THEN c.mmid END)::text AS new_conv_not_engaged,
-        COUNT(DISTINCT CASE WHEN c.engagement_status = 'not_engaged' AND cv.outcome = 'retention'                 THEN c.mmid END)::text AS repeat_conv_not_engaged,
-        COUNT(DISTINCT CASE WHEN c.engagement_status = 'not_engaged' AND cv.outcome = 'first_order_not_converted' THEN c.mmid END)::text AS not_conv_new_not_engaged,
-        COUNT(DISTINCT CASE WHEN c.engagement_status = 'not_engaged' AND cv.outcome = 'retention_not_converted'   THEN c.mmid END)::text AS not_conv_ret_not_engaged
+        COUNT(DISTINCT CASE WHEN c.engagement_status = 'not_engaged' AND cv.is_new          THEN c.mmid END)::text AS new_conv_not_engaged,
+        COUNT(DISTINCT CASE WHEN c.engagement_status = 'not_engaged' AND cv.is_repeat       THEN c.mmid END)::text AS repeat_conv_not_engaged,
+        COUNT(DISTINCT CASE WHEN c.engagement_status = 'not_engaged' AND cv.is_not_conv_new THEN c.mmid END)::text AS not_conv_new_not_engaged,
+        COUNT(DISTINCT CASE WHEN c.engagement_status = 'not_engaged' AND cv.is_not_conv_ret THEN c.mmid END)::text AS not_conv_ret_not_engaged
 
       FROM call_stats c
       LEFT JOIN conversions cv ON cv.mmid = c.mmid
