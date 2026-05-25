@@ -1,5 +1,6 @@
 import { AppSidebar } from '@/components/app-sidebar'
 import { TopBar } from '@/components/layout/TopBar'
+import { Prefetcher } from '@/components/layout/Prefetcher'
 import { DateRangeProvider } from '@/context/DateRangeContext'
 import { UploadQueueProvider } from '@/context/UploadQueueContext'
 import { BuildProvider } from '@/context/BuildContext'
@@ -14,6 +15,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
           <AppSidebar />
           <SidebarInset className="min-w-0">
             <TopBar />
+            <Prefetcher />
             <div className="flex-1 p-3 sm:p-6 overflow-x-auto">
               {children}
             </div>
