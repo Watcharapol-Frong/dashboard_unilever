@@ -232,15 +232,15 @@ export async function GET(request: Request) {
       }
     })
 
-    // Pivot trend rows → [{ period_label, BrandA: n, BrandB: n, ... }]
+    // Pivot trend rows → [{ period_label, BrandA: n|null, BrandB: n|null, ... }]
     const periodOrder = [...new Set(brandTrendRows.map(r => r.period))].sort()
     const top5Brands  = [...new Set(brandTrendRows.map(r => r.brands))]
     const by_brand_trend = periodOrder.map(period => {
       const label = brandTrendRows.find(r => r.period === period)?.period_label ?? period
-      const row: Record<string, string | number> = { period, period_label: label }
+      const row: Record<string, string | number | null> = { period, period_label: label }
       top5Brands.forEach(brand => {
         const entry = brandTrendRows.find(r => r.period === period && r.brands === brand)
-        row[brand] = entry ? Number(entry.total_sales) : 0
+        row[brand] = entry ? Number(entry.total_sales) : null
       })
       return row
     })

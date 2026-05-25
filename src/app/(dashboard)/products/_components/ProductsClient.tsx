@@ -3,7 +3,7 @@
 import { useMemo, useState } from 'react'
 import useSWR from 'swr'
 import {
-  AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, Legend,
+  LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend,
   ResponsiveContainer,
 } from 'recharts'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
@@ -431,15 +431,7 @@ export default function ProductsClient() {
         </CardHeader>
         <CardContent className="pt-0">
           <ResponsiveContainer width="100%" height={300}>
-            <AreaChart data={trendData} margin={{ top: 10, right: 10, left: 10, bottom: 0 }}>
-              <defs>
-                {top5.map((brand, i) => (
-                  <linearGradient key={brand} id={`grad_${i}`} x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%"  stopColor={BRAND_COLORS[i % BRAND_COLORS.length]} stopOpacity={0.25} />
-                    <stop offset="95%" stopColor={BRAND_COLORS[i % BRAND_COLORS.length]} stopOpacity={0}   />
-                  </linearGradient>
-                ))}
-              </defs>
+            <LineChart data={trendData} margin={{ top: 10, right: 10, left: 10, bottom: 0 }}>
               <CartesianGrid strokeDasharray="3 3" vertical={false} className="stroke-muted" />
               <XAxis dataKey="period_label" tickLine={false} axisLine={false} tickMargin={8} className={CHART_AXIS_CLS} />
               <YAxis tickLine={false} axisLine={false} tickMargin={8} className={CHART_AXIS_CLS}
@@ -447,22 +439,24 @@ export default function ProductsClient() {
               <Tooltip
                 contentStyle={CHART_TOOLTIP_STYLE}
                 labelClassName="text-xs font-bold"
-                formatter={(value: any, name: string) => [formatTHB(Number(value)), name]}
+                formatter={(value: any, name: string) =>
+                  value != null ? [formatTHB(Number(value)), name] : ['—', name]
+                }
               />
               <Legend wrapperStyle={{ fontSize: '11px', paddingTop: '8px' }} />
               {top5.map((brand, i) => (
-                <Area
+                <Line
                   key={brand}
                   type="monotone"
                   dataKey={brand}
                   stroke={BRAND_COLORS[i % BRAND_COLORS.length]}
-                  strokeWidth={2}
-                  fill={`url(#grad_${i})`}
-                  dot={false}
-                  activeDot={{ r: 4 }}
+                  strokeWidth={2.5}
+                  dot={{ r: 3, fill: BRAND_COLORS[i % BRAND_COLORS.length] }}
+                  activeDot={{ r: 5 }}
+                  connectNulls
                 />
               ))}
-            </AreaChart>
+            </LineChart>
           </ResponsiveContainer>
         </CardContent>
       </Card>
