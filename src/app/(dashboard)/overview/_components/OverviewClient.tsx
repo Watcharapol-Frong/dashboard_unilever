@@ -19,7 +19,7 @@ import {
 
 const OverviewChart = dynamic(
   () => import('./OverviewChart').then(m => m.OverviewChart),
-  { ssr: false, loading: () => <Skeleton className="h-[280px] w-full rounded-xl" /> }
+  { ssr: false, loading: () => <Skeleton className="h-[640px] w-full rounded-xl" /> }
 )
 
 type Agg = {
@@ -73,31 +73,6 @@ export default function OverviewClient() {
   const [hoverMonth, setHoverMonth] = useState<string | null>(null)
   const [filterCmg,  setFilterCmg]  = useState('all')
   const [filterChannel, setFilterChannel] = useState('all')
-
-  const [cohortInterval, setCohortInterval] = useState<'monthly' | 'weekly' | 'custom'>('monthly')
-  const [customStart, setCustomStart] = useState<string>('2026-02-01')
-  const [customEnd, setCustomEnd] = useState<string>('2026-05-31')
-
-  const durationDays = useMemo(() => {
-    if (cohortInterval !== 'custom' || !customStart || !customEnd) return 0
-    const start = new Date(customStart)
-    const end = new Date(customEnd)
-    return Math.ceil(Math.abs(end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24))
-  }, [cohortInterval, customStart, customEnd])
-
-  const calculatedInterval = useMemo(() => {
-    if (cohortInterval !== 'custom') return cohortInterval
-    // Auto granularity: daily ≤32 days, weekly ≥33 days
-    if (durationDays <= 32) return 'daily'
-    return 'weekly'
-  }, [cohortInterval, durationDays])
-
-  const cohortsQuery = `/api/data/cohorts?interval=${calculatedInterval}&cmg=${filterCmg}&channel=${filterChannel}` +
-    (cohortInterval === 'custom'
-      ? `${customStart ? `&startDate=${customStart}` : ''}${customEnd ? `&endDate=${customEnd}` : ''}`
-      : `${rangeFrom ? `&startDate=${rangeFrom}` : ''}${rangeTo ? `&endDate=${rangeTo}` : ''}`
-    )
-  const { data: cohortData = [] } = useDashboardSWR<any[]>(cohortsQuery)
 
   const handleChipClick = (m: string) => {
     if (!rangeFrom || (rangeFrom && rangeTo)) {
@@ -160,19 +135,6 @@ export default function OverviewClient() {
       return { month_label: mRows[0]?.month_label ?? month, ...agg }
     })
   }, [mappedFiltered])
-
-  const customerChartData = useMemo(() => {
-    return byMonth.map(m => {
-      const total = m.new_customers + m.retention
-      return {
-        month_label: m.month_label,
-        new_val: m.new_customers,
-        repeat_val: m.retention,
-        new_pct: total > 0 ? (m.new_customers / total) * 100 : 0,
-        repeat_pct: total > 0 ? (m.retention / total) * 100 : 0,
-      }
-    })
-  }, [byMonth])
 
   if (isLoading) return <PageLoading cols={6} />
   if (rows.length === 0) return (
@@ -301,19 +263,7 @@ export default function OverviewClient() {
       </KpiGrid>
 
       {/* Charts — rendered client-side only (recharts SSR fix) */}
-      <OverviewChart
-        byMonth={byMonth}
-        kpi={kpi}
-        cohortData={cohortData}
-        cohortInterval={cohortInterval}
-        setCohortInterval={setCohortInterval}
-        customStart={customStart}
-        customEnd={customEnd}
-        setCustomStart={setCustomStart}
-        setCustomEnd={setCustomEnd}
-        calculatedInterval={calculatedInterval}
-        durationDays={durationDays}
-      />
+      <OverviewChart byMonth={byMonth} kpi={kpi} />
     </div>
   )
 }
