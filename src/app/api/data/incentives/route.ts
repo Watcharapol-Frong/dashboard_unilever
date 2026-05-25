@@ -47,19 +47,42 @@ export async function GET() {
       achievement_ratio: string
       hoc_sales: string
       sales_target: string
+      incentive_per_head: string
     }>(`
+      WITH monthly AS (
+        SELECT
+          month,
+          SUM(total_incentive)  AS total_incentive,
+          SUM(total_agent_cost) AS total_agent_cost,
+          SUM(total_expense)    AS total_expense,
+          AVG(roi)              AS roi,
+          CASE WHEN SUM(sales_target) > 0
+               THEN SUM(hoc_sales) / SUM(sales_target)
+               ELSE 0 END       AS achievement_ratio,
+          SUM(hoc_sales)        AS hoc_sales,
+          SUM(sales_target)     AS sales_target
+        FROM mart_performance
+        GROUP BY month
+      )
       SELECT
-        month::text,
-        SUM(total_incentive)::text AS total_incentive,
-        SUM(total_agent_cost)::text AS total_agent_cost,
-        SUM(total_expense)::text AS total_expense,
-        AVG(roi)::text AS roi,
-        (CASE WHEN SUM(sales_target) > 0 THEN SUM(hoc_sales) / SUM(sales_target) ELSE 0 END)::text AS achievement_ratio,
-        SUM(hoc_sales)::text AS hoc_sales,
-        SUM(sales_target)::text AS sales_target
-      FROM mart_performance
-      GROUP BY month
-      ORDER BY month DESC
+        m.month::text,
+        m.total_incentive::text,
+        m.total_agent_cost::text,
+        m.total_expense::text,
+        m.roi::text,
+        m.achievement_ratio::text,
+        m.hoc_sales::text,
+        m.sales_target::text,
+        COALESCE(i.incentive_per_head, 0)::text AS incentive_per_head
+      FROM monthly m
+      LEFT JOIN LATERAL (
+        SELECT incentive_per_head
+        FROM incentives
+        WHERE tier <= m.achievement_ratio
+        ORDER BY tier DESC
+        LIMIT 1
+      ) i ON true
+      ORDER BY m.month DESC
     `)
 
     const data = {
@@ -83,6 +106,7 @@ export async function GET() {
         achievement_ratio: Number(m.achievement_ratio) * 100, // convert ratio to %
         hoc_sales: Number(m.hoc_sales),
         sales_target: Number(m.sales_target),
+        incentive_per_head: Number(m.incentive_per_head),
       })),
     }
 

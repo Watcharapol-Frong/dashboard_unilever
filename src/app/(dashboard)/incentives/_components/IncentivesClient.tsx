@@ -37,6 +37,7 @@ interface MonthlySummary {
   achievement_ratio: number
   hoc_sales: number
   sales_target: number
+  incentive_per_head: number
 }
 
 interface IncentivesKpi {
@@ -71,6 +72,15 @@ const summaryColumns: ColumnDef<MonthlySummary>[] = [
       <span className={`font-semibold transition-colors ${colorAchievement(row.original.achievement_ratio)}`}>
         {row.original.achievement_ratio.toFixed(1)}%
       </span>
+    ),
+  },
+  {
+    accessorKey: 'incentive_per_head',
+    header: 'Rate / Head',
+    cell: ({ row }) => (
+      <div className="text-right font-medium text-muted-foreground">
+        {row.original.incentive_per_head > 0 ? `${formatTHB(row.original.incentive_per_head)}/head` : '—'}
+      </div>
     ),
   },
   {
