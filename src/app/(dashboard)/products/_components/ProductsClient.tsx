@@ -79,6 +79,15 @@ function lastDayOfMonth(isoDate: string) {
   return new Date(y, m, 0).toISOString().split('T')[0]
 }
 
+function getSegment(p: { new_customers: number; retention_customers: number }): 'hook_new' | 'pull_old' | 'mixed' | 'no_data' {
+  const total = p.new_customers + p.retention_customers
+  if (total === 0) return 'no_data'
+  const newPct = (p.new_customers / total) * 100
+  if (newPct >= 70) return 'hook_new'
+  if (newPct <= 30) return 'pull_old'
+  return 'mixed'
+}
+
 // ── New vs Retention columns ──────────────────────────────────────────────────
 
 const newVsRetentionColumns: ColumnDef<ExtProductRow>[] = [
@@ -144,16 +153,14 @@ const newVsRetentionColumns: ColumnDef<ExtProductRow>[] = [
     id: 'segment',
     header: 'Segment',
     cell: ({ row }) => {
-      const { new_customers, retention_customers } = row.original
-      const total = new_customers + retention_customers
-      if (total === 0) return <span className="text-xs text-muted-foreground">—</span>
-      const newPct = (new_customers / total) * 100
-      if (newPct >= 70) return (
+      const seg = getSegment(row.original)
+      if (seg === 'no_data') return <span className="text-xs text-muted-foreground">—</span>
+      if (seg === 'hook_new') return (
         <span className="inline-flex items-center gap-1 text-xs font-semibold text-emerald-600">
           <UserPlus className="h-3 w-3" /> Hook คนใหม่
         </span>
       )
-      if (newPct <= 30) return (
+      if (seg === 'pull_old') return (
         <span className="inline-flex items-center gap-1 text-xs font-semibold text-teal-600">
           <Users className="h-3 w-3" /> ดึงคนเก่า
         </span>
@@ -247,6 +254,7 @@ export default function ProductsClient() {
   const [filterSeniorBuyer, setFilterSeniorBuyer] = useState('all')
   const [filterBuyer,       setFilterBuyer]       = useState('all')
   const [filterSubclass,    setFilterSubclass]    = useState('all')
+  const [filterSegment,     setFilterSegment]     = useState('all')
   const [prodSearch,        setProdSearch]        = useState('')
   const [activeTab,         setActiveTab]         = useState('products')
 
@@ -324,6 +332,11 @@ export default function ProductsClient() {
       (p.product_name_en ?? '').toLowerCase().includes(q)
     )
   }, [data?.by_product, prodSearch])
+
+  const segmentFiltered = useMemo(() => {
+    if (filterSegment === 'all') return filteredProducts
+    return filteredProducts.filter(p => getSegment(p) === filterSegment)
+  }, [filteredProducts, filterSegment])
 
   if (isLoading && !data) return <PageLoading />
   if (!data) {
@@ -522,26 +535,39 @@ export default function ProductsClient() {
 
             {/* ── New vs Retention ────────────────────────────────────── */}
             <TabsContent value="new_vs_retention" className="pt-2">
-              <div className="flex items-center gap-6 mb-3 px-1">
+              <div className="flex items-center gap-4 mb-3 px-1 flex-wrap">
                 <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
                   <UserPlus className="h-3.5 w-3.5 text-emerald-600" />
-                  <span><span className="font-semibold text-emerald-600">Hook คนใหม่</span> — new ≥ 70% ของผู้ซื้อ</span>
+                  <span><span className="font-semibold text-emerald-600">Hook คนใหม่</span> — new ≥ 70%</span>
                 </div>
                 <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
                   <Users className="h-3.5 w-3.5 text-teal-600" />
-                  <span><span className="font-semibold text-teal-600">ดึงคนเก่า</span> — retention ≥ 70% ของผู้ซื้อ</span>
+                  <span><span className="font-semibold text-teal-600">ดึงคนเก่า</span> — retention ≥ 70%</span>
                 </div>
                 <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
                   <span className="font-semibold text-muted-foreground">Mixed</span>
-                  <span>— ระหว่าง 30–70%</span>
+                  <span>— 30–70%</span>
                 </div>
               </div>
               <DataTable
                 columns={newVsRetentionColumns}
-                data={filteredProducts}
+                data={segmentFiltered}
                 searchValue={prodSearch}
                 onSearchChange={setProdSearch}
                 searchPlaceholder="Search product ID or name…"
+                toolbarLeft={
+                  <Select value={filterSegment} onValueChange={setFilterSegment}>
+                    <SelectTrigger className="h-8 text-xs w-[155px]">
+                      <SelectValue placeholder="All Segments" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">All Segments</SelectItem>
+                      <SelectItem value="hook_new">Hook คนใหม่</SelectItem>
+                      <SelectItem value="pull_old">ดึงคนเก่า</SelectItem>
+                      <SelectItem value="mixed">Mixed</SelectItem>
+                    </SelectContent>
+                  </Select>
+                }
               />
             </TabsContent>
 
