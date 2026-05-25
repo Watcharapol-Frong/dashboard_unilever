@@ -40,7 +40,7 @@ import { useBuild } from '@/context/BuildContext'
 const FILE_TYPES = Object.entries(FILE_TYPE_CONFIGS) as [UploadFileType, typeof FILE_TYPE_CONFIGS[UploadFileType]][]
 
 const FILE_TYPE_METADATA: Record<UploadFileType, { icon: React.ComponentType<any>; desc: string }> = {
-  online_sales: { icon: ShoppingBag, desc: 'Lazada, Shopee order sales transactions' },
+  online_sales: { icon: ShoppingBag, desc: 'Online channel order sales transactions' },
   offline_sales: { icon: Store, desc: 'Offline store/direct sales transactions' },
   leads: { icon: Users, desc: 'Telesales leads assignment sheet' },
   products: { icon: Package, desc: 'Master product list & brand hierarchy' },
