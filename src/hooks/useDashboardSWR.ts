@@ -9,6 +9,7 @@ const fetcher = async (url: string) => {
 
 export function useDashboardSWR<T>(url: string) {
   return useSWR<T>(url, fetcher, {
+    keepPreviousData: true,
     revalidateOnFocus: false,
     revalidateOnReconnect: false,
     dedupingInterval: 300_000,

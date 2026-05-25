@@ -51,7 +51,7 @@ interface TelesalesData {
     call_status_breakdown: Record<string, number>
   }
   by_agent: AgentPerformance[]
-  by_period: { period: string; total_calls: number; reached: number }[]
+  by_period: { period: string; total_calls: number; converted: number }[]
   by_tier_status: TierStatusItem[]
   months: string[]
   options: {
@@ -189,7 +189,7 @@ export default function TelesalesClient() {
     return data.by_period.map(p => ({
       name: new Date(p.period).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' }),
       Calls: p.total_calls,
-      Engaged: p.reached,
+      Conversion: p.converted,
     }))
   }, [data])
 
@@ -402,16 +402,16 @@ export default function TelesalesClient() {
           icon={Users}
         />
         <KpiCard
-          title="Engage Rate"
+          title="Connected Rate"
           value={formatPct(reachRate)}
-          subtitle={`Engaged: ${formatNumber(data.summary.reached)} / Total: ${formatNumber(data.summary.total_calls)}`}
+          subtitle={`Connected: ${formatNumber(data.summary.reached)} / Total: ${formatNumber(data.summary.total_calls)}`}
           valueClassName={colorRate(reachRate)}
           icon={PhoneCall}
         />
         <KpiCard
           title="Conversion Rate"
           value={formatPct(conversionRate)}
-          subtitle={`Converted: ${formatNumber(data.summary.total_converted)} / Engaged: ${formatNumber(data.summary.reached)}`}
+          subtitle={`Converted: ${formatNumber(data.summary.total_converted)} / Connected: ${formatNumber(data.summary.reached)}`}
           valueClassName={colorRate(conversionRate, [0.15, 0.08])}
           icon={UserCheck}
         />
@@ -424,14 +424,14 @@ export default function TelesalesClient() {
       </KpiGrid>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        <ChartCard title="Daily Calling Trend (Calls vs Engaged)" height={300} className="lg:col-span-3">
+        <ChartCard title="Daily Calling Trend (Calls vs Conversion)" height={300} className="lg:col-span-3">
           <AreaChart data={trendData} margin={{ top: 10, right: 10, left: 10, bottom: 0 }}>
             <defs>
               <linearGradient id="colorCalls" x1="0" y1="0" x2="0" y2="1">
                 <stop offset="5%" stopColor="#3b82f6" stopOpacity={0.8}/>
                 <stop offset="95%" stopColor="#3b82f6" stopOpacity={0}/>
               </linearGradient>
-              <linearGradient id="colorReached" x1="0" y1="0" x2="0" y2="1">
+              <linearGradient id="colorConverted" x1="0" y1="0" x2="0" y2="1">
                 <stop offset="5%" stopColor="#10b981" stopOpacity={0.8}/>
                 <stop offset="95%" stopColor="#10b981" stopOpacity={0}/>
               </linearGradient>
@@ -441,7 +441,7 @@ export default function TelesalesClient() {
             <YAxis tickLine={false} axisLine={false} tickMargin={8} className={CHART_AXIS_CLS} />
             <Tooltip contentStyle={CHART_TOOLTIP_STYLE} labelClassName="text-xs font-bold" />
             <Area type="monotone" dataKey="Calls" stroke="#3b82f6" fillOpacity={1} fill="url(#colorCalls)" strokeWidth={2} />
-            <Area type="monotone" dataKey="Engaged" stroke="#10b981" fillOpacity={1} fill="url(#colorReached)" strokeWidth={2} />
+            <Area type="monotone" dataKey="Conversion" stroke="#10b981" fillOpacity={1} fill="url(#colorConverted)" strokeWidth={2} />
           </AreaChart>
         </ChartCard>
 
@@ -451,7 +451,7 @@ export default function TelesalesClient() {
             <XAxis
               type="number"
               domain={[0, 100]}
-              tickFormatter={(val) => `${val}%`}
+              tickFormatter={(val) => `${Math.round(val)}%`}
               tickLine={false}
               axisLine={false}
               className={CHART_AXIS_CLS}

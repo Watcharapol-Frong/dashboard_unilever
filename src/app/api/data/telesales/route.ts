@@ -45,10 +45,32 @@ export async function GET(request: Request) {
     }
 
     const whereClause = 'WHERE ' + conditions.join(' AND ')
-    const whereClauseTc = 'WHERE ' + conditions.map(c => 
-      c.replace(/first_connected_date/g, 'tc.first_connected_date')
-       .replace(/agent =/g, 'tc.agent =')
-    ).join(' AND ')
+
+    // Build conditionsTc explicitly to prevent ambiguous column reference (e.g. tc.mmid vs ac.mmid)
+    const conditionsTc: string[] = ['tc.first_connected_date IS NOT NULL']
+    if (startDate) {
+      conditionsTc.push(`tc.first_connected_date >= $${params.indexOf(startDate) + 1}::date`)
+    }
+    if (endDate) {
+      conditionsTc.push(`tc.first_connected_date <= $${params.indexOf(endDate) + 1}::date`)
+    }
+    if (agent !== 'all') {
+      conditionsTc.push(`tc.agent = $${params.indexOf(agent) + 1}`)
+    }
+    if (channel !== 'all' || cmg !== 'all') {
+      const subConditions: string[] = []
+      if (channel !== 'all') {
+        subConditions.push(`channel = $${params.indexOf(channel) + 1}`)
+      }
+      if (cmg !== 'all') {
+        subConditions.push(`dynamic_cmg = $${params.indexOf(cmg) + 1}`)
+      }
+      conditionsTc.push(`tc.mmid IN (
+        SELECT DISTINCT mmid FROM mart_telesales_orders
+        WHERE ${subConditions.join(' AND ')}
+      )`)
+    }
+    const whereClauseTc = 'WHERE ' + conditionsTc.join(' AND ')
 
     // 1. Leads, Conversions, and Summary totals
     const [leadsRow, totalConvertedRow, summaryRow] = await Promise.all([
@@ -78,8 +100,6 @@ export async function GET(request: Request) {
           COUNT(*) FILTER (
             WHERE call_status NOT LIKE 'ไม่รับสาย%'
               AND call_status IS DISTINCT FROM 'ปิดเครื่อง/ติดต่อไม่ได้'
-              AND call_status IS DISTINCT FROM 'ไม่สะดวกคุย'
-              AND call_status IS DISTINCT FROM 'ยังไม่ต้องการสินค้า'
           )::text AS reached
         FROM telesales_calls
         ${whereClause}
@@ -136,8 +156,6 @@ export async function GET(request: Request) {
         COUNT(*) FILTER (
           WHERE tc.call_status NOT LIKE 'ไม่รับสาย%'
             AND tc.call_status IS DISTINCT FROM 'ปิดเครื่อง/ติดต่อไม่ได้'
-            AND tc.call_status IS DISTINCT FROM 'ไม่สะดวกคุย'
-            AND tc.call_status IS DISTINCT FROM 'ยังไม่ต้องการสินค้า'
         )::text AS reached,
         COUNT(DISTINCT tc.mmid) FILTER (
           WHERE ac.mmid IS NOT NULL
@@ -171,27 +189,31 @@ export async function GET(request: Request) {
     const trendRows = await query<{
       period: string
       total_calls: string
-      reached: string
+      converted: string
     }>(`
+      WITH agent_conversions AS (
+        SELECT DISTINCT mmid FROM mart_telesales_orders
+        WHERE customer_type IN ('new_customer', 'retention')
+          ${startDate ? `AND order_date >= $1::date` : ''}
+          ${endDate ? `AND order_date <= $${startDate ? '2' : '1'}::date` : ''}
+          ${channel !== 'all' ? `AND channel = $${params.indexOf(channel) + 1}` : ''}
+          ${cmg !== 'all' ? `AND dynamic_cmg = $${params.indexOf(cmg) + 1}` : ''}
+      )
       SELECT
-        first_connected_date::text AS period,
+        tc.first_connected_date::text AS period,
         COUNT(*)::text AS total_calls,
-        COUNT(*) FILTER (
-          WHERE call_status NOT LIKE 'ไม่รับสาย%'
-            AND call_status IS DISTINCT FROM 'ปิดเครื่อง/ติดต่อไม่ได้'
-            AND call_status IS DISTINCT FROM 'ไม่สะดวกคุย'
-            AND call_status IS DISTINCT FROM 'ยังไม่ต้องการสินค้า'
-        )::text AS reached
-      FROM telesales_calls
-      ${whereClause}
-      GROUP BY first_connected_date
-      ORDER BY first_connected_date
+        COUNT(DISTINCT tc.mmid) FILTER (WHERE ac.mmid IS NOT NULL)::text AS converted
+      FROM telesales_calls tc
+      LEFT JOIN agent_conversions ac ON ac.mmid = tc.mmid
+      ${whereClauseTc}
+      GROUP BY tc.first_connected_date
+      ORDER BY tc.first_connected_date
     `, params)
 
     const by_period = trendRows.map(r => ({
       period: r.period,
       total_calls: Number(r.total_calls),
-      reached: Number(r.reached),
+      converted: Number(r.converted),
     }))
 
     // 5. Available months for range chips (unfiltered) and filter options
