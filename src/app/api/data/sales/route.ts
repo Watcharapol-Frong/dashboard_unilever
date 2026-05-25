@@ -227,7 +227,7 @@ export async function GET(request: Request) {
       }
     }
 
-    return NextResponse.json({
+    const res = NextResponse.json({
       ok: true,
       data: {
         kpi: {
@@ -266,5 +266,7 @@ export async function GET(request: Request) {
         months: monthsRaw.map(r => r.month),
       },
     })
+    res.headers.set('Cache-Control', 'public, s-maxage=300, stale-while-revalidate=600')
+    return res
   })
 }

@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useMemo, useState } from 'react'
+import { useDashboardSWR } from '@/hooks/useDashboardSWR'
 import {
   LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend,
   ResponsiveContainer,
@@ -52,6 +53,14 @@ interface BrandRow {
   pct_of_total: number
 }
 
+interface ProductOptions {
+  brands: string[]
+  class_names: string[]
+  senior_buyers: string[]
+  buyers: string[]
+  subclasses: string[]
+}
+
 interface ProductData {
   by_product: ExtProductRow[]
   by_brand: BrandRow[]
@@ -63,13 +72,6 @@ interface ProductData {
   total_orders: number
   avg_order_value: number
   months: string[]
-  options: {
-    brands: string[]
-    class_names: string[]
-    senior_buyers: string[]
-    buyers: string[]
-    subclasses: string[]
-  }
 }
 
 // ── Constants ─────────────────────────────────────────────────────────────────
@@ -244,8 +246,16 @@ const brandColumns: ColumnDef<BrandRow>[] = [
 
 // ── Component ─────────────────────────────────────────────────────────────────
 
+const EMPTY_OPTS: ProductOptions = { brands: [], class_names: [], senior_buyers: [], buyers: [], subclasses: [] }
+
 export default function ProductsClient() {
   const { buildVersion } = useBuild()
+
+  // Options fetched once and cached for 1hr — independent of filter changes
+  const { data: optsData } = useDashboardSWR<ProductOptions>('/api/data/products/options', {
+    dedupingInterval: 3_600_000,
+  })
+  const opts = optsData ?? EMPTY_OPTS
 
   // Date range
   const [rangeFrom,  setRangeFrom]  = useState<string | null>(null)
@@ -347,7 +357,6 @@ export default function ProductsClient() {
     return <PageEmpty message="No product sales data available" hint="Please build mart first." />
   }
 
-  const opts      = data.options
   const top5      = data.top5_brands
   const trendData = data.by_brand_trend
   const months    = data.months ?? []

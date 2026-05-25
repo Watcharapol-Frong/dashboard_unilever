@@ -1,4 +1,4 @@
-import useSWR from 'swr'
+import useSWR, { SWRConfiguration } from 'swr'
 
 const fetcher = async (url: string) => {
   const res  = await fetch(url)
@@ -7,11 +7,12 @@ const fetcher = async (url: string) => {
   return json.data
 }
 
-export function useDashboardSWR<T>(url: string) {
+export function useDashboardSWR<T>(url: string, overrides?: SWRConfiguration<T>) {
   return useSWR<T>(url, fetcher, {
     keepPreviousData: true,
     revalidateOnFocus: false,
     revalidateOnReconnect: false,
     dedupingInterval: 300_000,
+    ...overrides,
   })
 }

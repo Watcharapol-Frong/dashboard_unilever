@@ -42,7 +42,7 @@ export async function GET(request: Request) {
       brands, className, seniorBuyer, buyer, subclass, startDate, endDate,
     )
 
-    const [kpiRow, productRows, brandRows, brandTrendRows, optsRaw, monthsRaw] = await Promise.all([
+    const [kpiRow, productRows, brandRows, brandTrendRows, monthsRaw] = await Promise.all([
       // ── KPI totals ───────────────────────────────────────────────────────
       queryOne<{
         total_sales: string
@@ -157,25 +157,6 @@ export async function GET(request: Request) {
         ORDER BY m.month
       `, filterParams),
 
-      // ── Filter options ───────────────────────────────────────────────────
-      query<{
-        brands: string | null
-        class_name: string | null
-        senior_buyer_name: string | null
-        buyer_name: string | null
-        subclass: string | null
-      }>(`
-        SELECT DISTINCT
-          brands,
-          class_name,
-          senior_buyer_name,
-          buyer_name,
-          subclass
-        FROM products
-        WHERE prod_num IN (SELECT DISTINCT prod_num FROM mart_telesales_orders)
-        ORDER BY brands, class_name
-      `),
-
       // ── Available months for range chips (unfiltered) ────────────────────
       query<{ month: string }>(`
         SELECT DISTINCT month::text AS month FROM mart_telesales_orders ORDER BY month
@@ -240,10 +221,7 @@ export async function GET(request: Request) {
       return row
     })
 
-    const unique = <T,>(arr: (T | null)[]) =>
-      [...new Set(arr.filter((v): v is T => v !== null && v !== ''))]
-
-    return NextResponse.json({
+    const res = NextResponse.json({
       ok: true,
       data: {
         by_product,
@@ -256,14 +234,9 @@ export async function GET(request: Request) {
         total_orders:    totalOrders,
         avg_order_value: totalOrders > 0 ? totalSales / totalOrders : 0,
         months: monthsRaw.map(r => r.month),
-        options: {
-          brands:        unique(optsRaw.map(r => r.brands)).sort(),
-          class_names:   unique(optsRaw.map(r => r.class_name)).sort(),
-          senior_buyers: unique(optsRaw.map(r => r.senior_buyer_name)).sort(),
-          buyers:        unique(optsRaw.map(r => r.buyer_name)).sort(),
-          subclasses:    unique(optsRaw.map(r => r.subclass)).sort(),
-        },
       },
     })
+    res.headers.set('Cache-Control', 'public, s-maxage=300, stale-while-revalidate=600')
+    return res
   })
 }

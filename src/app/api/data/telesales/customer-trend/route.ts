@@ -90,6 +90,8 @@ export async function GET(request: Request) {
       retention_not_converted: Number(r.retention_not_converted ?? 0),
     }))
 
-    return NextResponse.json({ ok: true, data })
+    const res = NextResponse.json({ ok: true, data })
+    res.headers.set('Cache-Control', 'public, s-maxage=300, stale-while-revalidate=600')
+    return res
   })
 }
