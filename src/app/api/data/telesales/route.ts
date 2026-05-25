@@ -171,27 +171,31 @@ export async function GET(request: Request) {
     const trendRows = await query<{
       period: string
       total_calls: string
-      reached: string
+      converted: string
     }>(`
+      WITH agent_conversions AS (
+        SELECT DISTINCT mmid FROM mart_telesales_orders
+        WHERE customer_type IN ('new_customer', 'retention')
+          ${startDate ? `AND order_date >= $1::date` : ''}
+          ${endDate ? `AND order_date <= $${startDate ? '2' : '1'}::date` : ''}
+          ${channel !== 'all' ? `AND channel = $${params.indexOf(channel) + 1}` : ''}
+          ${cmg !== 'all' ? `AND dynamic_cmg = $${params.indexOf(cmg) + 1}` : ''}
+      )
       SELECT
-        first_connected_date::text AS period,
+        tc.first_connected_date::text AS period,
         COUNT(*)::text AS total_calls,
-        COUNT(*) FILTER (
-          WHERE call_status NOT LIKE 'ไม่รับสาย%'
-            AND call_status IS DISTINCT FROM 'ปิดเครื่อง/ติดต่อไม่ได้'
-            AND call_status IS DISTINCT FROM 'ไม่สะดวกคุย'
-            AND call_status IS DISTINCT FROM 'ยังไม่ต้องการสินค้า'
-        )::text AS reached
-      FROM telesales_calls
-      ${whereClause}
-      GROUP BY first_connected_date
-      ORDER BY first_connected_date
+        COUNT(DISTINCT tc.mmid) FILTER (WHERE ac.mmid IS NOT NULL)::text AS converted
+      FROM telesales_calls tc
+      LEFT JOIN agent_conversions ac ON ac.mmid = tc.mmid
+      ${whereClauseTc}
+      GROUP BY tc.first_connected_date
+      ORDER BY tc.first_connected_date
     `, params)
 
     const by_period = trendRows.map(r => ({
       period: r.period,
       total_calls: Number(r.total_calls),
-      reached: Number(r.reached),
+      converted: Number(r.converted),
     }))
 
     // 5. Available months for range chips (unfiltered) and filter options
