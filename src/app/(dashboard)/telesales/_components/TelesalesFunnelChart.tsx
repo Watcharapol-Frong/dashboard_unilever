@@ -32,8 +32,8 @@ interface FunnelSummary {
   totalConverted: number
   newConverted: number
   repeatConverted: number
-  convertedFromEngaged: number
-  convertedFromNotEngaged: number
+  convFromEngaged: number
+  convFromNotEngaged: number
   contactRate: number
   engageRate: number
   conversionRate: number

@@ -47,38 +47,28 @@ export async function GET(request: Request) {
 
     const whereClause = 'WHERE ' + conditions.join(' AND ')
 
-    // Build conditions for conversions (mart_telesales_orders)
-    const orderConditions: string[] = ["customer_type IN ('new_customer', 'retention')"]
-    if (startDate) {
-      orderConditions.push(`order_date >= $${params.indexOf(startDate) + 1}::date`)
-    }
-    if (endDate) {
-      orderConditions.push(`order_date <= $${params.indexOf(endDate) + 1}::date`)
-    }
-    if (channel !== 'all') {
-      orderConditions.push(`channel = $${params.indexOf(channel) + 1}`)
-    }
-    if (cmg !== 'all') {
-      orderConditions.push(`dynamic_cmg = $${params.indexOf(cmg) + 1}`)
-    }
-    const conversionsWhere = 'WHERE ' + orderConditions.join(' AND ')
+    // mart_telesales_orders channel/cmg filter (re-use same param indices)
+    const orderExtraConditions: string[] = []
+    if (channel !== 'all') orderExtraConditions.push(`channel = $${params.indexOf(channel) + 1}`)
+    if (cmg !== 'all')     orderExtraConditions.push(`dynamic_cmg = $${params.indexOf(cmg) + 1}`)
+    const orderExtra = orderExtraConditions.length ? 'AND ' + orderExtraConditions.join(' AND ') : ''
 
     const row = await queryOne<{
       leads_all: string
       contacted: string
       engaged: string
       not_engaged: string
-      total_converted: string
-      new_converted: string
-      repeat_converted: string
-      converted_engaged: string
-      converted_not_engaged: string
+      // Engaged path — from mart_telesales_orders
       new_converted_engaged: string
-      new_converted_not_engaged: string
       repeat_converted_engaged: string
+      not_converted_engaged: string
+      // Not Engaged path — from mart_telesales_orders
+      new_converted_not_engaged: string
       repeat_converted_not_engaged: string
+      not_converted_not_engaged: string
     }>(`
       WITH call_stats AS (
+        -- Classify each mmid as engaged or not_engaged based on their best call status
         SELECT
           mmid,
           CASE
@@ -94,64 +84,78 @@ export async function GET(request: Request) {
         ${whereClause}
         GROUP BY mmid
       ),
-      conversions AS (
-        SELECT
+      orders AS (
+        -- All order records per mmid with customer_type
+        -- customer_type values:
+        --   new_customer              → Converted → New Customer
+        --   retention                 → Converted → Repeat Customer
+        --   first_order_not_converted → Not Converted
+        --   retention_not_converted   → Not Converted
+        SELECT DISTINCT ON (mmid)
           mmid,
-          BOOL_OR(customer_type = 'new_customer') AS is_new_conv,
-          BOOL_OR(customer_type = 'retention')    AS is_ret_conv
+          -- Determine top-priority outcome per mmid
+          CASE
+            WHEN BOOL_OR(customer_type = 'new_customer')  OVER (PARTITION BY mmid) THEN 'new_customer'
+            WHEN BOOL_OR(customer_type = 'retention')     OVER (PARTITION BY mmid) THEN 'retention'
+            WHEN BOOL_OR(customer_type = 'retention_not_converted') OVER (PARTITION BY mmid) THEN 'retention_not_converted'
+            ELSE 'first_order_not_converted'
+          END AS outcome
         FROM mart_telesales_orders
-        ${conversionsWhere}
-        GROUP BY mmid
+        WHERE TRUE ${orderExtra}
       )
       SELECT
         (SELECT COUNT(DISTINCT mmid) FROM leads)::text AS leads_all,
-        COUNT(DISTINCT c.mmid)::text                                                                            AS contacted,
-        COUNT(DISTINCT c.mmid) FILTER (WHERE c.engagement_status = 'engaged')::text                            AS engaged,
-        COUNT(DISTINCT c.mmid) FILTER (WHERE c.engagement_status = 'not_engaged')::text                        AS not_engaged,
-        COUNT(DISTINCT conv.mmid)::text                                                                         AS total_converted,
-        COUNT(DISTINCT conv.mmid) FILTER (WHERE conv.is_new_conv)::text                                        AS new_converted,
-        COUNT(DISTINCT conv.mmid) FILTER (WHERE conv.is_ret_conv)::text                                        AS repeat_converted,
-        COUNT(DISTINCT conv.mmid) FILTER (WHERE c.engagement_status = 'engaged')::text                         AS converted_engaged,
-        COUNT(DISTINCT conv.mmid) FILTER (WHERE c.engagement_status = 'not_engaged')::text                     AS converted_not_engaged,
-        COUNT(DISTINCT conv.mmid) FILTER (WHERE conv.is_new_conv AND c.engagement_status = 'engaged')::text    AS new_converted_engaged,
-        COUNT(DISTINCT conv.mmid) FILTER (WHERE conv.is_new_conv AND c.engagement_status = 'not_engaged')::text AS new_converted_not_engaged,
-        COUNT(DISTINCT conv.mmid) FILTER (WHERE conv.is_ret_conv AND c.engagement_status = 'engaged')::text    AS repeat_converted_engaged,
-        COUNT(DISTINCT conv.mmid) FILTER (WHERE conv.is_ret_conv AND c.engagement_status = 'not_engaged')::text AS repeat_converted_not_engaged
+        COUNT(DISTINCT c.mmid)::text AS contacted,
+        COUNT(DISTINCT c.mmid) FILTER (WHERE c.engagement_status = 'engaged')::text     AS engaged,
+        COUNT(DISTINCT c.mmid) FILTER (WHERE c.engagement_status = 'not_engaged')::text AS not_engaged,
+
+        -- Engaged path outcomes (from mart_telesales_orders)
+        COUNT(DISTINCT CASE WHEN c.engagement_status = 'engaged'     AND o.outcome = 'new_customer'              THEN c.mmid END)::text AS new_converted_engaged,
+        COUNT(DISTINCT CASE WHEN c.engagement_status = 'engaged'     AND o.outcome = 'retention'                 THEN c.mmid END)::text AS repeat_converted_engaged,
+        COUNT(DISTINCT CASE WHEN c.engagement_status = 'engaged'     AND o.outcome IN ('first_order_not_converted','retention_not_converted') THEN c.mmid END)::text AS not_converted_engaged,
+
+        -- Not Engaged path outcomes (from mart_telesales_orders)
+        COUNT(DISTINCT CASE WHEN c.engagement_status = 'not_engaged' AND o.outcome = 'new_customer'              THEN c.mmid END)::text AS new_converted_not_engaged,
+        COUNT(DISTINCT CASE WHEN c.engagement_status = 'not_engaged' AND o.outcome = 'retention'                 THEN c.mmid END)::text AS repeat_converted_not_engaged,
+        COUNT(DISTINCT CASE WHEN c.engagement_status = 'not_engaged' AND o.outcome IN ('first_order_not_converted','retention_not_converted') THEN c.mmid END)::text AS not_converted_not_engaged
+
       FROM call_stats c
-      LEFT JOIN conversions conv ON conv.mmid = c.mmid
+      LEFT JOIN orders o ON o.mmid = c.mmid
     `, params)
 
     if (!row) {
       return NextResponse.json({ ok: true, data: null })
     }
 
-    const leadsAll            = Number(row.leads_all)
-    const contacted           = Number(row.contacted)
-    const engaged             = Number(row.engaged)
-    const notEngaged          = Number(row.not_engaged)
-    const totalConverted      = Number(row.total_converted)
-    const newConverted        = Number(row.new_converted)
-    const repeatConverted     = Number(row.repeat_converted)
-    const notContacted        = Math.max(leadsAll - contacted, 0)
+    const leadsAll   = Number(row.leads_all)
+    const contacted  = Number(row.contacted)
+    const engaged    = Number(row.engaged)
+    const notEngaged = Number(row.not_engaged)
+    const notContacted = Math.max(leadsAll - contacted, 0)
 
-    const convertedFromEngaged    = Number(row.converted_engaged)
-    const convertedFromNotEngaged = Number(row.converted_not_engaged)
+    // Engaged path
+    const newConvEngaged     = Number(row.new_converted_engaged)
+    const repeatConvEngaged  = Number(row.repeat_converted_engaged)
+    const notConvEngaged     = Number(row.not_converted_engaged)
+    const convFromEngaged    = newConvEngaged + repeatConvEngaged
 
-    const newConvertedEngaged       = Number(row.new_converted_engaged)
-    const newConvertedNotEngaged    = Number(row.new_converted_not_engaged)
-    const repeatConvertedEngaged    = Number(row.repeat_converted_engaged)
-    const repeatConvertedNotEngaged = Number(row.repeat_converted_not_engaged)
+    // Not Engaged path
+    const newConvNotEngaged     = Number(row.new_converted_not_engaged)
+    const repeatConvNotEngaged  = Number(row.repeat_converted_not_engaged)
+    const notConvNotEngaged     = Number(row.not_converted_not_engaged)
+    const convFromNotEngaged    = newConvNotEngaged + repeatConvNotEngaged
 
-    // Not Converted split by engagement path
-    const notConvertedEngaged    = Math.max(engaged    - convertedFromEngaged,    0)
-    const notConvertedNotEngaged = Math.max(notEngaged - convertedFromNotEngaged, 0)
+    // Totals
+    const totalConverted  = convFromEngaged + convFromNotEngaged
+    const newConverted    = newConvEngaged   + newConvNotEngaged
+    const repeatConverted = repeatConvEngaged + repeatConvNotEngaged
 
     // Sankey node index map:
     //  0: All Leads
     //  1: Contacted
     //  2: Not Contacted
     //  3: Engaged
-    //  4: Not Engaged
+    //  4: Not Engaged       ← same vertical level as Engaged
     //  5: Not Converted
     //  6: Converted
     //  7: New Customer
@@ -162,7 +166,7 @@ export async function GET(request: Request) {
       { name: 'Contacted',       category: 'stage'   },
       { name: 'Not Contacted',   category: 'drop'    },
       { name: 'Engaged',         category: 'stage'   },
-      { name: 'Not Engaged',     category: 'drop'    },
+      { name: 'Not Engaged',     category: 'stage'   }, // same level — both flow to Converted/Not Converted
       { name: 'Not Converted',   category: 'drop'    },
       { name: 'Converted',       category: 'outcome' },
       { name: 'New Customer',    category: 'outcome' },
@@ -178,18 +182,17 @@ export async function GET(request: Request) {
       { source: 1, target: 3, value: Math.max(engaged,    1) },
       { source: 1, target: 4, value: Math.max(notEngaged, 1) },
 
-      // Engaged → Converted / Not Converted
-      { source: 3, target: 6, value: Math.max(convertedFromEngaged,    1) },
-      { source: 3, target: 5, value: Math.max(notConvertedEngaged,     1) },
+      // Engaged → Converted / Not Converted  (based on mart_telesales_orders customer_type)
+      { source: 3, target: 6, value: Math.max(convFromEngaged, 1) },
+      { source: 3, target: 5, value: Math.max(notConvEngaged,  1) },
 
-      // Not Engaged → Converted / Not Converted  (ตามข้อมูลจริง mart_telesales_orders)
-      { source: 4, target: 6, value: Math.max(convertedFromNotEngaged, 1) },
-      { source: 4, target: 5, value: Math.max(notConvertedNotEngaged,  1) },
+      // Not Engaged → Converted / Not Converted  (based on mart_telesales_orders customer_type)
+      { source: 4, target: 6, value: Math.max(convFromNotEngaged, 1) },
+      { source: 4, target: 5, value: Math.max(notConvNotEngaged,  1) },
 
-      // Converted → New Customer / Repeat Customer
-      // (flows from both Engaged & Not Engaged paths)
-      { source: 6, target: 7, value: Math.max(newConvertedEngaged + newConvertedNotEngaged,       1) },
-      { source: 6, target: 8, value: Math.max(repeatConvertedEngaged + repeatConvertedNotEngaged, 1) },
+      // Converted → New Customer / Repeat Customer  (combined from both paths)
+      { source: 6, target: 7, value: Math.max(newConverted,    1) },
+      { source: 6, target: 8, value: Math.max(repeatConverted, 1) },
     ]
 
     const summary = {
@@ -201,11 +204,11 @@ export async function GET(request: Request) {
       totalConverted,
       newConverted,
       repeatConverted,
-      convertedFromEngaged,
-      convertedFromNotEngaged,
-      contactRate:    leadsAll  > 0 ? contacted      / leadsAll  : 0,
-      engageRate:     contacted > 0 ? engaged         / contacted : 0,
-      conversionRate: contacted > 0 ? totalConverted  / contacted : 0,
+      convFromEngaged,
+      convFromNotEngaged,
+      contactRate:    leadsAll   > 0 ? contacted     / leadsAll   : 0,
+      engageRate:     contacted  > 0 ? engaged        / contacted  : 0,
+      conversionRate: contacted  > 0 ? totalConverted / contacted  : 0,
     }
 
     const res = NextResponse.json({ ok: true, data: { nodes, links, summary } })
