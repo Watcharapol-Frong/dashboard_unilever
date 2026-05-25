@@ -90,18 +90,22 @@ export async function GET(request: Request) {
         ORDER BY SUM(m.sales_in_vat) DESC
       `, filterParams),
 
-      // ── By brand (summary) ───────────────────────────────────────────────
+      // ── By brand (summary + channel split) ──────────────────────────────
       query<{
         brands: string
         total_sales: string
+        online_sales: string
+        offline_sales: string
         total_qty: string
         product_count: string
       }>(`
         SELECT
-          COALESCE(p.brands, 'Unknown') AS brands,
-          SUM(m.sales_in_vat)::text     AS total_sales,
-          SUM(m.sales_qty)::text        AS total_qty,
-          COUNT(DISTINCT m.prod_num)::text AS product_count
+          COALESCE(p.brands, 'Unknown')                                                   AS brands,
+          SUM(m.sales_in_vat)::text                                                       AS total_sales,
+          COALESCE(SUM(CASE WHEN m.channel = 'online'  THEN m.sales_in_vat END), 0)::text AS online_sales,
+          COALESCE(SUM(CASE WHEN m.channel = 'offline' THEN m.sales_in_vat END), 0)::text AS offline_sales,
+          SUM(m.sales_qty)::text                                                           AS total_qty,
+          COUNT(DISTINCT m.prod_num)::text                                                 AS product_count
         FROM mart_telesales_orders m
         LEFT JOIN products p ON m.prod_num = p.prod_num
         WHERE true ${extraWhere}
@@ -183,13 +187,19 @@ export async function GET(request: Request) {
     })
 
     const by_brand = brandRows.map(b => {
-      const sales = Number(b.total_sales)
+      const sales   = Number(b.total_sales)
+      const online  = Number(b.online_sales)
+      const offline = Number(b.offline_sales)
       return {
-        brands:        b.brands,
-        total_sales:   sales,
-        total_qty:     Number(b.total_qty),
-        product_count: Number(b.product_count),
-        pct_of_total:  totalSales > 0 ? sales / totalSales : 0,
+        brands:          b.brands,
+        total_sales:     sales,
+        online_sales:    online,
+        offline_sales:   offline,
+        online_pct:      sales > 0 ? online  / sales : 0,
+        offline_pct:     sales > 0 ? offline / sales : 0,
+        total_qty:       Number(b.total_qty),
+        product_count:   Number(b.product_count),
+        pct_of_total:    totalSales > 0 ? sales / totalSales : 0,
       }
     })
 

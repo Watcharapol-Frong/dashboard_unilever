@@ -42,6 +42,10 @@ interface ExtProductRow {
 interface BrandRow {
   brands: string
   total_sales: number
+  online_sales: number
+  offline_sales: number
+  online_pct: number
+  offline_pct: number
   total_qty: number
   product_count: number
   pct_of_total: number
@@ -165,27 +169,67 @@ const newVsRetentionColumns: ColumnDef<ExtProductRow>[] = [
 const brandColumns: ColumnDef<BrandRow>[] = [
   {
     accessorKey: 'brands',
-    header: 'Brand',
+    header: ({ column }) => <DataTableColumnHeader column={column} title="Brand" />,
     cell: ({ row }) => <span className="font-semibold">{row.original.brands}</span>,
   },
   {
     accessorKey: 'product_count',
-    header: 'SKUs',
+    header: ({ column }) => <DataTableColumnHeader column={column} title="SKUs" className="justify-end" />,
     cell: ({ row }) => <div className="text-right">{formatNumber(row.original.product_count)}</div>,
   },
   {
     accessorKey: 'total_qty',
-    header: 'Qty Sold',
+    header: ({ column }) => <DataTableColumnHeader column={column} title="Qty Sold" className="justify-end" />,
     cell: ({ row }) => <div className="text-right">{formatNumber(row.original.total_qty)}</div>,
   },
   {
     accessorKey: 'total_sales',
-    header: 'Revenue (THB)',
-    cell: ({ row }) => <div className="text-right font-medium">{formatTHB(row.original.total_sales)}</div>,
+    header: ({ column }) => <DataTableColumnHeader column={column} title="Total Revenue" className="justify-end" />,
+    cell: ({ row }) => <div className="text-right font-semibold">{formatTHB(row.original.total_sales)}</div>,
+  },
+  {
+    accessorKey: 'online_sales',
+    header: ({ column }) => <DataTableColumnHeader column={column} title="Online" className="justify-end" />,
+    cell: ({ row }) => (
+      <div className="text-right">
+        <div className="font-medium text-[#003DA6]">{formatTHB(row.original.online_sales)}</div>
+        <div className="text-[10px] text-muted-foreground">{formatPct(row.original.online_pct)}</div>
+      </div>
+    ),
+  },
+  {
+    accessorKey: 'offline_sales',
+    header: ({ column }) => <DataTableColumnHeader column={column} title="Offline" className="justify-end" />,
+    cell: ({ row }) => (
+      <div className="text-right">
+        <div className="font-medium text-[#EE2737]">{formatTHB(row.original.offline_sales)}</div>
+        <div className="text-[10px] text-muted-foreground">{formatPct(row.original.offline_pct)}</div>
+      </div>
+    ),
+  },
+  {
+    id: 'channel_bar',
+    header: 'Channel Mix',
+    cell: ({ row }) => {
+      const onPct  = row.original.online_pct  * 100
+      const offPct = row.original.offline_pct * 100
+      return (
+        <div className="w-24">
+          <div className="h-2 rounded-full overflow-hidden flex">
+            <div className="h-full bg-[#003DA6]" style={{ width: `${onPct}%` }} />
+            <div className="h-full bg-[#EE2737]" style={{ width: `${offPct}%` }} />
+          </div>
+          <div className="flex justify-between text-[10px] text-muted-foreground mt-0.5">
+            <span>{onPct.toFixed(0)}%</span>
+            <span>{offPct.toFixed(0)}%</span>
+          </div>
+        </div>
+      )
+    },
   },
   {
     accessorKey: 'pct_of_total',
-    header: '% of Total',
+    header: ({ column }) => <DataTableColumnHeader column={column} title="% of Total" className="justify-end" />,
     cell: ({ row }) => <div className="text-right">{formatPct(row.original.pct_of_total)}</div>,
   },
 ]
