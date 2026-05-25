@@ -18,6 +18,7 @@ import { formatTHB, formatNumber, formatPct, fmtBaht } from '@/lib/formatters'
 import { columns as baseProductColumns } from '../columns'
 import { Package, ShoppingCart, TrendingUp, BarChart2, Filter, UserPlus, Users } from 'lucide-react'
 import { ColumnDef } from '@tanstack/react-table'
+import { DataTableColumnHeader } from '@/components/ui/data-table-column-header'
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -75,26 +76,87 @@ const fetcher = (url: string) =>
     return j.data as ProductData
   })
 
-// ── Extended SKU columns (base + new/retention) ───────────────────────────────
+// ── New vs Retention columns ──────────────────────────────────────────────────
 
-const newRetentionCols: ColumnDef<ExtProductRow>[] = [
+const newVsRetentionColumns: ColumnDef<ExtProductRow>[] = [
+  {
+    accessorKey: 'prod_num',
+    header: ({ column }) => <DataTableColumnHeader column={column} title="Product #" />,
+  },
+  {
+    accessorKey: 'brands',
+    header: ({ column }) => <DataTableColumnHeader column={column} title="Brand" />,
+    cell: ({ row }) => row.original.brands ?? '-',
+  },
+  {
+    accessorKey: 'product_name_th',
+    header: 'Product Name (TH)',
+    cell: ({ row }) => (
+      <div className="max-w-[320px] truncate" title={row.original.product_name_th ?? ''}>
+        {row.original.product_name_th ?? '-'}
+      </div>
+    ),
+  },
   {
     accessorKey: 'new_customers',
-    header: 'New Cust.',
+    header: ({ column }) => (
+      <DataTableColumnHeader column={column} title="New Customers" className="justify-end" />
+    ),
     cell: ({ row }) => (
-      <div className="text-right font-medium text-emerald-600">
+      <div className="text-right font-semibold text-emerald-600">
         {formatNumber(row.original.new_customers)}
       </div>
     ),
   },
   {
     accessorKey: 'retention_customers',
-    header: 'Retention',
+    header: ({ column }) => (
+      <DataTableColumnHeader column={column} title="Retention" className="justify-end" />
+    ),
     cell: ({ row }) => (
-      <div className="text-right font-medium text-teal-600">
+      <div className="text-right font-semibold text-teal-600">
         {formatNumber(row.original.retention_customers)}
       </div>
     ),
+  },
+  {
+    id: 'new_pct',
+    header: ({ column }) => (
+      <DataTableColumnHeader column={column} title="New %" className="justify-end" />
+    ),
+    cell: ({ row }) => {
+      const total = row.original.new_customers + row.original.retention_customers
+      if (total === 0) return <div className="text-right text-muted-foreground">—</div>
+      const pct = (row.original.new_customers / total) * 100
+      return (
+        <div className="text-right">
+          <span className={pct >= 50 ? 'text-emerald-600 font-semibold' : 'text-teal-600 font-semibold'}>
+            {pct.toFixed(0)}%
+          </span>
+        </div>
+      )
+    },
+  },
+  {
+    id: 'segment',
+    header: 'Segment',
+    cell: ({ row }) => {
+      const { new_customers, retention_customers } = row.original
+      const total = new_customers + retention_customers
+      if (total === 0) return <span className="text-xs text-muted-foreground">—</span>
+      const newPct = (new_customers / total) * 100
+      if (newPct >= 70) return (
+        <span className="inline-flex items-center gap-1 text-xs font-semibold text-emerald-600">
+          <UserPlus className="h-3 w-3" /> Hook คนใหม่
+        </span>
+      )
+      if (newPct <= 30) return (
+        <span className="inline-flex items-center gap-1 text-xs font-semibold text-teal-600">
+          <Users className="h-3 w-3" /> ดึงคนเก่า
+        </span>
+      )
+      return <span className="text-xs text-muted-foreground font-medium">Mixed</span>
+    },
   },
 ]
 
@@ -175,12 +237,6 @@ export default function ProductsClient() {
       (p.product_name_en ?? '').toLowerCase().includes(q)
     )
   }, [data?.by_product, prodSearch])
-
-  // Combine base columns with new/retention columns
-  const extendedColumns = useMemo(
-    () => [...(baseProductColumns as ColumnDef<ExtProductRow>[]), ...newRetentionCols],
-    [],
-  )
 
   if (isLoading && !data) return <PageLoading />
   if (!data || data.total_sales === 0) {
@@ -311,26 +367,15 @@ export default function ProductsClient() {
         <CardContent className="pt-6">
           <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-4">
             <TabsList>
-              <TabsTrigger value="products">
-                <span className="flex items-center gap-1.5">Top SKUs</span>
-              </TabsTrigger>
+              <TabsTrigger value="products">Top SKUs</TabsTrigger>
+              <TabsTrigger value="new_vs_retention">New vs Retention</TabsTrigger>
               <TabsTrigger value="brands">By Brand</TabsTrigger>
             </TabsList>
 
+            {/* ── Top SKUs (original) ─────────────────────────────────── */}
             <TabsContent value="products" className="pt-2">
-              {/* New / Retention legend */}
-              <div className="flex items-center gap-4 mb-3">
-                <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
-                  <UserPlus className="h-3.5 w-3.5 text-emerald-600" />
-                  <span><span className="font-semibold text-emerald-600">New Cust.</span> — first-time buyers of this SKU</span>
-                </div>
-                <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
-                  <Users className="h-3.5 w-3.5 text-teal-600" />
-                  <span><span className="font-semibold text-teal-600">Retention</span> — repeat buyers of this SKU</span>
-                </div>
-              </div>
               <DataTable
-                columns={extendedColumns}
+                columns={baseProductColumns as ColumnDef<ExtProductRow>[]}
                 data={filteredProducts}
                 searchValue={prodSearch}
                 onSearchChange={setProdSearch}
@@ -377,6 +422,32 @@ export default function ProductsClient() {
               />
             </TabsContent>
 
+            {/* ── New vs Retention ────────────────────────────────────── */}
+            <TabsContent value="new_vs_retention" className="pt-2">
+              <div className="flex items-center gap-6 mb-3 px-1">
+                <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                  <UserPlus className="h-3.5 w-3.5 text-emerald-600" />
+                  <span><span className="font-semibold text-emerald-600">Hook คนใหม่</span> — new ≥ 70% ของผู้ซื้อ</span>
+                </div>
+                <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                  <Users className="h-3.5 w-3.5 text-teal-600" />
+                  <span><span className="font-semibold text-teal-600">ดึงคนเก่า</span> — retention ≥ 70% ของผู้ซื้อ</span>
+                </div>
+                <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                  <span className="font-semibold text-muted-foreground">Mixed</span>
+                  <span>— ระหว่าง 30–70%</span>
+                </div>
+              </div>
+              <DataTable
+                columns={newVsRetentionColumns}
+                data={filteredProducts}
+                searchValue={prodSearch}
+                onSearchChange={setProdSearch}
+                searchPlaceholder="Search product ID or name…"
+              />
+            </TabsContent>
+
+            {/* ── By Brand ────────────────────────────────────────────── */}
             <TabsContent value="brands" className="pt-2">
               <DataTable columns={brandColumns} data={data.by_brand} />
             </TabsContent>
