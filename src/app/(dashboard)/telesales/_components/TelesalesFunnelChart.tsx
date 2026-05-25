@@ -7,15 +7,17 @@ import { formatNumber, formatPct } from '@/lib/formatters'
 
 // ─── Funnel Node Colors ───────────────────────────────────────────────────────
 const NODE_COLORS: Record<string, string> = {
-  'All Leads':       '#003DA6',  // Unilever Navy
-  'Contacted':       '#1a5fd4',  // Bright Blue
-  'Not Contacted':   '#94a3b8',  // Muted Slate
-  'Engaged':         '#10b981',  // Emerald
-  'Not Engaged':     '#f59e0b',  // Amber — same level as Engaged
-  'Not Converted':   '#f87171',  // Soft Red
-  'Converted':       '#059669',  // Dark Emerald
-  'New Customer':    '#047857',  // Forest Green
-  'Repeat Customer': '#6d28d9',  // Purple (retention)
+  'All Leads':            '#003DA6',  // Unilever Navy
+  'Contacted':            '#1a5fd4',  // Bright Blue
+  'Not Contacted':        '#94a3b8',  // Muted Slate
+  'Engaged':              '#10b981',  // Emerald
+  'Not Engaged':          '#f59e0b',  // Amber — same level as Engaged
+  'Not Converted':        '#f87171',  // Soft Red
+  'Converted':            '#059669',  // Dark Emerald
+  'New Customer':         '#047857',  // Forest Green
+  'Repeat Customer':      '#6d28d9',  // Purple (retention)
+  'New Not Converted':    '#fca5a5',  // Light Soft Red
+  'Repeat Not Converted': '#fda4af',  // Light Pink/Rose
 }
 
 function getNodeColor(name: string): string {
@@ -35,6 +37,8 @@ interface FunnelSummary {
   repeatConverted: number
   convFromEngaged: number
   convFromNotEngaged: number
+  notConvNewTotal: number
+  notConvRetTotal: number
   contactRate: number
   engageRate: number
   conversionRate: number
@@ -253,8 +257,8 @@ export function TelesalesFunnelChart({
         <span>All Leads</span>
         <span>Contacted</span>
         <span>Engaged / Not Engaged</span>
-        <span>Converted</span>
-        <span>Customer Type</span>
+        <span>Converted / Not Converted</span>
+        <span>Outcome Segment</span>
       </div>
     </div>
   )

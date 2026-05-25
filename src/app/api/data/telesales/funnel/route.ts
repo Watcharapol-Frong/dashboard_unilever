@@ -58,13 +58,18 @@ export async function GET(request: Request) {
       contacted: string
       engaged: string
       not_engaged: string
-      // Conversions split by engagement path
-      // Only new_customer + retention count as "Converted"
-      // retention_not_converted / first_order_not_converted → ignored (not counted)
+      
+      // Engaged path outcomes
       new_conv_engaged: string
       repeat_conv_engaged: string
+      not_conv_new_engaged: string
+      not_conv_ret_engaged: string
+
+      // Not Engaged path outcomes
       new_conv_not_engaged: string
       repeat_conv_not_engaged: string
+      not_conv_new_not_engaged: string
+      not_conv_ret_not_engaged: string
     }>(`
       WITH call_stats AS (
         -- Classify each mmid as engaged or not_engaged
@@ -84,14 +89,18 @@ export async function GET(request: Request) {
         GROUP BY mmid
       ),
       conversions AS (
-        -- Converted = new_customer OR retention ONLY
-        -- retention_not_converted / first_order_not_converted are NOT counted
+        -- We map customer outcomes from mart_telesales_orders
         SELECT
           mmid,
-          BOOL_OR(customer_type = 'new_customer') AS is_new,
-          BOOL_OR(customer_type = 'retention')    AS is_repeat
+          -- Top outcome priority per mmid
+          CASE
+            WHEN BOOL_OR(customer_type = 'new_customer')              THEN 'new_customer'
+            WHEN BOOL_OR(customer_type = 'retention')                 THEN 'retention'
+            WHEN BOOL_OR(customer_type = 'retention_not_converted')   THEN 'retention_not_converted'
+            ELSE                                                           'first_order_not_converted'
+          END AS outcome
         FROM mart_telesales_orders
-        WHERE customer_type IN ('new_customer', 'retention')
+        WHERE customer_type IN ('new_customer', 'retention', 'first_order_not_converted', 'retention_not_converted')
           ${orderExtra}
         GROUP BY mmid
       )
@@ -101,13 +110,17 @@ export async function GET(request: Request) {
         COUNT(DISTINCT c.mmid) FILTER (WHERE c.engagement_status = 'engaged')::text     AS engaged,
         COUNT(DISTINCT c.mmid) FILTER (WHERE c.engagement_status = 'not_engaged')::text AS not_engaged,
 
-        -- Engaged path → new_customer / retention
-        COUNT(DISTINCT CASE WHEN c.engagement_status = 'engaged'     AND cv.is_new    THEN c.mmid END)::text AS new_conv_engaged,
-        COUNT(DISTINCT CASE WHEN c.engagement_status = 'engaged'     AND cv.is_repeat THEN c.mmid END)::text AS repeat_conv_engaged,
+        -- Engaged path outcomes
+        COUNT(DISTINCT CASE WHEN c.engagement_status = 'engaged'     AND cv.outcome = 'new_customer'              THEN c.mmid END)::text AS new_conv_engaged,
+        COUNT(DISTINCT CASE WHEN c.engagement_status = 'engaged'     AND cv.outcome = 'retention'                 THEN c.mmid END)::text AS repeat_conv_engaged,
+        COUNT(DISTINCT CASE WHEN c.engagement_status = 'engaged'     AND cv.outcome = 'first_order_not_converted' THEN c.mmid END)::text AS not_conv_new_engaged,
+        COUNT(DISTINCT CASE WHEN c.engagement_status = 'engaged'     AND cv.outcome = 'retention_not_converted'   THEN c.mmid END)::text AS not_conv_ret_engaged,
 
-        -- Not Engaged path → new_customer / retention
-        COUNT(DISTINCT CASE WHEN c.engagement_status = 'not_engaged' AND cv.is_new    THEN c.mmid END)::text AS new_conv_not_engaged,
-        COUNT(DISTINCT CASE WHEN c.engagement_status = 'not_engaged' AND cv.is_repeat THEN c.mmid END)::text AS repeat_conv_not_engaged
+        -- Not Engaged path outcomes
+        COUNT(DISTINCT CASE WHEN c.engagement_status = 'not_engaged' AND cv.outcome = 'new_customer'              THEN c.mmid END)::text AS new_conv_not_engaged,
+        COUNT(DISTINCT CASE WHEN c.engagement_status = 'not_engaged' AND cv.outcome = 'retention'                 THEN c.mmid END)::text AS repeat_conv_not_engaged,
+        COUNT(DISTINCT CASE WHEN c.engagement_status = 'not_engaged' AND cv.outcome = 'first_order_not_converted' THEN c.mmid END)::text AS not_conv_new_not_engaged,
+        COUNT(DISTINCT CASE WHEN c.engagement_status = 'not_engaged' AND cv.outcome = 'retention_not_converted'   THEN c.mmid END)::text AS not_conv_ret_not_engaged
 
       FROM call_stats c
       LEFT JOIN conversions cv ON cv.mmid = c.mmid
@@ -141,30 +154,40 @@ export async function GET(request: Request) {
     const repeatConverted = repeatConvEngaged + repeatConvNotEngaged
     const totalNotConverted = notConvEngaged + notConvNotEngaged
 
+    // Not Converted split
+    const notConvNewEngaged    = Number(row.not_conv_new_engaged)
+    const notConvRetEngaged    = Number(row.not_conv_ret_engaged)
+    const notConvNewNotEngaged = Number(row.not_conv_new_not_engaged)
+    const notConvRetNotEngaged = Number(row.not_conv_ret_not_engaged)
+
+    const notConvNewTotal = notConvNewEngaged + notConvNewNotEngaged
+    const notConvRetTotal = notConvRetEngaged + notConvRetNotEngaged
+
     // Sankey node index map:
     //  0: All Leads
     //  1: Contacted
     //  2: Not Contacted
     //  3: Engaged
-    //  4: Not Engaged         ← depth 2 (same as Engaged)
-    //  5: Not Converted       ← depth 3 (same as Converted) — no outgoing links
-    //  6: Converted           ← depth 3
-    //  7: New Customer        ← depth 4
-    //  8: Repeat Customer     ← depth 4
-    //
-    // Use align="start" so nodes are placed by min-depth from source,
-    // which ensures Not Converted (depth 3) and Converted (depth 3) line up.
+    //  4: Not Engaged
+    //  5: Not Converted
+    //  6: Converted
+    //  7: New Customer
+    //  8: Repeat Customer
+    //  9: New Not Converted
+    //  10: Repeat Not Converted
 
     const nodes = [
-      { name: 'All Leads',       category: 'source'  },
-      { name: 'Contacted',       category: 'stage'   },
-      { name: 'Not Contacted',   category: 'drop'    },
-      { name: 'Engaged',         category: 'stage'   },
-      { name: 'Not Engaged',     category: 'stage'   },
-      { name: 'Not Converted',   category: 'drop'    },
-      { name: 'Converted',       category: 'outcome' },
-      { name: 'New Customer',    category: 'outcome' },
-      { name: 'Repeat Customer', category: 'outcome' },
+      { name: 'All Leads',            category: 'source'  },
+      { name: 'Contacted',            category: 'stage'   },
+      { name: 'Not Contacted',        category: 'drop'    },
+      { name: 'Engaged',              category: 'stage'   },
+      { name: 'Not Engaged',          category: 'stage'   },
+      { name: 'Not Converted',        category: 'drop'    },
+      { name: 'Converted',            category: 'outcome' },
+      { name: 'New Customer',         category: 'outcome' },
+      { name: 'Repeat Customer',      category: 'outcome' },
+      { name: 'New Not Converted',    category: 'outcome' },
+      { name: 'Repeat Not Converted', category: 'outcome' },
     ]
 
     const links = [
@@ -187,6 +210,10 @@ export async function GET(request: Request) {
       // Converted → New Customer / Repeat Customer
       { source: 6, target: 7, value: Math.max(newConverted,    1) },
       { source: 6, target: 8, value: Math.max(repeatConverted, 1) },
+
+      // Not Converted → New Not Converted / Repeat Not Converted
+      { source: 5, target: 9,  value: Math.max(notConvNewTotal, 1) },
+      { source: 5, target: 10, value: Math.max(notConvRetTotal, 1) },
     ]
 
     const summary = {
@@ -201,6 +228,8 @@ export async function GET(request: Request) {
       repeatConverted,
       convFromEngaged,
       convFromNotEngaged,
+      notConvNewTotal,
+      notConvRetTotal,
       contactRate:    leadsAll   > 0 ? contacted     / leadsAll   : 0,
       engageRate:     contacted  > 0 ? engaged        / contacted  : 0,
       conversionRate: contacted  > 0 ? totalConverted / contacted  : 0,
