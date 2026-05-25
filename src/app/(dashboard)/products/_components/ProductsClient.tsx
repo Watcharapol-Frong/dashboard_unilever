@@ -441,7 +441,7 @@ export default function ProductsClient() {
                 ))}
               </defs>
               <CartesianGrid strokeDasharray="3 3" vertical={false} className="stroke-muted" />
-              <XAxis dataKey="month_label" tickLine={false} axisLine={false} tickMargin={8} className={CHART_AXIS_CLS} />
+              <XAxis dataKey="period_label" tickLine={false} axisLine={false} tickMargin={8} className={CHART_AXIS_CLS} />
               <YAxis tickLine={false} axisLine={false} tickMargin={8} className={CHART_AXIS_CLS}
                 tickFormatter={v => `฿${(v / 1000).toFixed(0)}k`} width={60} />
               <Tooltip
