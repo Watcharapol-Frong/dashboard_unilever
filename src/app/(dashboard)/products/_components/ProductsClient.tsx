@@ -4,7 +4,6 @@ import { useMemo, useState } from 'react'
 import useSWR from 'swr'
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip } from 'recharts'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import { Input } from '@/components/ui/input'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { KpiCard } from '@/components/dashboard/KpiCard'
 import { KpiGrid } from '@/components/dashboard/KpiGrid'
@@ -15,9 +14,8 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { CHART_AXIS_CLS, CHART_TOOLTIP_STYLE } from '@/lib/chart-utils'
 import { formatTHB, formatNumber, formatPct, fmtBaht } from '@/lib/formatters'
 import { columns as productColumns } from '../columns'
-import { Package, ShoppingCart, TrendingUp, BarChart2, Search, Filter } from 'lucide-react'
+import { Package, ShoppingCart, TrendingUp, BarChart2, Filter } from 'lucide-react'
 import { ColumnDef } from '@tanstack/react-table'
-import { cn } from '@/lib/utils'
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -107,7 +105,7 @@ export default function ProductsClient() {
   const [filterBuyer,       setFilterBuyer]       = useState('all')
   const [filterSubclass,    setFilterSubclass]    = useState('all')
 
-  // Client-side prod_num search (table only)
+  // Client-side prod_num / name search (table only)
   const [prodSearch, setProdSearch] = useState('')
 
   const [activeTab, setActiveTab] = useState('products')
@@ -184,24 +182,8 @@ export default function ProductsClient() {
               </SelectContent>
             </Select>
 
-            <Select value={filterClass} onValueChange={setFilterClass}>
-              <SelectTrigger className="h-7 text-xs w-[160px]"><SelectValue placeholder="All Classes" /></SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">All Classes</SelectItem>
-                {opts.class_names.map(v => <SelectItem key={v} value={v}>{v}</SelectItem>)}
-              </SelectContent>
-            </Select>
-
-            <Select value={filterSubclass} onValueChange={setFilterSubclass}>
-              <SelectTrigger className="h-7 text-xs w-[160px]"><SelectValue placeholder="All Subclasses" /></SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">All Subclasses</SelectItem>
-                {opts.subclasses.map(v => <SelectItem key={v} value={v}>{v}</SelectItem>)}
-              </SelectContent>
-            </Select>
-
             <Select value={filterSeniorBuyer} onValueChange={setFilterSeniorBuyer}>
-              <SelectTrigger className="h-7 text-xs w-[180px]"><SelectValue placeholder="All Senior Buyers" /></SelectTrigger>
+              <SelectTrigger className="h-7 text-xs w-[175px]"><SelectValue placeholder="All Senior Buyers" /></SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">All Senior Buyers</SelectItem>
                 {opts.senior_buyers.map(v => <SelectItem key={v} value={v}>{v}</SelectItem>)}
@@ -209,10 +191,26 @@ export default function ProductsClient() {
             </Select>
 
             <Select value={filterBuyer} onValueChange={setFilterBuyer}>
-              <SelectTrigger className="h-7 text-xs w-[160px]"><SelectValue placeholder="All Buyers" /></SelectTrigger>
+              <SelectTrigger className="h-7 text-xs w-[150px]"><SelectValue placeholder="All Buyers" /></SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">All Buyers</SelectItem>
                 {opts.buyers.map(v => <SelectItem key={v} value={v}>{v}</SelectItem>)}
+              </SelectContent>
+            </Select>
+
+            <Select value={filterClass} onValueChange={setFilterClass}>
+              <SelectTrigger className="h-7 text-xs w-[150px]"><SelectValue placeholder="All Classes" /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All Classes</SelectItem>
+                {opts.class_names.map(v => <SelectItem key={v} value={v}>{v}</SelectItem>)}
+              </SelectContent>
+            </Select>
+
+            <Select value={filterSubclass} onValueChange={setFilterSubclass}>
+              <SelectTrigger className="h-7 text-xs w-[155px]"><SelectValue placeholder="All Subclasses" /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All Subclasses</SelectItem>
+                {opts.subclasses.map(v => <SelectItem key={v} value={v}>{v}</SelectItem>)}
               </SelectContent>
             </Select>
 
@@ -273,34 +271,58 @@ export default function ProductsClient() {
       <Card>
         <CardContent className="pt-6">
           <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-4">
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-              <TabsList>
-                <TabsTrigger value="products">Top SKUs</TabsTrigger>
-                <TabsTrigger value="brands">By Brand</TabsTrigger>
-              </TabsList>
-
-              {/* Product ID / name search — client-side, only affects SKU tab */}
-              {activeTab === 'products' && (
-                <div className="relative w-full sm:w-64">
-                  <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground pointer-events-none" />
-                  <Input
-                    value={prodSearch}
-                    onChange={e => setProdSearch(e.target.value)}
-                    placeholder="Search product ID or name…"
-                    className={cn('h-7 pl-8 text-xs', prodSearch && 'border-[#003DA6]')}
-                  />
-                </div>
-              )}
-            </div>
+            <TabsList>
+              <TabsTrigger value="products">Top SKUs</TabsTrigger>
+              <TabsTrigger value="brands">By Brand</TabsTrigger>
+            </TabsList>
 
             <TabsContent value="products" className="pt-2">
-              {prodSearch && (
-                <p className="text-xs text-muted-foreground mb-2">
-                  {filteredProducts.length} result{filteredProducts.length !== 1 ? 's' : ''} for
-                  {' '}<span className="font-medium text-foreground">"{prodSearch}"</span>
-                </p>
-              )}
-              <DataTable columns={productColumns} data={filteredProducts} />
+              <DataTable
+                columns={productColumns}
+                data={filteredProducts}
+                searchValue={prodSearch}
+                onSearchChange={setProdSearch}
+                searchPlaceholder="Search product ID or name…"
+                toolbarLeft={
+                  <>
+                    <Select value={filterBrands} onValueChange={setFilterBrands}>
+                      <SelectTrigger className="h-8 text-xs w-[130px]"><SelectValue placeholder="Brand" /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="all">All Brands</SelectItem>
+                        {opts.brands.map(v => <SelectItem key={v} value={v}>{v}</SelectItem>)}
+                      </SelectContent>
+                    </Select>
+                    <Select value={filterSeniorBuyer} onValueChange={setFilterSeniorBuyer}>
+                      <SelectTrigger className="h-8 text-xs w-[150px]"><SelectValue placeholder="Senior Buyer" /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="all">All Senior Buyers</SelectItem>
+                        {opts.senior_buyers.map(v => <SelectItem key={v} value={v}>{v}</SelectItem>)}
+                      </SelectContent>
+                    </Select>
+                    <Select value={filterBuyer} onValueChange={setFilterBuyer}>
+                      <SelectTrigger className="h-8 text-xs w-[130px]"><SelectValue placeholder="Buyer" /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="all">All Buyers</SelectItem>
+                        {opts.buyers.map(v => <SelectItem key={v} value={v}>{v}</SelectItem>)}
+                      </SelectContent>
+                    </Select>
+                    <Select value={filterClass} onValueChange={setFilterClass}>
+                      <SelectTrigger className="h-8 text-xs w-[130px]"><SelectValue placeholder="Class" /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="all">All Classes</SelectItem>
+                        {opts.class_names.map(v => <SelectItem key={v} value={v}>{v}</SelectItem>)}
+                      </SelectContent>
+                    </Select>
+                    <Select value={filterSubclass} onValueChange={setFilterSubclass}>
+                      <SelectTrigger className="h-8 text-xs w-[130px]"><SelectValue placeholder="Subclass" /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="all">All Subclasses</SelectItem>
+                        {opts.subclasses.map(v => <SelectItem key={v} value={v}>{v}</SelectItem>)}
+                      </SelectContent>
+                    </Select>
+                  </>
+                }
+              />
             </TabsContent>
             <TabsContent value="brands" className="pt-2">
               <DataTable columns={brandColumns} data={data.by_brand} />

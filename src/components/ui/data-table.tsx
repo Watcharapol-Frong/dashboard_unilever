@@ -36,6 +36,7 @@ interface DataTableProps<TData, TValue> {
   searchValue?: string
   onSearchChange?: (v: string) => void
   searchPlaceholder?: string
+  toolbarLeft?: React.ReactNode
 }
 
 export function DataTable<TData, TValue>({
@@ -45,6 +46,7 @@ export function DataTable<TData, TValue>({
   searchValue,
   onSearchChange,
   searchPlaceholder,
+  toolbarLeft,
 }: DataTableProps<TData, TValue>) {
   const [rowSelection, setRowSelection] = React.useState({})
   const [columnVisibility, setColumnVisibility] =
@@ -79,7 +81,8 @@ export function DataTable<TData, TValue>({
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between">
-        <div className="flex flex-1 items-center space-x-2">
+        <div className="flex flex-1 items-center space-x-2 flex-wrap gap-y-2">
+          {toolbarLeft}
           {searchKey && (
             <Input
               placeholder={`Filter ${searchKey}...`}
