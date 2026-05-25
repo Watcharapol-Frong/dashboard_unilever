@@ -47,7 +47,7 @@ export async function GET(request: Request) {
 
     const whereClause = 'WHERE ' + conditions.join(' AND ')
 
-    // mart_telesales_orders channel/cmg filter (re-use same param indices)
+    // mart_telesales_orders channel/cmg filter
     const orderExtraConditions: string[] = []
     if (channel !== 'all') orderExtraConditions.push(`channel = $${params.indexOf(channel) + 1}`)
     if (cmg !== 'all')     orderExtraConditions.push(`dynamic_cmg = $${params.indexOf(cmg) + 1}`)
@@ -58,17 +58,16 @@ export async function GET(request: Request) {
       contacted: string
       engaged: string
       not_engaged: string
-      // Engaged path — from mart_telesales_orders
-      new_converted_engaged: string
-      repeat_converted_engaged: string
-      not_converted_engaged: string
-      // Not Engaged path — from mart_telesales_orders
-      new_converted_not_engaged: string
-      repeat_converted_not_engaged: string
-      not_converted_not_engaged: string
+      // Conversions split by engagement path
+      // Only new_customer + retention count as "Converted"
+      // retention_not_converted / first_order_not_converted → ignored (not counted)
+      new_conv_engaged: string
+      repeat_conv_engaged: string
+      new_conv_not_engaged: string
+      repeat_conv_not_engaged: string
     }>(`
       WITH call_stats AS (
-        -- Classify each mmid as engaged or not_engaged based on their best call status
+        -- Classify each mmid as engaged or not_engaged
         SELECT
           mmid,
           CASE
@@ -84,24 +83,17 @@ export async function GET(request: Request) {
         ${whereClause}
         GROUP BY mmid
       ),
-      orders AS (
-        -- All order records per mmid with customer_type
-        -- customer_type values:
-        --   new_customer              → Converted → New Customer
-        --   retention                 → Converted → Repeat Customer
-        --   first_order_not_converted → Not Converted
-        --   retention_not_converted   → Not Converted
-        SELECT DISTINCT ON (mmid)
+      conversions AS (
+        -- Converted = new_customer OR retention ONLY
+        -- retention_not_converted / first_order_not_converted are NOT counted
+        SELECT
           mmid,
-          -- Determine top-priority outcome per mmid
-          CASE
-            WHEN BOOL_OR(customer_type = 'new_customer')  OVER (PARTITION BY mmid) THEN 'new_customer'
-            WHEN BOOL_OR(customer_type = 'retention')     OVER (PARTITION BY mmid) THEN 'retention'
-            WHEN BOOL_OR(customer_type = 'retention_not_converted') OVER (PARTITION BY mmid) THEN 'retention_not_converted'
-            ELSE 'first_order_not_converted'
-          END AS outcome
+          BOOL_OR(customer_type = 'new_customer') AS is_new,
+          BOOL_OR(customer_type = 'retention')    AS is_repeat
         FROM mart_telesales_orders
-        WHERE TRUE ${orderExtra}
+        WHERE customer_type IN ('new_customer', 'retention')
+          ${orderExtra}
+        GROUP BY mmid
       )
       SELECT
         (SELECT COUNT(DISTINCT mmid) FROM leads)::text AS leads_all,
@@ -109,64 +101,66 @@ export async function GET(request: Request) {
         COUNT(DISTINCT c.mmid) FILTER (WHERE c.engagement_status = 'engaged')::text     AS engaged,
         COUNT(DISTINCT c.mmid) FILTER (WHERE c.engagement_status = 'not_engaged')::text AS not_engaged,
 
-        -- Engaged path outcomes (from mart_telesales_orders)
-        COUNT(DISTINCT CASE WHEN c.engagement_status = 'engaged'     AND o.outcome = 'new_customer'              THEN c.mmid END)::text AS new_converted_engaged,
-        COUNT(DISTINCT CASE WHEN c.engagement_status = 'engaged'     AND o.outcome = 'retention'                 THEN c.mmid END)::text AS repeat_converted_engaged,
-        COUNT(DISTINCT CASE WHEN c.engagement_status = 'engaged'     AND o.outcome IN ('first_order_not_converted','retention_not_converted') THEN c.mmid END)::text AS not_converted_engaged,
+        -- Engaged path → new_customer / retention
+        COUNT(DISTINCT CASE WHEN c.engagement_status = 'engaged'     AND cv.is_new    THEN c.mmid END)::text AS new_conv_engaged,
+        COUNT(DISTINCT CASE WHEN c.engagement_status = 'engaged'     AND cv.is_repeat THEN c.mmid END)::text AS repeat_conv_engaged,
 
-        -- Not Engaged path outcomes (from mart_telesales_orders)
-        COUNT(DISTINCT CASE WHEN c.engagement_status = 'not_engaged' AND o.outcome = 'new_customer'              THEN c.mmid END)::text AS new_converted_not_engaged,
-        COUNT(DISTINCT CASE WHEN c.engagement_status = 'not_engaged' AND o.outcome = 'retention'                 THEN c.mmid END)::text AS repeat_converted_not_engaged,
-        COUNT(DISTINCT CASE WHEN c.engagement_status = 'not_engaged' AND o.outcome IN ('first_order_not_converted','retention_not_converted') THEN c.mmid END)::text AS not_converted_not_engaged
+        -- Not Engaged path → new_customer / retention
+        COUNT(DISTINCT CASE WHEN c.engagement_status = 'not_engaged' AND cv.is_new    THEN c.mmid END)::text AS new_conv_not_engaged,
+        COUNT(DISTINCT CASE WHEN c.engagement_status = 'not_engaged' AND cv.is_repeat THEN c.mmid END)::text AS repeat_conv_not_engaged
 
       FROM call_stats c
-      LEFT JOIN orders o ON o.mmid = c.mmid
+      LEFT JOIN conversions cv ON cv.mmid = c.mmid
     `, params)
 
     if (!row) {
       return NextResponse.json({ ok: true, data: null })
     }
 
-    const leadsAll   = Number(row.leads_all)
-    const contacted  = Number(row.contacted)
-    const engaged    = Number(row.engaged)
-    const notEngaged = Number(row.not_engaged)
+    const leadsAll    = Number(row.leads_all)
+    const contacted   = Number(row.contacted)
+    const engaged     = Number(row.engaged)
+    const notEngaged  = Number(row.not_engaged)
     const notContacted = Math.max(leadsAll - contacted, 0)
 
     // Engaged path
-    const newConvEngaged     = Number(row.new_converted_engaged)
-    const repeatConvEngaged  = Number(row.repeat_converted_engaged)
-    const notConvEngaged     = Number(row.not_converted_engaged)
+    const newConvEngaged     = Number(row.new_conv_engaged)
+    const repeatConvEngaged  = Number(row.repeat_conv_engaged)
     const convFromEngaged    = newConvEngaged + repeatConvEngaged
+    const notConvEngaged     = Math.max(engaged - convFromEngaged, 0)
 
     // Not Engaged path
-    const newConvNotEngaged     = Number(row.new_converted_not_engaged)
-    const repeatConvNotEngaged  = Number(row.repeat_converted_not_engaged)
-    const notConvNotEngaged     = Number(row.not_converted_not_engaged)
+    const newConvNotEngaged     = Number(row.new_conv_not_engaged)
+    const repeatConvNotEngaged  = Number(row.repeat_conv_not_engaged)
     const convFromNotEngaged    = newConvNotEngaged + repeatConvNotEngaged
+    const notConvNotEngaged     = Math.max(notEngaged - convFromNotEngaged, 0)
 
     // Totals
     const totalConverted  = convFromEngaged + convFromNotEngaged
     const newConverted    = newConvEngaged   + newConvNotEngaged
     const repeatConverted = repeatConvEngaged + repeatConvNotEngaged
+    const totalNotConverted = notConvEngaged + notConvNotEngaged
 
     // Sankey node index map:
     //  0: All Leads
     //  1: Contacted
     //  2: Not Contacted
     //  3: Engaged
-    //  4: Not Engaged       ← same vertical level as Engaged
-    //  5: Not Converted
-    //  6: Converted
-    //  7: New Customer
-    //  8: Repeat Customer
+    //  4: Not Engaged         ← depth 2 (same as Engaged)
+    //  5: Not Converted       ← depth 3 (same as Converted) — no outgoing links
+    //  6: Converted           ← depth 3
+    //  7: New Customer        ← depth 4
+    //  8: Repeat Customer     ← depth 4
+    //
+    // Use align="start" so nodes are placed by min-depth from source,
+    // which ensures Not Converted (depth 3) and Converted (depth 3) line up.
 
     const nodes = [
       { name: 'All Leads',       category: 'source'  },
       { name: 'Contacted',       category: 'stage'   },
       { name: 'Not Contacted',   category: 'drop'    },
       { name: 'Engaged',         category: 'stage'   },
-      { name: 'Not Engaged',     category: 'stage'   }, // same level — both flow to Converted/Not Converted
+      { name: 'Not Engaged',     category: 'stage'   },
       { name: 'Not Converted',   category: 'drop'    },
       { name: 'Converted',       category: 'outcome' },
       { name: 'New Customer',    category: 'outcome' },
@@ -182,15 +176,15 @@ export async function GET(request: Request) {
       { source: 1, target: 3, value: Math.max(engaged,    1) },
       { source: 1, target: 4, value: Math.max(notEngaged, 1) },
 
-      // Engaged → Converted / Not Converted  (based on mart_telesales_orders customer_type)
+      // Engaged → Converted / Not Converted
       { source: 3, target: 6, value: Math.max(convFromEngaged, 1) },
       { source: 3, target: 5, value: Math.max(notConvEngaged,  1) },
 
-      // Not Engaged → Converted / Not Converted  (based on mart_telesales_orders customer_type)
+      // Not Engaged → Converted / Not Converted
       { source: 4, target: 6, value: Math.max(convFromNotEngaged, 1) },
       { source: 4, target: 5, value: Math.max(notConvNotEngaged,  1) },
 
-      // Converted → New Customer / Repeat Customer  (combined from both paths)
+      // Converted → New Customer / Repeat Customer
       { source: 6, target: 7, value: Math.max(newConverted,    1) },
       { source: 6, target: 8, value: Math.max(repeatConverted, 1) },
     ]
@@ -202,6 +196,7 @@ export async function GET(request: Request) {
       engaged,
       notEngaged,
       totalConverted,
+      totalNotConverted,
       newConverted,
       repeatConverted,
       convFromEngaged,

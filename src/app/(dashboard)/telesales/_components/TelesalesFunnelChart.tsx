@@ -30,6 +30,7 @@ interface FunnelSummary {
   engaged: number
   notEngaged: number
   totalConverted: number
+  totalNotConverted: number
   newConverted: number
   repeatConverted: number
   convFromEngaged: number
@@ -207,7 +208,7 @@ export function TelesalesFunnelChart({
           <ResponsiveSankey
             data={sankeyData}
             margin={{ top: 20, right: 180, bottom: 20, left: 180 }}
-            align="justify"
+            align="start"
             colors={(node) => getNodeColor(node.id as string)}
             nodeOpacity={1}
             nodeHoverOthersOpacity={0.35}
