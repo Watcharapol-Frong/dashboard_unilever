@@ -109,7 +109,7 @@ const CustomTooltip = ({ active, payload, label }: { active?: boolean; payload?:
           {payload.map((item, index) => {
             if (!item.value && item.value !== 0) return null
             const countKey = `${item.name}_count`
-            const count = item.payload[countKey] ?? 0
+            const count = Number(item.payload[countKey] ?? 0)
             if (count === 0) return null
             return (
               <div key={index} className="flex items-center justify-between gap-8 min-w-[200px]">
