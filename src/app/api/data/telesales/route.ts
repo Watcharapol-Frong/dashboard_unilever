@@ -9,12 +9,12 @@ export async function GET(request: Request) {
     const { searchParams } = new URL(request.url)
     const startDate = searchParams.get('startDate')
     const endDate = searchParams.get('endDate')
-    const channel = searchParams.get('channel') || 'all'
-    const cmg = searchParams.get('cmg') || 'all'
-    const agent = searchParams.get('agent') || 'all'
+    const channel = (searchParams.get('channel') || '').split(',').filter(Boolean)
+    const cmg     = (searchParams.get('cmg')     || '').split(',').filter(Boolean)
+    const agent   = (searchParams.get('agent')   || '').split(',').filter(Boolean)
 
     const conditions: string[] = ['first_connected_date IS NOT NULL']
-    const params: string[] = []
+    const params: any[] = []
 
     if (startDate) {
       params.push(startDate)
@@ -24,19 +24,19 @@ export async function GET(request: Request) {
       params.push(endDate)
       conditions.push(`first_connected_date <= $${params.length}::date`)
     }
-    if (agent !== 'all') {
+    if (agent.length > 0) {
       params.push(agent)
-      conditions.push(`agent = $${params.length}`)
+      conditions.push(`agent = ANY($${params.length})`)
     }
-    if (channel !== 'all' || cmg !== 'all') {
+    if (channel.length > 0 || cmg.length > 0) {
       const subConditions: string[] = []
-      if (channel !== 'all') {
+      if (channel.length > 0) {
         params.push(channel)
-        subConditions.push(`channel = $${params.length}`)
+        subConditions.push(`channel = ANY($${params.length})`)
       }
-      if (cmg !== 'all') {
+      if (cmg.length > 0) {
         params.push(cmg)
-        subConditions.push(`dynamic_cmg = $${params.length}`)
+        subConditions.push(`dynamic_cmg = ANY($${params.length})`)
       }
       conditions.push(`mmid IN (
         SELECT DISTINCT mmid FROM mart_telesales_orders
@@ -46,24 +46,31 @@ export async function GET(request: Request) {
 
     const whereClause = 'WHERE ' + conditions.join(' AND ')
 
-    // Build conditionsTc explicitly to prevent ambiguous column reference (e.g. tc.mmid vs ac.mmid)
+    // Build conditionsTc — mirrors conditions above but prefixed with tc. for alias safety
     const conditionsTc: string[] = ['tc.first_connected_date IS NOT NULL']
+    // Re-use param indices by tracking positions
+    let paramIdx = 0
     if (startDate) {
-      conditionsTc.push(`tc.first_connected_date >= $${params.indexOf(startDate) + 1}::date`)
+      paramIdx++
+      conditionsTc.push(`tc.first_connected_date >= $${paramIdx}::date`)
     }
     if (endDate) {
-      conditionsTc.push(`tc.first_connected_date <= $${params.indexOf(endDate) + 1}::date`)
+      paramIdx++
+      conditionsTc.push(`tc.first_connected_date <= $${paramIdx}::date`)
     }
-    if (agent !== 'all') {
-      conditionsTc.push(`tc.agent = $${params.indexOf(agent) + 1}`)
+    if (agent.length > 0) {
+      paramIdx++
+      conditionsTc.push(`tc.agent = ANY($${paramIdx})`)
     }
-    if (channel !== 'all' || cmg !== 'all') {
+    if (channel.length > 0 || cmg.length > 0) {
       const subConditions: string[] = []
-      if (channel !== 'all') {
-        subConditions.push(`channel = $${params.indexOf(channel) + 1}`)
+      if (channel.length > 0) {
+        paramIdx++
+        subConditions.push(`channel = ANY($${paramIdx})`)
       }
-      if (cmg !== 'all') {
-        subConditions.push(`dynamic_cmg = $${params.indexOf(cmg) + 1}`)
+      if (cmg.length > 0) {
+        paramIdx++
+        subConditions.push(`dynamic_cmg = ANY($${paramIdx})`)
       }
       conditionsTc.push(`tc.mmid IN (
         SELECT DISTINCT mmid FROM mart_telesales_orders
@@ -83,8 +90,8 @@ export async function GET(request: Request) {
           WHERE customer_type IN ('new_customer', 'retention')
             ${startDate ? `AND order_date >= $1::date` : ''}
             ${endDate ? `AND order_date <= $${startDate ? '2' : '1'}::date` : ''}
-            ${channel !== 'all' ? `AND channel = $${params.indexOf(channel) + 1}` : ''}
-            ${cmg !== 'all' ? `AND dynamic_cmg = $${params.indexOf(cmg) + 1}` : ''}
+            ${channel.length > 0 ? `AND channel = ANY($${params.indexOf(channel) + 1})` : ''}
+            ${cmg.length > 0 ? `AND dynamic_cmg = ANY($${params.indexOf(cmg) + 1})` : ''}
         )
         SELECT COUNT(DISTINCT tc.mmid)::text AS total_converted
         FROM telesales_calls tc
@@ -147,8 +154,8 @@ export async function GET(request: Request) {
         WHERE customer_type IN ('new_customer', 'retention')
           ${startDate ? `AND order_date >= $1::date` : ''}
           ${endDate ? `AND order_date <= $${startDate ? '2' : '1'}::date` : ''}
-          ${channel !== 'all' ? `AND channel = $${params.indexOf(channel) + 1}` : ''}
-          ${cmg !== 'all' ? `AND dynamic_cmg = $${params.indexOf(cmg) + 1}` : ''}
+          ${channel.length > 0 ? `AND channel = ANY($${params.indexOf(channel) + 1})` : ''}
+          ${cmg.length > 0 ? `AND dynamic_cmg = ANY($${params.indexOf(cmg) + 1})` : ''}
       )
       SELECT
         COALESCE(tc.agent, 'Unknown') AS agent,
@@ -196,8 +203,8 @@ export async function GET(request: Request) {
         WHERE customer_type IN ('new_customer', 'retention')
           ${startDate ? `AND order_date >= $1::date` : ''}
           ${endDate ? `AND order_date <= $${startDate ? '2' : '1'}::date` : ''}
-          ${channel !== 'all' ? `AND channel = $${params.indexOf(channel) + 1}` : ''}
-          ${cmg !== 'all' ? `AND dynamic_cmg = $${params.indexOf(cmg) + 1}` : ''}
+          ${channel.length > 0 ? `AND channel = ANY($${params.indexOf(channel) + 1})` : ''}
+          ${cmg.length > 0 ? `AND dynamic_cmg = ANY($${params.indexOf(cmg) + 1})` : ''}
       )
       SELECT
         tc.first_connected_date::text AS period,

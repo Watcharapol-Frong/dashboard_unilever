@@ -5,11 +5,11 @@ import { query, queryOne } from '@/lib/db'
 export const dynamic = 'force-dynamic'
 
 function buildProductWhere(
-  brands: string,
-  className: string,
-  seniorBuyer: string,
-  buyer: string,
-  subclass: string,
+  brands: string[],
+  className: string[],
+  seniorBuyer: string[],
+  buyer: string[],
+  subclass: string[],
   startDate: string | null,
   endDate: string | null,
 ) {
@@ -18,11 +18,11 @@ function buildProductWhere(
 
   if (startDate) { params.push(startDate); conditions.push(`m.order_date >= $${params.length}::date`) }
   if (endDate)   { params.push(endDate);   conditions.push(`m.order_date <= $${params.length}::date`) }
-  if (brands      !== 'all') { params.push(brands);      conditions.push(`p.brands = $${params.length}`) }
-  if (className   !== 'all') { params.push(className);   conditions.push(`p.class_name = $${params.length}`) }
-  if (seniorBuyer !== 'all') { params.push(seniorBuyer); conditions.push(`p.senior_buyer_name = $${params.length}`) }
-  if (buyer       !== 'all') { params.push(buyer);       conditions.push(`p.buyer_name = $${params.length}`) }
-  if (subclass    !== 'all') { params.push(subclass);    conditions.push(`p.subclass = $${params.length}`) }
+  if (brands.length > 0)      { params.push(brands);      conditions.push(`p.brands = ANY($${params.length})`) }
+  if (className.length > 0)   { params.push(className);   conditions.push(`p.class_name = ANY($${params.length})`) }
+  if (seniorBuyer.length > 0) { params.push(seniorBuyer); conditions.push(`p.senior_buyer_name = ANY($${params.length})`) }
+  if (buyer.length > 0)       { params.push(buyer);       conditions.push(`p.buyer_name = ANY($${params.length})`) }
+  if (subclass.length > 0)    { params.push(subclass);    conditions.push(`p.subclass = ANY($${params.length})`) }
 
   return { where: conditions.length ? 'AND ' + conditions.join(' AND ') : '', params }
 }
@@ -30,11 +30,11 @@ function buildProductWhere(
 export async function GET(request: Request) {
   return withAdmin(async () => {
     const { searchParams } = new URL(request.url)
-    const brands      = searchParams.get('brands')      || 'all'
-    const className   = searchParams.get('class_name')  || 'all'
-    const seniorBuyer = searchParams.get('senior_buyer') || 'all'
-    const buyer       = searchParams.get('buyer')       || 'all'
-    const subclass    = searchParams.get('subclass')    || 'all'
+    const brands      = (searchParams.get('brands')       || '').split(',').filter(Boolean)
+    const className   = (searchParams.get('class_name')   || '').split(',').filter(Boolean)
+    const seniorBuyer = (searchParams.get('senior_buyer') || '').split(',').filter(Boolean)
+    const buyer       = (searchParams.get('buyer')        || '').split(',').filter(Boolean)
+    const subclass    = (searchParams.get('subclass')     || '').split(',').filter(Boolean)
     const startDate   = searchParams.get('startDate')   || null
     const endDate     = searchParams.get('endDate')     || null
 

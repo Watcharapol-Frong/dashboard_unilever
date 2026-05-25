@@ -86,9 +86,9 @@ function MetricStrip({
 interface TelesalesFunnelChartProps {
   startDate: string
   endDate: string
-  channel: string
-  cmg: string
-  agent: string
+  channel: string[]
+  cmg: string[]
+  agent: string[]
 }
 
 // ─── Main Component ───────────────────────────────────────────────────────────
@@ -103,9 +103,9 @@ export function TelesalesFunnelChart({
     const p = new URLSearchParams()
     if (startDate) p.set('startDate', startDate)
     if (endDate)   p.set('endDate',   endDate)
-    if (channel && channel !== 'all') p.set('channel', channel)
-    if (cmg && cmg !== 'all')         p.set('cmg', cmg)
-    if (agent && agent !== 'all')     p.set('agent', agent)
+    if (channel.length > 0) p.set('channel', channel.join(','))
+    if (cmg.length > 0)     p.set('cmg', cmg.join(','))
+    if (agent.length > 0)   p.set('agent', agent.join(','))
     return `/api/data/telesales/funnel?${p.toString()}`
   }, [startDate, endDate, channel, cmg, agent])
 

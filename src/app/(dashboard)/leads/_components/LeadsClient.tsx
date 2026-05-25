@@ -6,7 +6,7 @@ import { DataTable } from '@/components/ui/data-table'
 import { KpiCard } from '@/components/dashboard/KpiCard'
 import { KpiGrid } from '@/components/dashboard/KpiGrid'
 import { FilterBar } from '@/components/dashboard/FilterBar'
-import { FilterSelect } from '@/components/dashboard/FilterSelect'
+import { MultiSelect } from '@/components/dashboard/MultiSelect'
 import { PageLoadingTable, PageEmpty, PageError } from '@/components/dashboard/PageState'
 import { fmtPct } from '@/lib/formatters'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
@@ -33,10 +33,14 @@ const fetcher = async (url: string) => {
   return json
 }
 
-function buildUrl(base: string, params: Record<string, string | number>) {
+function buildUrl(base: string, params: Record<string, string | number | string[]>) {
   const sp = new URLSearchParams()
   for (const [k, v] of Object.entries(params)) {
-    if (v !== '' && v !== 'all') sp.set(k, String(v))
+    if (Array.isArray(v)) {
+      if (v.length > 0) sp.set(k, v.join(','))
+    } else if (v !== '' && v !== 'all') {
+      sp.set(k, String(v))
+    }
   }
   return `${base}?${sp.toString()}`
 }
@@ -44,11 +48,11 @@ function buildUrl(base: string, params: Record<string, string | number>) {
 export default function LeadsClient() {
   const [search,        setSearch]        = useState('')
   const [debouncedSearch, setDebouncedSearch] = useState('')
-  const [filterTier,    setFilterTier]    = useState('all')
-  const [filterContact, setFilterContact] = useState('all')
-  const [filterConv,    setFilterConv]    = useState('all')
-  const [filterCmg,     setFilterCmg]     = useState('all')
-  const [filterAgent,   setFilterAgent]   = useState('all')
+  const [filterTier,    setFilterTier]    = useState<string[]>([])
+  const [filterContact, setFilterContact] = useState<string[]>([])
+  const [filterConv,    setFilterConv]    = useState<string[]>([])
+  const [filterCmg,     setFilterCmg]     = useState<string[]>([])
+  const [filterAgent,   setFilterAgent]   = useState<string[]>([])
   const [page,          setPage]          = useState(1)
 
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
@@ -96,12 +100,12 @@ export default function LeadsClient() {
   const limit      = leadsPage?.limit ?? 500
   const totalPages = Math.max(1, Math.ceil(total / limit))
 
-  const hasFilter = !!(search || filterTier !== 'all' || filterContact !== 'all' ||
-                    filterConv !== 'all' || filterCmg !== 'all' || filterAgent !== 'all')
+  const hasFilter = !!(search || filterTier.length > 0 || filterContact.length > 0 ||
+                    filterConv.length > 0 || filterCmg.length > 0 || filterAgent.length > 0)
 
   const clearFilters = () => {
-    setSearch(''); setFilterTier('all'); setFilterContact('all')
-    setFilterConv('all'); setFilterCmg('all'); setFilterAgent('all')
+    setSearch(''); setFilterTier([]); setFilterContact([])
+    setFilterConv([]); setFilterCmg([]); setFilterAgent([])
   }
 
   if (summaryLoading) return <PageLoadingTable kpiCols={4} rows={8} />
@@ -153,13 +157,13 @@ export default function LeadsClient() {
         <CardContent>
           <FilterBar hasFilter={hasFilter} onClear={clearFilters}>
             {/* No search input here anymore, moved to DataTable */}
-            <FilterSelect
+            <MultiSelect
               label="All Tiers"
               value={filterTier}
               onChange={setFilterTier}
               options={tiers.map(v => ({ value: v, label: v }))}
             />
-            <FilterSelect
+            <MultiSelect
               label="Contact"
               value={filterContact}
               onChange={setFilterContact}
@@ -169,7 +173,7 @@ export default function LeadsClient() {
                 { value: 'not_called',         label: 'Not Called' },
               ]}
             />
-            <FilterSelect
+            <MultiSelect
               label="Conversion"
               value={filterConv}
               onChange={setFilterConv}
@@ -179,13 +183,13 @@ export default function LeadsClient() {
                 { value: 'no_hoc_order',  label: 'No Order' },
               ]}
             />
-            <FilterSelect
+            <MultiSelect
               label="All CMG"
               value={filterCmg}
               onChange={setFilterCmg}
               options={cmgs.map(v => ({ value: v, label: v }))}
             />
-            <FilterSelect
+            <MultiSelect
               label="All Agents"
               value={filterAgent}
               onChange={setFilterAgent}

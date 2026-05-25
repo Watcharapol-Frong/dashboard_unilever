@@ -21,9 +21,9 @@ function labelExpr(interval: Interval) {
 function buildWhere(
   startDate: string | null,
   endDate: string | null,
-  channel: string,
-  cmg: string,
-  agent: string,
+  channel: string[],
+  cmg: string[],
+  agent: string[],
   conversion: string,
 ) {
   const conditions: string[] = []
@@ -31,9 +31,9 @@ function buildWhere(
 
   if (startDate) { params.push(startDate); conditions.push(`order_date >= $${params.length}::date`) }
   if (endDate)   { params.push(endDate);   conditions.push(`order_date <= $${params.length}::date`) }
-  if (channel    !== 'all') { params.push(channel);    conditions.push(`channel = $${params.length}`) }
-  if (cmg        !== 'all') { params.push(cmg);        conditions.push(`dynamic_cmg = $${params.length}`) }
-  if (agent      !== 'all') { params.push(agent);      conditions.push(`agent = $${params.length}`) }
+  if (channel.length > 0) { params.push(channel); conditions.push(`channel = ANY($${params.length})`) }
+  if (cmg.length > 0)     { params.push(cmg);     conditions.push(`dynamic_cmg = ANY($${params.length})`) }
+  if (agent.length > 0)   { params.push(agent);   conditions.push(`agent = ANY($${params.length})`) }
   if (conversion === 'converted') {
     conditions.push(`customer_type IN ('new_customer', 'retention')`)
   } else if (conversion === 'not_converted') {
@@ -91,9 +91,9 @@ export async function GET(request: Request) {
       rawInterval === 'daily' ? 'daily' : rawInterval === 'weekly' ? 'weekly' : 'monthly'
     const startDate  = searchParams.get('startDate')
     const endDate    = searchParams.get('endDate')
-    const channel    = searchParams.get('channel')    || 'all'
-    const cmg        = searchParams.get('cmg')        || 'all'
-    const agent      = searchParams.get('agent')      || 'all'
+    const channel    = (searchParams.get('channel') || '').split(',').filter(Boolean)
+    const cmg        = (searchParams.get('cmg')     || '').split(',').filter(Boolean)
+    const agent      = (searchParams.get('agent')   || '').split(',').filter(Boolean)
     const conversion = searchParams.get('conversion') || 'all'
 
     const hasDateRange = !!(startDate && endDate)

@@ -7,6 +7,7 @@ import {
 } from 'recharts'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import { MultiSelect } from '@/components/dashboard/MultiSelect'
 import { KpiCard } from '@/components/dashboard/KpiCard'
 import { KpiGrid } from '@/components/dashboard/KpiGrid'
 import { DataTable } from '@/components/ui/data-table'
@@ -252,11 +253,11 @@ export default function ProductsClient() {
   const [hoverMonth, setHoverMonth] = useState<string | null>(null)
 
   // Dimension filters
-  const [filterBrands,      setFilterBrands]      = useState('all')
-  const [filterClass,       setFilterClass]       = useState('all')
-  const [filterSeniorBuyer, setFilterSeniorBuyer] = useState('all')
-  const [filterBuyer,       setFilterBuyer]       = useState('all')
-  const [filterSubclass,    setFilterSubclass]    = useState('all')
+  const [filterBrands,      setFilterBrands]      = useState<string[]>([])
+  const [filterClass,       setFilterClass]       = useState<string[]>([])
+  const [filterSeniorBuyer, setFilterSeniorBuyer] = useState<string[]>([])
+  const [filterBuyer,       setFilterBuyer]       = useState<string[]>([])
+  const [filterSubclass,    setFilterSubclass]    = useState<string[]>([])
   const [filterSegment,     setFilterSegment]     = useState('all')
   const [prodSearch,        setProdSearch]        = useState('')
   const [activeTab,         setActiveTab]         = useState('products')
@@ -276,11 +277,11 @@ export default function ProductsClient() {
   // Build API URL from current filter state
   const apiUrl = useMemo(() => {
     const p = new URLSearchParams()
-    if (filterBrands      !== 'all') p.set('brands',       filterBrands)
-    if (filterClass       !== 'all') p.set('class_name',   filterClass)
-    if (filterSeniorBuyer !== 'all') p.set('senior_buyer', filterSeniorBuyer)
-    if (filterBuyer       !== 'all') p.set('buyer',        filterBuyer)
-    if (filterSubclass    !== 'all') p.set('subclass',     filterSubclass)
+    if (filterBrands.length > 0)      p.set('brands',       filterBrands.join(','))
+    if (filterClass.length > 0)       p.set('class_name',   filterClass.join(','))
+    if (filterSeniorBuyer.length > 0) p.set('senior_buyer', filterSeniorBuyer.join(','))
+    if (filterBuyer.length > 0)       p.set('buyer',        filterBuyer.join(','))
+    if (filterSubclass.length > 0)    p.set('subclass',     filterSubclass.join(','))
     if (rangeFrom) {
       p.set('startDate', rangeFrom)
       p.set('endDate',   lastDayOfMonth(rangeTo ?? rangeFrom))
@@ -315,13 +316,13 @@ export default function ProductsClient() {
     return () => { cancelled = true }
   }, [apiUrl, buildVersion])
 
-  const hasFilter = filterBrands !== 'all' || filterClass !== 'all' ||
-    filterSeniorBuyer !== 'all' || filterBuyer !== 'all' || filterSubclass !== 'all'
+  const hasFilter = filterBrands.length > 0 || filterClass.length > 0 ||
+    filterSeniorBuyer.length > 0 || filterBuyer.length > 0 || filterSubclass.length > 0
   const hasRange  = !!rangeFrom
 
   const clearAll = () => {
-    setFilterBrands('all'); setFilterClass('all')
-    setFilterSeniorBuyer('all'); setFilterBuyer('all'); setFilterSubclass('all')
+    setFilterBrands([]); setFilterClass([])
+    setFilterSeniorBuyer([]); setFilterBuyer([]); setFilterSubclass([])
     setRangeFrom(null); setRangeTo(null)
   }
 
@@ -403,41 +404,41 @@ export default function ProductsClient() {
             <div className="w-px h-6 bg-border hidden lg:block" />
 
             {/* Dimension filters */}
-            <Select value={filterBrands} onValueChange={setFilterBrands}>
-              <SelectTrigger className="h-7 text-xs w-[140px]"><SelectValue placeholder="All Brands" /></SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">All Brands</SelectItem>
-                {opts.brands.map(v => <SelectItem key={v} value={v}>{v}</SelectItem>)}
-              </SelectContent>
-            </Select>
-            <Select value={filterSeniorBuyer} onValueChange={setFilterSeniorBuyer}>
-              <SelectTrigger className="h-7 text-xs w-[165px]"><SelectValue placeholder="All Senior Buyers" /></SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">All Senior Buyers</SelectItem>
-                {opts.senior_buyers.map(v => <SelectItem key={v} value={v}>{v}</SelectItem>)}
-              </SelectContent>
-            </Select>
-            <Select value={filterBuyer} onValueChange={setFilterBuyer}>
-              <SelectTrigger className="h-7 text-xs w-[140px]"><SelectValue placeholder="All Buyers" /></SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">All Buyers</SelectItem>
-                {opts.buyers.map(v => <SelectItem key={v} value={v}>{v}</SelectItem>)}
-              </SelectContent>
-            </Select>
-            <Select value={filterClass} onValueChange={setFilterClass}>
-              <SelectTrigger className="h-7 text-xs w-[140px]"><SelectValue placeholder="All Classes" /></SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">All Classes</SelectItem>
-                {opts.class_names.map(v => <SelectItem key={v} value={v}>{v}</SelectItem>)}
-              </SelectContent>
-            </Select>
-            <Select value={filterSubclass} onValueChange={setFilterSubclass}>
-              <SelectTrigger className="h-7 text-xs w-[145px]"><SelectValue placeholder="All Subclasses" /></SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">All Subclasses</SelectItem>
-                {opts.subclasses.map(v => <SelectItem key={v} value={v}>{v}</SelectItem>)}
-              </SelectContent>
-            </Select>
+            <MultiSelect
+              label="All Brands"
+              value={filterBrands}
+              onChange={setFilterBrands}
+              options={opts.brands.map(v => ({ value: v, label: v }))}
+              width="w-[140px]"
+            />
+            <MultiSelect
+              label="All Senior Buyers"
+              value={filterSeniorBuyer}
+              onChange={setFilterSeniorBuyer}
+              options={opts.senior_buyers.map(v => ({ value: v, label: v }))}
+              width="w-[165px]"
+            />
+            <MultiSelect
+              label="All Buyers"
+              value={filterBuyer}
+              onChange={setFilterBuyer}
+              options={opts.buyers.map(v => ({ value: v, label: v }))}
+              width="w-[140px]"
+            />
+            <MultiSelect
+              label="All Classes"
+              value={filterClass}
+              onChange={setFilterClass}
+              options={opts.class_names.map(v => ({ value: v, label: v }))}
+              width="w-[140px]"
+            />
+            <MultiSelect
+              label="All Subclasses"
+              value={filterSubclass}
+              onChange={setFilterSubclass}
+              options={opts.subclasses.map(v => ({ value: v, label: v }))}
+              width="w-[145px]"
+            />
 
             {(hasFilter || hasRange) && (
               <button onClick={clearAll} className="text-xs text-[#003DA6] hover:underline font-semibold">

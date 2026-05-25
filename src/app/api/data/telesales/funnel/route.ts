@@ -9,13 +9,13 @@ export async function GET(request: Request) {
     const { searchParams } = new URL(request.url)
     const startDate = searchParams.get('startDate')
     const endDate = searchParams.get('endDate')
-    const channel = searchParams.get('channel') || 'all'
-    const cmg = searchParams.get('cmg') || 'all'
-    const agent = searchParams.get('agent') || 'all'
+    const channel = (searchParams.get('channel') || '').split(',').filter(Boolean)
+    const cmg     = (searchParams.get('cmg')     || '').split(',').filter(Boolean)
+    const agent   = (searchParams.get('agent')   || '').split(',').filter(Boolean)
 
     // Build conditions for telesales_calls
     const conditions: string[] = ['first_connected_date IS NOT NULL']
-    const params: string[] = []
+    const params: any[] = []
 
     if (startDate) {
       params.push(startDate)
@@ -25,19 +25,19 @@ export async function GET(request: Request) {
       params.push(endDate)
       conditions.push(`first_connected_date <= $${params.length}::date`)
     }
-    if (agent !== 'all') {
+    if (agent.length > 0) {
       params.push(agent)
-      conditions.push(`agent = $${params.length}`)
+      conditions.push(`agent = ANY($${params.length})`)
     }
-    if (channel !== 'all' || cmg !== 'all') {
+    if (channel.length > 0 || cmg.length > 0) {
       const subConditions: string[] = []
-      if (channel !== 'all') {
+      if (channel.length > 0) {
         params.push(channel)
-        subConditions.push(`channel = $${params.length}`)
+        subConditions.push(`channel = ANY($${params.length})`)
       }
-      if (cmg !== 'all') {
+      if (cmg.length > 0) {
         params.push(cmg)
-        subConditions.push(`dynamic_cmg = $${params.length}`)
+        subConditions.push(`dynamic_cmg = ANY($${params.length})`)
       }
       conditions.push(`mmid IN (
         SELECT DISTINCT mmid FROM mart_telesales_orders
@@ -49,8 +49,8 @@ export async function GET(request: Request) {
 
     // mart_telesales_orders channel/cmg filter
     const orderExtraConditions: string[] = []
-    if (channel !== 'all') orderExtraConditions.push(`channel = $${params.indexOf(channel) + 1}`)
-    if (cmg !== 'all')     orderExtraConditions.push(`dynamic_cmg = $${params.indexOf(cmg) + 1}`)
+    if (channel.length > 0) orderExtraConditions.push(`channel = ANY($${params.indexOf(channel) + 1})`)
+    if (cmg.length > 0)     orderExtraConditions.push(`dynamic_cmg = ANY($${params.indexOf(cmg) + 1})`)
     const orderExtra = orderExtraConditions.length ? 'AND ' + orderExtraConditions.join(' AND ') : ''
 
     const row = await queryOne<{
