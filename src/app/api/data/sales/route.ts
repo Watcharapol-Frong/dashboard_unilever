@@ -127,7 +127,7 @@ export async function GET(request: Request) {
       comparisonLabel = interval === 'weekly' ? 'vs previous week' : 'vs previous month'
     }
 
-    const [currKpi, prevOrPeriods, periodsRaw, ordersRaw, optsRaw] = await Promise.all([
+    const [currKpi, prevOrPeriods, periodsRaw, ordersRaw, optsRaw, monthsRaw] = await Promise.all([
       // Current KPI: date-filtered for custom, all-time for monthly/weekly
       fetchKpis(curr.where, curr.params),
 
@@ -164,12 +164,17 @@ export async function GET(request: Request) {
         LIMIT 100
       `, curr.params),
 
-      // Unfiltered options
+      // Unfiltered filter options
       query<{ cmg: string; agent: string }>(`
         SELECT DISTINCT dynamic_cmg AS cmg, agent
         FROM mart_telesales_orders
         WHERE dynamic_cmg IS NOT NULL AND agent IS NOT NULL
         ORDER BY dynamic_cmg, agent
+      `),
+
+      // Available months for range chips (unfiltered)
+      query<{ month: string }>(`
+        SELECT DISTINCT month::text AS month FROM mart_telesales_orders ORDER BY month
       `),
     ])
 
@@ -258,6 +263,7 @@ export async function GET(request: Request) {
           cmg:    [...new Set(optsRaw.map(o => o.cmg))].filter(Boolean).sort(),
           agents: [...new Set(optsRaw.map(o => o.agent))].filter(Boolean).sort(),
         },
+        months: monthsRaw.map(r => r.month),
       },
     })
   })
