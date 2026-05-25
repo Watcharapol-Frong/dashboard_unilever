@@ -157,16 +157,17 @@ export default function SalesClient() {
   return (
     <div className="space-y-6">
 
-      {/* ── Range Selection (month chips) ─────────────────────────────────── */}
+      {/* ── Filter & Range Selection ──────────────────────────────────────── */}
       <Card>
         <CardHeader className="pb-3">
           <div className="flex items-center gap-2">
             <Calendar className="h-4 w-4 text-[#003DA6]" />
-            <CardTitle className="text-sm font-medium">Range Selection</CardTitle>
+            <CardTitle className="text-sm font-medium">Filter & Range Selection</CardTitle>
           </div>
         </CardHeader>
         <CardContent>
           <div className="flex flex-wrap items-center gap-4">
+            {/* Month chips */}
             <div className="flex items-center gap-1.5 flex-wrap">
               {months.map(m => {
                 const effectiveTo = rangeTo ?? (rangeFrom ? hoverMonth : null)
@@ -194,30 +195,9 @@ export default function SalesClient() {
               })}
             </div>
 
-            {rangeFrom && (
-              <button
-                onClick={() => { setRangeFrom(null); setRangeTo(null) }}
-                className="text-xs text-[#003DA6] hover:underline font-semibold"
-              >
-                Reset
-              </button>
-            )}
-          </div>
-          {rangeFrom && (
-            <p className="text-xs text-muted-foreground mt-2">
-              Selected: <span className="font-medium text-foreground">{activeRangeLabel}</span>
-            </p>
-          )}
-        </CardContent>
-      </Card>
+            <div className="w-px h-6 bg-border hidden lg:block" />
 
-      {/* ── Dimension Filters ─────────────────────────────────────────────── */}
-      <Card>
-        <CardHeader className="pb-3">
-          <CardTitle className="text-sm font-medium">Filters</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="flex flex-wrap items-center gap-3">
+            {/* Dimension filters */}
             <Select value={channel} onValueChange={v => setChannel(v as Channel)}>
               <SelectTrigger className="h-7 text-xs w-[130px]"><SelectValue placeholder="All Channels" /></SelectTrigger>
               <SelectContent>
@@ -264,6 +244,12 @@ export default function SalesClient() {
               </button>
             )}
           </div>
+
+          {rangeFrom && (
+            <p className="text-xs text-muted-foreground mt-3">
+              Selected: <span className="font-medium text-foreground">{activeRangeLabel}</span>
+            </p>
+          )}
         </CardContent>
       </Card>
 
