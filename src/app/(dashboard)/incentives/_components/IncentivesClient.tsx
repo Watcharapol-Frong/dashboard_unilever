@@ -11,8 +11,8 @@ import { PageLoading, PageEmpty } from '@/components/dashboard/PageState'
 import { useDashboardSWR } from '@/hooks/useDashboardSWR'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { CHART_AXIS_CLS, CHART_TOOLTIP_STYLE } from '@/lib/chart-utils'
-import { formatTHB, formatNumber, formatPeriodLabel, colorAchievement, colorRoi } from '@/lib/formatters'
-import { PiggyBank, Briefcase, Calculator, TrendingUp } from 'lucide-react'
+import { formatTHB, formatPeriodLabel, colorAchievement, colorRoi } from '@/lib/formatters'
+import { PiggyBank, TrendingUp } from 'lucide-react'
 import { ColumnDef } from '@tanstack/react-table'
 
 interface IncentiveTier {
@@ -58,34 +58,6 @@ const tierColumns: ColumnDef<IncentiveTier>[] = [
   },
 ]
 
-const headcountColumns: ColumnDef<HeadcountCost>[] = [
-  {
-    accessorKey: 'month',
-    header: 'Month',
-    cell: ({ row }) => formatPeriodLabel(row.original.month, 'month'),
-  },
-  {
-    accessorKey: 'agent_count',
-    header: 'Agents',
-    cell: ({ row }) => <div className="text-right">{formatNumber(row.original.agent_count)}</div>,
-  },
-  {
-    accessorKey: 'cost_per_agent',
-    header: 'Cost Per Agent',
-    cell: ({ row }) => <div className="text-right">{formatTHB(row.original.cost_per_agent)}</div>,
-  },
-  {
-    accessorKey: 'supervisor_count',
-    header: 'Supervisors',
-    cell: ({ row }) => <div className="text-right">{formatNumber(row.original.supervisor_count)}</div>,
-  },
-  {
-    accessorKey: 'cost_per_supervisor',
-    header: 'Cost Per Supervisor',
-    cell: ({ row }) => <div className="text-right">{formatTHB(row.original.cost_per_supervisor)}</div>,
-  },
-]
-
 const summaryColumns: ColumnDef<MonthlySummary>[] = [
   {
     accessorKey: 'month',
@@ -107,16 +79,6 @@ const summaryColumns: ColumnDef<MonthlySummary>[] = [
     cell: ({ row }) => <div className="text-right font-medium">{formatTHB(row.original.total_incentive)}</div>,
   },
   {
-    accessorKey: 'total_agent_cost',
-    header: 'Total Agent Costs',
-    cell: ({ row }) => <div className="text-right">{formatTHB(row.original.total_agent_cost)}</div>,
-  },
-  {
-    accessorKey: 'total_expense',
-    header: 'Total Expense',
-    cell: ({ row }) => <div className="text-right font-bold">{formatTHB(row.original.total_expense)}</div>,
-  },
-  {
     accessorKey: 'roi',
     header: 'ROI',
     cell: ({ row }) => (
@@ -135,7 +97,7 @@ export default function IncentivesClient() {
     if (!data?.monthly_summary) return []
     return [...data.monthly_summary].reverse().map(m => ({
       name: new Date(m.month).toLocaleDateString('en-GB', { month: 'short', year: 'numeric' }),
-      Expense: m.total_expense,
+      Incentive: m.total_incentive,
       ROI: m.roi,
     }))
   }, [data])
@@ -146,31 +108,18 @@ export default function IncentivesClient() {
   }
 
   const totalIncentive = data.monthly_summary.reduce((sum, m) => sum + m.total_incentive, 0)
-  const totalAgentCost = data.monthly_summary.reduce((sum, m) => sum + m.total_agent_cost, 0)
   const totalExpense   = data.monthly_summary.reduce((sum, m) => sum + m.total_expense,   0)
   const totalSales     = data.monthly_summary.reduce((sum, m) => sum + m.hoc_sales,       0)
   const grandRoi       = totalExpense > 0 ? totalSales / totalExpense : 0
 
   return (
     <div className="space-y-6">
-      <KpiGrid cols={4}>
+      <KpiGrid cols={2}>
         <KpiCard
           title="Total Incentives Paid"
           value={formatTHB(totalIncentive)}
           subtitle="Agent performance bonus"
           icon={PiggyBank}
-        />
-        <KpiCard
-          title="Total Headcount Cost"
-          value={formatTHB(totalAgentCost)}
-          subtitle="Agent & supervisor salaries"
-          icon={Briefcase}
-        />
-        <KpiCard
-          title="Total Operation Expense"
-          value={formatTHB(totalExpense)}
-          subtitle="Incentive + Headcount cost"
-          icon={Calculator}
         />
         <KpiCard
           title="Overall Program ROI"
@@ -181,16 +130,16 @@ export default function IncentivesClient() {
         />
       </KpiGrid>
 
-      <ChartCard title="Monthly Expense vs Program ROI" height={300}>
+      <ChartCard title="Monthly Incentives vs Program ROI" height={300}>
         <ComposedChart data={chartData} margin={{ top: 10, right: 10, left: 10, bottom: 0 }}>
           <CartesianGrid strokeDasharray="3 3" vertical={false} className="stroke-muted" />
           <XAxis dataKey="name" tickLine={false} axisLine={false} tickMargin={8} className={CHART_AXIS_CLS} />
-          <YAxis yAxisId="expense" tickLine={false} axisLine={false} tickMargin={8} className={CHART_AXIS_CLS}
+          <YAxis yAxisId="incentive" tickLine={false} axisLine={false} tickMargin={8} className={CHART_AXIS_CLS}
             tickFormatter={v => `฿${(v / 1000).toFixed(0)}k`} />
           <YAxis yAxisId="roi" orientation="right" tickLine={false} axisLine={false} tickMargin={8} className={CHART_AXIS_CLS}
             tickFormatter={v => `${v}x`} />
           <Tooltip contentStyle={CHART_TOOLTIP_STYLE} labelClassName="text-xs font-bold" />
-          <Bar yAxisId="expense" dataKey="Expense" name="Total Expense" fill="#003DA6" radius={[4, 4, 0, 0]} barSize={24} />
+          <Bar yAxisId="incentive" dataKey="Incentive" name="Total Incentives Paid" fill="#003DA6" radius={[4, 4, 0, 0]} barSize={24} />
           <Line yAxisId="roi" type="monotone" dataKey="ROI" name="ROI (Multiplier)" stroke="#EE2737" strokeWidth={3} dot={{ r: 4 }} />
         </ComposedChart>
       </ChartCard>
@@ -199,15 +148,11 @@ export default function IncentivesClient() {
         <CardContent className="pt-6">
           <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-4">
             <TabsList className="flex flex-wrap gap-2">
-              <TabsTrigger value="summary">Monthly Expense Summary</TabsTrigger>
-              <TabsTrigger value="headcount">Headcount & Salary History</TabsTrigger>
+              <TabsTrigger value="summary">Monthly Incentive Summary</TabsTrigger>
               <TabsTrigger value="tiers">Incentive Tier Configuration</TabsTrigger>
             </TabsList>
             <TabsContent value="summary" className="pt-2">
               <DataTable columns={summaryColumns} data={data.monthly_summary} />
-            </TabsContent>
-            <TabsContent value="headcount" className="pt-2">
-              <DataTable columns={headcountColumns} data={data.headcount_costs} />
             </TabsContent>
             <TabsContent value="tiers" className="pt-2">
               <DataTable columns={tierColumns} data={data.incentive_tiers} />
