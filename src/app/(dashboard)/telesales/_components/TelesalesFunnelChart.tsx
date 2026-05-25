@@ -10,10 +10,8 @@ const NODE_COLORS: Record<string, string> = {
   'All Leads':       '#003DA6',  // Unilever Navy
   'Contacted':       '#1a5fd4',  // Bright Blue
   'Not Contacted':   '#94a3b8',  // Muted Slate
-  'Answered':        '#0ea5e9',  // Sky Blue
-  'No Answer':       '#cbd5e1',  // Light Slate
   'Engaged':         '#10b981',  // Emerald
-  'Not Engaged':     '#d1d5db',  // Light Gray
+  'Not Engaged':     '#f59e0b',  // Amber — same level as Engaged
   'Not Converted':   '#f87171',  // Soft Red
   'Converted':       '#059669',  // Dark Emerald
   'New Customer':    '#047857',  // Forest Green
@@ -34,6 +32,8 @@ interface FunnelSummary {
   totalConverted: number
   newConverted: number
   repeatConverted: number
+  convertedFromEngaged: number
+  convertedFromNotEngaged: number
   contactRate: number
   engageRate: number
   conversionRate: number
@@ -202,27 +202,27 @@ export function TelesalesFunnelChart({
       </div>
 
       {/* ── Sankey Chart ── */}
-      <div className="h-[350px] w-full">
+      <div className="h-[420px] w-full">
         {sankeyData && (
           <ResponsiveSankey
             data={sankeyData}
-            margin={{ top: 16, right: 160, bottom: 16, left: 160 }}
+            margin={{ top: 20, right: 180, bottom: 20, left: 180 }}
             align="justify"
             colors={(node) => getNodeColor(node.id as string)}
             nodeOpacity={1}
             nodeHoverOthersOpacity={0.35}
-            nodeThickness={14}
-            nodeSpacing={20}
+            nodeThickness={18}
+            nodeSpacing={28}
             nodeBorderWidth={0}
-            nodeBorderRadius={3}
-            linkOpacity={0.45}
+            nodeBorderRadius={4}
+            linkOpacity={0.4}
             linkHoverOthersOpacity={0.1}
             linkContract={3}
             enableLinkGradient={true}
             labelPosition="outside"
             labelOrientation="horizontal"
             label={(node) => `${node.id} (${formatNumber(node.value)})`}
-            labelPadding={16}
+            labelPadding={18}
             theme={{
               labels: {
                 text: {
@@ -251,7 +251,7 @@ export function TelesalesFunnelChart({
       <div className="flex justify-between px-2 text-[10px] text-muted-foreground font-medium uppercase tracking-wider">
         <span>All Leads</span>
         <span>Contacted</span>
-        <span>Engaged</span>
+        <span>Engaged / Not Engaged</span>
         <span>Converted</span>
         <span>Customer Type</span>
       </div>
