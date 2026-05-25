@@ -3,7 +3,7 @@
 import { useMemo, useState } from 'react'
 import useSWR from 'swr'
 import {
-  AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip,
+  AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
 } from 'recharts'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
@@ -243,9 +243,9 @@ export default function SalesClient() {
               )}
             </div>
           </CardHeader>
-          <CardContent className="h-[300px] pt-2">
-            <AreaChart data={chartData} width={0} height={280} style={{ width: '100%' }}
-              margin={{ top: 10, right: 10, left: 10, bottom: 0 }}>
+          <CardContent className="pt-2">
+            <ResponsiveContainer width="100%" height={280}>
+            <AreaChart data={chartData} margin={{ top: 10, right: 10, left: 10, bottom: 0 }}>
               <defs>
                 <linearGradient id="salesOnline" x1="0" y1="0" x2="0" y2="1">
                   <stop offset="5%"  stopColor="#003DA6" stopOpacity={0.8} />
@@ -268,6 +268,7 @@ export default function SalesClient() {
               <Area type="monotone" dataKey="Online"  stroke="#003DA6" fillOpacity={1} fill="url(#salesOnline)"  strokeWidth={2} />
               <Area type="monotone" dataKey="Offline" stroke="#EE2737" fillOpacity={1} fill="url(#salesOffline)" strokeWidth={2} />
             </AreaChart>
+            </ResponsiveContainer>
           </CardContent>
         </Card>
 
