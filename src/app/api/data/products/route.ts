@@ -4,6 +4,8 @@ import { query, queryOne } from '@/lib/db'
 
 export const dynamic = 'force-dynamic'
 
+type TrendInterval = 'monthly' | 'weekly' | 'daily'
+
 function buildProductWhere(
   brands: string,
   className: string,
@@ -23,21 +25,52 @@ function buildProductWhere(
   return { where: conditions.length ? 'AND ' + conditions.join(' AND ') : '', params }
 }
 
+function trendPeriodExpr(interval: TrendInterval) {
+  if (interval === 'daily')  return 'm.order_date'
+  if (interval === 'weekly') return "DATE_TRUNC('week', m.order_date)::date"
+  return 'm.month'
+}
+
+function trendLabelExpr(interval: TrendInterval) {
+  if (interval === 'daily')  return "TO_CHAR(m.order_date, 'DD Mon')"
+  if (interval === 'weekly') return "MAX(m.week_label)"
+  return "MAX(m.month_label) || ' ' || EXTRACT(YEAR FROM MAX(m.order_date))::text"
+}
+
 export async function GET(request: Request) {
   return withAdmin(async () => {
     const { searchParams } = new URL(request.url)
+
+    // Product dimension filters
     const brands      = searchParams.get('brands')      || 'all'
     const className   = searchParams.get('class_name')  || 'all'
     const seniorBuyer = searchParams.get('senior_buyer') || 'all'
     const buyer       = searchParams.get('buyer')       || 'all'
     const subclass    = searchParams.get('subclass')    || 'all'
 
+    // Trend-only params
+    const rawInterval  = searchParams.get('trend_interval') ?? 'monthly'
+    const trendInterval: TrendInterval =
+      rawInterval === 'daily' ? 'daily' : rawInterval === 'weekly' ? 'weekly' : 'monthly'
+    const trendStart = searchParams.get('trend_start')
+    const trendEnd   = searchParams.get('trend_end')
+
     const { where: extraWhere, params: filterParams } = buildProductWhere(
       brands, className, seniorBuyer, buyer, subclass,
     )
 
+    // Build date range clause for trend query (appended after filterParams)
+    const dateConditions: string[] = []
+    const dateParams: any[] = []
+    if (trendStart) { dateParams.push(trendStart); dateConditions.push(`m.order_date >= $${filterParams.length + dateParams.length}::date`) }
+    if (trendEnd)   { dateParams.push(trendEnd);   dateConditions.push(`m.order_date <= $${filterParams.length + dateParams.length}::date`) }
+    const dateWhere = dateConditions.length ? 'AND ' + dateConditions.join(' AND ') : ''
+
+    const periodExpr = trendPeriodExpr(trendInterval)
+    const labelExpr  = trendLabelExpr(trendInterval)
+
     const [kpiRow, productRows, brandRows, brandTrendRows, optsRaw] = await Promise.all([
-      // ── KPI totals ───────────────────────────────────────────────────────
+      // ── KPI totals (product filters only, no date range) ─────────────────
       queryOne<{
         total_sales: string
         total_qty: string
@@ -54,7 +87,7 @@ export async function GET(request: Request) {
         WHERE true ${extraWhere}
       `, filterParams),
 
-      // ── By product (SKU level) with new/retention counts ─────────────────
+      // ── By product (SKU level) ────────────────────────────────────────────
       query<{
         prod_num: string
         brands: string | null
@@ -100,12 +133,12 @@ export async function GET(request: Request) {
         product_count: string
       }>(`
         SELECT
-          COALESCE(p.brands, 'Unknown')                                                   AS brands,
-          SUM(m.sales_in_vat)::text                                                       AS total_sales,
+          COALESCE(p.brands, 'Unknown')                                                    AS brands,
+          SUM(m.sales_in_vat)::text                                                        AS total_sales,
           COALESCE(SUM(CASE WHEN m.channel = 'online'  THEN m.sales_in_vat END), 0)::text AS online_sales,
           COALESCE(SUM(CASE WHEN m.channel = 'offline' THEN m.sales_in_vat END), 0)::text AS offline_sales,
-          SUM(m.sales_qty)::text                                                           AS total_qty,
-          COUNT(DISTINCT m.prod_num)::text                                                 AS product_count
+          SUM(m.sales_qty)::text                                                            AS total_qty,
+          COUNT(DISTINCT m.prod_num)::text                                                  AS product_count
         FROM mart_telesales_orders m
         LEFT JOIN products p ON m.prod_num = p.prod_num
         WHERE true ${extraWhere}
@@ -113,10 +146,10 @@ export async function GET(request: Request) {
         ORDER BY SUM(m.sales_in_vat) DESC
       `, filterParams),
 
-      // ── Brand revenue trend — top 5 brands × month ───────────────────────
+      // ── Brand revenue trend — top 5 × period (with date range) ───────────
       query<{
-        month: string
-        month_label: string
+        period: string
+        period_label: string
         brands: string
         total_sales: string
       }>(`
@@ -124,22 +157,23 @@ export async function GET(request: Request) {
           SELECT COALESCE(p.brands, 'Unknown') AS brands
           FROM mart_telesales_orders m
           LEFT JOIN products p ON m.prod_num = p.prod_num
-          WHERE true ${extraWhere}
+          WHERE true ${extraWhere} ${dateWhere}
           GROUP BY 1
           ORDER BY SUM(m.sales_in_vat) DESC
           LIMIT 5
         )
         SELECT
-          m.month::text                                                                   AS month,
-          MAX(m.month_label) || ' ' || EXTRACT(YEAR FROM MAX(m.order_date))::text        AS month_label,
-          COALESCE(p.brands, 'Unknown')                                                  AS brands,
-          SUM(m.sales_in_vat)::text                                                      AS total_sales
+          ${periodExpr}                         AS period,
+          ${labelExpr}                          AS period_label,
+          COALESCE(p.brands, 'Unknown')         AS brands,
+          SUM(m.sales_in_vat)::text             AS total_sales
         FROM mart_telesales_orders m
         LEFT JOIN products p ON m.prod_num = p.prod_num
-        WHERE COALESCE(p.brands, 'Unknown') IN (SELECT brands FROM top5) ${extraWhere}
-        GROUP BY m.month, COALESCE(p.brands, 'Unknown')
-        ORDER BY m.month
-      `, [...filterParams, ...filterParams]),
+        WHERE COALESCE(p.brands, 'Unknown') IN (SELECT brands FROM top5)
+          ${extraWhere} ${dateWhere}
+        GROUP BY ${periodExpr}, COALESCE(p.brands, 'Unknown')
+        ORDER BY ${periodExpr}
+      `, [...filterParams, ...dateParams, ...filterParams, ...dateParams]),
 
       // ── Filter options ───────────────────────────────────────────────────
       query<{
@@ -149,12 +183,7 @@ export async function GET(request: Request) {
         buyer_name: string | null
         subclass: string | null
       }>(`
-        SELECT DISTINCT
-          brands,
-          class_name,
-          senior_buyer_name,
-          buyer_name,
-          subclass
+        SELECT DISTINCT brands, class_name, senior_buyer_name, buyer_name, subclass
         FROM products
         WHERE prod_num IN (SELECT DISTINCT prod_num FROM mart_telesales_orders)
         ORDER BY brands, class_name
@@ -169,20 +198,20 @@ export async function GET(request: Request) {
     const by_product = productRows.map(p => {
       const sales = Number(p.total_sales)
       return {
-        prod_num:          p.prod_num,
-        brands:            p.brands,
-        product_name_th:   p.product_name_th,
-        product_name_en:   p.product_name_en,
-        class_name:        p.class_name,
-        subclass:          p.subclass,
-        senior_buyer_name: p.senior_buyer_name,
-        buyer_name:        p.buyer_name,
-        is_uni_hoc_pd:     true,
-        total_qty:         Number(p.total_qty),
-        total_sales:       sales,
-        new_customers:     Number(p.new_customers),
+        prod_num:            p.prod_num,
+        brands:              p.brands,
+        product_name_th:     p.product_name_th,
+        product_name_en:     p.product_name_en,
+        class_name:          p.class_name,
+        subclass:            p.subclass,
+        senior_buyer_name:   p.senior_buyer_name,
+        buyer_name:          p.buyer_name,
+        is_uni_hoc_pd:       true,
+        total_qty:           Number(p.total_qty),
+        total_sales:         sales,
+        new_customers:       Number(p.new_customers),
         retention_customers: Number(p.retention_customers),
-        pct_of_total:      totalSales > 0 ? sales / totalSales : 0,
+        pct_of_total:        totalSales > 0 ? sales / totalSales : 0,
       }
     })
 
@@ -191,26 +220,26 @@ export async function GET(request: Request) {
       const online  = Number(b.online_sales)
       const offline = Number(b.offline_sales)
       return {
-        brands:          b.brands,
-        total_sales:     sales,
-        online_sales:    online,
-        offline_sales:   offline,
-        online_pct:      sales > 0 ? online  / sales : 0,
-        offline_pct:     sales > 0 ? offline / sales : 0,
-        total_qty:       Number(b.total_qty),
-        product_count:   Number(b.product_count),
-        pct_of_total:    totalSales > 0 ? sales / totalSales : 0,
+        brands:        b.brands,
+        total_sales:   sales,
+        online_sales:  online,
+        offline_sales: offline,
+        online_pct:    sales > 0 ? online  / sales : 0,
+        offline_pct:   sales > 0 ? offline / sales : 0,
+        total_qty:     Number(b.total_qty),
+        product_count: Number(b.product_count),
+        pct_of_total:  totalSales > 0 ? sales / totalSales : 0,
       }
     })
 
-    // Pivot brand trend: [{ month_label, Brand_A: n, Brand_B: n, ... }]
-    const monthOrder = [...new Set(brandTrendRows.map(r => r.month))].sort()
-    const top5Brands = [...new Set(brandTrendRows.map(r => r.brands))]
-    const by_brand_trend = monthOrder.map(month => {
-      const label = brandTrendRows.find(r => r.month === month)?.month_label ?? month
-      const row: Record<string, string | number> = { month, month_label: label }
+    // Pivot trend rows → [{ period_label, BrandA: n, BrandB: n, ... }]
+    const periodOrder = [...new Set(brandTrendRows.map(r => r.period))].sort()
+    const top5Brands  = [...new Set(brandTrendRows.map(r => r.brands))]
+    const by_brand_trend = periodOrder.map(period => {
+      const label = brandTrendRows.find(r => r.period === period)?.period_label ?? period
+      const row: Record<string, string | number> = { period, period_label: label }
       top5Brands.forEach(brand => {
-        const entry = brandTrendRows.find(r => r.month === month && r.brands === brand)
+        const entry = brandTrendRows.find(r => r.period === period && r.brands === brand)
         row[brand] = entry ? Number(entry.total_sales) : 0
       })
       return row
@@ -225,7 +254,7 @@ export async function GET(request: Request) {
         by_product,
         by_brand,
         by_brand_trend,
-        top5_brands: top5Brands,
+        top5_brands:     top5Brands,
         total_sales:     totalSales,
         total_qty:       totalQty,
         total_skus:      totalSkus,

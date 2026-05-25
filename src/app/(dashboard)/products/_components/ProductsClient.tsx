@@ -19,6 +19,8 @@ import { columns as baseProductColumns } from '../columns'
 import { Package, ShoppingCart, TrendingUp, BarChart2, Filter, UserPlus, Users } from 'lucide-react'
 import { ColumnDef } from '@tanstack/react-table'
 import { DataTableColumnHeader } from '@/components/ui/data-table-column-header'
+import { DateRangePicker } from '@/components/dashboard/DateRangePicker'
+import { cn } from '@/lib/utils'
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -73,6 +75,7 @@ interface ProductData {
 // ── Constants ─────────────────────────────────────────────────────────────────
 
 const BRAND_COLORS = ['#003DA6', '#EE2737', '#10b981', '#f59e0b', '#8b5cf6']
+type TrendInterval = 'monthly' | 'weekly' | 'custom'
 
 const fetcher = (url: string) =>
   fetch(url).then(r => r.json()).then(j => {
@@ -245,6 +248,23 @@ export default function ProductsClient() {
   const [prodSearch,        setProdSearch]        = useState('')
   const [activeTab,         setActiveTab]         = useState('products')
 
+  // Trend interval & date range (chart only)
+  const [trendInterval,  setTrendInterval]  = useState<TrendInterval>('monthly')
+  const [customStart,    setCustomStart]    = useState('')
+  const [customEnd,      setCustomEnd]      = useState('')
+
+  const durationDays = useMemo(() => {
+    if (trendInterval !== 'custom' || !customStart || !customEnd) return 0
+    return Math.ceil(Math.abs(new Date(customEnd).getTime() - new Date(customStart).getTime()) / 86_400_000)
+  }, [trendInterval, customStart, customEnd])
+
+  const calculatedInterval = useMemo<'daily' | 'weekly' | 'monthly'>(() => {
+    if (trendInterval !== 'custom') return trendInterval
+    return durationDays <= 32 ? 'daily' : 'weekly'
+  }, [trendInterval, durationDays])
+
+  const handleIntervalChange = (v: TrendInterval) => setTrendInterval(v)
+
   const apiUrl = useMemo(() => {
     const p = new URLSearchParams()
     if (filterBrands      !== 'all') p.set('brands',       filterBrands)
@@ -252,9 +272,13 @@ export default function ProductsClient() {
     if (filterSeniorBuyer !== 'all') p.set('senior_buyer', filterSeniorBuyer)
     if (filterBuyer       !== 'all') p.set('buyer',        filterBuyer)
     if (filterSubclass    !== 'all') p.set('subclass',     filterSubclass)
+    p.set('trend_interval', calculatedInterval)
+    if (trendInterval === 'custom' && customStart) p.set('trend_start', customStart)
+    if (trendInterval === 'custom' && customEnd)   p.set('trend_end',   customEnd)
     const qs = p.toString()
     return `/api/data/products${qs ? `?${qs}` : ''}`
-  }, [filterBrands, filterClass, filterSeniorBuyer, filterBuyer, filterSubclass])
+  }, [filterBrands, filterClass, filterSeniorBuyer, filterBuyer, filterSubclass,
+      calculatedInterval, trendInterval, customStart, customEnd])
 
   const { data, isLoading } = useSWR<ProductData>(apiUrl, fetcher, {
     keepPreviousData: true,
@@ -362,11 +386,48 @@ export default function ProductsClient() {
 
       {/* ── Brand Revenue Trend ───────────────────────────────────────────── */}
       <Card>
-        <CardHeader>
-          <CardTitle className="text-sm font-medium">Revenue Trend by Brand (Top 5)</CardTitle>
-          <p className="text-xs text-muted-foreground mt-0.5">
-            Monthly telesales revenue per brand — track momentum over time
-          </p>
+        <CardHeader className="flex sm:flex-row flex-col justify-between sm:items-start items-start gap-3 pb-2">
+          <div>
+            <CardTitle className="text-sm font-medium">Revenue Trend by Brand (Top 5)</CardTitle>
+            <p className="text-xs text-muted-foreground mt-0.5">
+              Telesales revenue per brand — track momentum over time
+            </p>
+          </div>
+          <div className="flex items-center gap-2 flex-wrap">
+            {/* Interval tabs */}
+            <div className="flex items-center bg-gray-100/80 p-0.5 rounded-lg border border-gray-200">
+              {(['monthly', 'weekly', 'custom'] as const).map(v => (
+                <button
+                  key={v}
+                  onClick={() => handleIntervalChange(v)}
+                  className={cn(
+                    'px-3 py-1 rounded-md text-xs font-bold transition-all duration-200 capitalize',
+                    trendInterval === v
+                      ? 'bg-white text-[#003DA6] shadow-xs'
+                      : 'text-muted-foreground hover:text-foreground',
+                  )}
+                >
+                  {v.charAt(0).toUpperCase() + v.slice(1)}
+                </button>
+              ))}
+            </div>
+            {/* DateRangePicker for custom mode */}
+            {trendInterval === 'custom' && (
+              <div className="flex items-center gap-2 animate-in fade-in slide-in-from-right-2 duration-200">
+                <DateRangePicker
+                  from={customStart}
+                  to={customEnd}
+                  onFromChange={setCustomStart}
+                  onToChange={setCustomEnd}
+                />
+                {durationDays > 0 && (
+                  <span className="text-[9px] bg-blue-50 text-[#003DA6] px-1.5 py-0.5 rounded font-bold uppercase">
+                    {calculatedInterval} · {durationDays}d
+                  </span>
+                )}
+              </div>
+            )}
+          </div>
         </CardHeader>
         <CardContent className="pt-0">
           <ResponsiveContainer width="100%" height={300}>
