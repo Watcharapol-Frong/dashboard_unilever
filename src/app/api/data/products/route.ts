@@ -36,7 +36,8 @@ export async function GET(request: Request) {
       brands, className, seniorBuyer, buyer, subclass,
     )
 
-    const [kpiRow, productRows, brandRows, optsRaw] = await Promise.all([
+    const [kpiRow, productRows, brandRows, brandTrendRows, optsRaw] = await Promise.all([
+      // ── KPI totals ───────────────────────────────────────────────────────
       queryOne<{
         total_sales: string
         total_qty: string
@@ -53,6 +54,7 @@ export async function GET(request: Request) {
         WHERE true ${extraWhere}
       `, filterParams),
 
+      // ── By product (SKU level) with new/retention counts ─────────────────
       query<{
         prod_num: string
         brands: string | null
@@ -64,6 +66,8 @@ export async function GET(request: Request) {
         buyer_name: string | null
         total_qty: string
         total_sales: string
+        new_customers: string
+        retention_customers: string
       }>(`
         SELECT
           m.prod_num,
@@ -74,8 +78,10 @@ export async function GET(request: Request) {
           p.subclass,
           p.senior_buyer_name,
           p.buyer_name,
-          SUM(m.sales_qty)::text      AS total_qty,
-          SUM(m.sales_in_vat)::text   AS total_sales
+          SUM(m.sales_qty)::text                                                            AS total_qty,
+          SUM(m.sales_in_vat)::text                                                        AS total_sales,
+          COUNT(DISTINCT m.mmid) FILTER (WHERE m.customer_type = 'new_customer')::text     AS new_customers,
+          COUNT(DISTINCT m.mmid) FILTER (WHERE m.customer_type = 'retention')::text        AS retention_customers
         FROM mart_telesales_orders m
         LEFT JOIN products p ON m.prod_num = p.prod_num
         WHERE true ${extraWhere}
@@ -84,6 +90,7 @@ export async function GET(request: Request) {
         ORDER BY SUM(m.sales_in_vat) DESC
       `, filterParams),
 
+      // ── By brand (summary) ───────────────────────────────────────────────
       query<{
         brands: string
         total_sales: string
@@ -102,7 +109,35 @@ export async function GET(request: Request) {
         ORDER BY SUM(m.sales_in_vat) DESC
       `, filterParams),
 
-      // Filter options — always unfiltered so dropdowns stay complete
+      // ── Brand revenue trend — top 5 brands × month ───────────────────────
+      query<{
+        month: string
+        month_label: string
+        brands: string
+        total_sales: string
+      }>(`
+        WITH top5 AS (
+          SELECT COALESCE(p.brands, 'Unknown') AS brands
+          FROM mart_telesales_orders m
+          LEFT JOIN products p ON m.prod_num = p.prod_num
+          WHERE true ${extraWhere}
+          GROUP BY 1
+          ORDER BY SUM(m.sales_in_vat) DESC
+          LIMIT 5
+        )
+        SELECT
+          m.month::text                                                                   AS month,
+          MAX(m.month_label) || ' ' || EXTRACT(YEAR FROM MAX(m.order_date))::text        AS month_label,
+          COALESCE(p.brands, 'Unknown')                                                  AS brands,
+          SUM(m.sales_in_vat)::text                                                      AS total_sales
+        FROM mart_telesales_orders m
+        LEFT JOIN products p ON m.prod_num = p.prod_num
+        WHERE COALESCE(p.brands, 'Unknown') IN (SELECT brands FROM top5) ${extraWhere}
+        GROUP BY m.month, COALESCE(p.brands, 'Unknown')
+        ORDER BY m.month
+      `, [...filterParams, ...filterParams]),
+
+      // ── Filter options ───────────────────────────────────────────────────
       query<{
         brands: string | null
         class_name: string | null
@@ -141,6 +176,8 @@ export async function GET(request: Request) {
         is_uni_hoc_pd:     true,
         total_qty:         Number(p.total_qty),
         total_sales:       sales,
+        new_customers:     Number(p.new_customers),
+        retention_customers: Number(p.retention_customers),
         pct_of_total:      totalSales > 0 ? sales / totalSales : 0,
       }
     })
@@ -156,6 +193,19 @@ export async function GET(request: Request) {
       }
     })
 
+    // Pivot brand trend: [{ month_label, Brand_A: n, Brand_B: n, ... }]
+    const monthOrder = [...new Set(brandTrendRows.map(r => r.month))].sort()
+    const top5Brands = [...new Set(brandTrendRows.map(r => r.brands))]
+    const by_brand_trend = monthOrder.map(month => {
+      const label = brandTrendRows.find(r => r.month === month)?.month_label ?? month
+      const row: Record<string, string | number> = { month, month_label: label }
+      top5Brands.forEach(brand => {
+        const entry = brandTrendRows.find(r => r.month === month && r.brands === brand)
+        row[brand] = entry ? Number(entry.total_sales) : 0
+      })
+      return row
+    })
+
     const unique = <T,>(arr: (T | null)[]) =>
       [...new Set(arr.filter((v): v is T => v !== null && v !== ''))]
 
@@ -164,17 +214,19 @@ export async function GET(request: Request) {
       data: {
         by_product,
         by_brand,
+        by_brand_trend,
+        top5_brands: top5Brands,
         total_sales:     totalSales,
         total_qty:       totalQty,
         total_skus:      totalSkus,
         total_orders:    totalOrders,
         avg_order_value: totalOrders > 0 ? totalSales / totalOrders : 0,
         options: {
-          brands:       unique(optsRaw.map(r => r.brands)).sort(),
-          class_names:  unique(optsRaw.map(r => r.class_name)).sort(),
+          brands:        unique(optsRaw.map(r => r.brands)).sort(),
+          class_names:   unique(optsRaw.map(r => r.class_name)).sort(),
           senior_buyers: unique(optsRaw.map(r => r.senior_buyer_name)).sort(),
-          buyers:       unique(optsRaw.map(r => r.buyer_name)).sort(),
-          subclasses:   unique(optsRaw.map(r => r.subclass)).sort(),
+          buyers:        unique(optsRaw.map(r => r.buyer_name)).sort(),
+          subclasses:    unique(optsRaw.map(r => r.subclass)).sort(),
         },
       },
     })
