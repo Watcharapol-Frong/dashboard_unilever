@@ -59,6 +59,7 @@ interface ProductOptions {
   senior_buyers: string[]
   buyers: string[]
   subclasses: string[]
+  months: string[]
 }
 
 interface ProductData {
@@ -246,7 +247,7 @@ const brandColumns: ColumnDef<BrandRow>[] = [
 
 // ── Component ─────────────────────────────────────────────────────────────────
 
-const EMPTY_OPTS: ProductOptions = { brands: [], class_names: [], senior_buyers: [], buyers: [], subclasses: [] }
+const EMPTY_OPTS: ProductOptions = { brands: [], class_names: [], senior_buyers: [], buyers: [], subclasses: [], months: [] }
 
 export default function ProductsClient() {
   const { buildVersion } = useBuild()
@@ -359,7 +360,7 @@ export default function ProductsClient() {
 
   const top5      = data.top5_brands
   const trendData = data.by_brand_trend
-  const months    = data.months ?? []
+  const months    = opts.months
 
   const activeRangeLabel = (() => {
     if (!rangeFrom) return 'All available periods'

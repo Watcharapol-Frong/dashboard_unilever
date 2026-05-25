@@ -42,7 +42,7 @@ export async function GET(request: Request) {
       brands, className, seniorBuyer, buyer, subclass, startDate, endDate,
     )
 
-    const [kpiRow, productRows, brandRows, brandTrendRows, monthsRaw] = await Promise.all([
+    const [kpiRow, productRows, brandRows, brandTrendRows] = await Promise.all([
       // ── KPI totals ───────────────────────────────────────────────────────
       queryOne<{
         total_sales: string
@@ -157,10 +157,6 @@ export async function GET(request: Request) {
         ORDER BY m.month
       `, filterParams),
 
-      // ── Available months for range chips (unfiltered) ────────────────────
-      query<{ month: string }>(`
-        SELECT DISTINCT month::text AS month FROM mart_telesales_orders ORDER BY month
-      `),
     ])
 
     const totalSales  = Number(kpiRow?.total_sales  ?? 0)
@@ -233,7 +229,6 @@ export async function GET(request: Request) {
         total_skus:      totalSkus,
         total_orders:    totalOrders,
         avg_order_value: totalOrders > 0 ? totalSales / totalOrders : 0,
-        months: monthsRaw.map(r => r.month),
       },
     })
     res.headers.set('Cache-Control', 'public, s-maxage=300, stale-while-revalidate=600')
