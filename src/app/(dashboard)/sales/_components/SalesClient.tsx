@@ -63,7 +63,7 @@ export default function SalesClient() {
   const [hoverMonth,  setHoverMonth]  = useState<string | null>(null)
 
   // Trend interval state
-  const [interval,    setInterval]    = useState<Interval>('monthly')
+  const [interval,    setInterval]    = useState<Interval>('weekly')
   const [customStart, setCustomStart] = useState('2026-02-01')
   const [customEnd,   setCustomEnd]   = useState('2026-05-31')
 
