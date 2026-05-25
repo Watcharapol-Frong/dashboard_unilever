@@ -1,7 +1,6 @@
 'use client'
 
-import { useMemo, useState } from 'react'
-import useSWR from 'swr'
+import { useEffect, useMemo, useState } from 'react'
 import {
   AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, Legend,
   ResponsiveContainer,
@@ -74,12 +73,6 @@ interface ProductData {
 // ── Constants ─────────────────────────────────────────────────────────────────
 
 const BRAND_COLORS = ['#003DA6', '#EE2737', '#10b981', '#f59e0b', '#8b5cf6']
-
-const fetcher = (url: string) =>
-  fetch(url).then(r => r.json()).then(j => {
-    if (!j.ok) throw new Error(j.error ?? 'fetch error')
-    return j.data as ProductData
-  })
 
 function lastDayOfMonth(isoDate: string) {
   const [y, m] = isoDate.split('-').map(Number)
@@ -269,11 +262,7 @@ export default function ProductsClient() {
     }
   }
 
-  const effectiveStart = rangeFrom ?? null
-  const effectiveEnd   = rangeFrom
-    ? lastDayOfMonth(rangeTo ?? rangeFrom)
-    : null
-
+  // Build API URL from current filter state
   const apiUrl = useMemo(() => {
     const p = new URLSearchParams()
     if (filterBrands      !== 'all') p.set('brands',       filterBrands)
@@ -281,18 +270,39 @@ export default function ProductsClient() {
     if (filterSeniorBuyer !== 'all') p.set('senior_buyer', filterSeniorBuyer)
     if (filterBuyer       !== 'all') p.set('buyer',        filterBuyer)
     if (filterSubclass    !== 'all') p.set('subclass',     filterSubclass)
-    if (effectiveStart) p.set('startDate', effectiveStart)
-    if (effectiveEnd)   p.set('endDate',   effectiveEnd)
+    if (rangeFrom) {
+      p.set('startDate', rangeFrom)
+      p.set('endDate',   lastDayOfMonth(rangeTo ?? rangeFrom))
+    }
     const qs = p.toString()
     return `/api/data/products${qs ? `?${qs}` : ''}`
-  }, [filterBrands, filterClass, filterSeniorBuyer, filterBuyer, filterSubclass, effectiveStart, effectiveEnd])
+  }, [filterBrands, filterClass, filterSeniorBuyer, filterBuyer, filterSubclass, rangeFrom, rangeTo])
 
-  const { data, isLoading } = useSWR<ProductData>(apiUrl, fetcher, {
-    keepPreviousData: true,
-    revalidateOnFocus: false,
-    revalidateOnReconnect: false,
-    dedupingInterval: 300_000,
-  })
+  // useEffect fetch — re-runs whenever apiUrl changes; keeps previous data on error
+  const [data,      setData]      = useState<ProductData | null>(null)
+  const [isLoading, setIsLoading] = useState(true)
+  const [fetchErr,  setFetchErr]  = useState<string | null>(null)
+
+  useEffect(() => {
+    let cancelled = false
+    setIsLoading(true)
+    setFetchErr(null)
+    fetch(apiUrl)
+      .then(r => r.json())
+      .then((j: { ok: boolean; data?: ProductData; error?: string }) => {
+        if (!cancelled) {
+          if (j.ok && j.data) setData(j.data)
+          else setFetchErr(j.error ?? 'Unknown error')
+        }
+      })
+      .catch((err: Error) => {
+        if (!cancelled) setFetchErr(err.message)
+      })
+      .finally(() => {
+        if (!cancelled) setIsLoading(false)
+      })
+    return () => { cancelled = true }
+  }, [apiUrl])
 
   const hasFilter = filterBrands !== 'all' || filterClass !== 'all' ||
     filterSeniorBuyer !== 'all' || filterBuyer !== 'all' || filterSubclass !== 'all'
@@ -316,7 +326,7 @@ export default function ProductsClient() {
   }, [data?.by_product, prodSearch])
 
   if (isLoading && !data) return <PageLoading />
-  if (!data || data.total_sales === 0) {
+  if (!data) {
     return <PageEmpty message="No product sales data available" hint="Please build mart first." />
   }
 
@@ -424,6 +434,9 @@ export default function ProductsClient() {
             <p className="text-xs text-muted-foreground mt-3">
               Selected range: <span className="font-semibold text-foreground">{activeRangeLabel}</span>
             </p>
+          )}
+          {fetchErr && (
+            <p className="text-xs text-red-500 mt-2">Failed to load filtered data: {fetchErr}</p>
           )}
         </CardContent>
       </Card>
