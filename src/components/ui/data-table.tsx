@@ -85,7 +85,7 @@ export function DataTable<TData, TValue>({
           {toolbarLeft}
           {searchKey && (
             <Input
-              placeholder={`Filter ${searchKey}...`}
+              placeholder={searchPlaceholder || `Filter ${searchKey}...`}
               value={(table.getColumn(searchKey)?.getFilterValue() as string) ?? ""}
               onChange={(event) =>
                 table.getColumn(searchKey)?.setFilterValue(event.target.value)
