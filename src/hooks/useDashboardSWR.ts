@@ -1,4 +1,5 @@
 import useSWR from 'swr'
+import { useBuild } from '@/context/BuildContext'
 
 const fetcher = async (url: string) => {
   const res  = await fetch(url)
@@ -8,7 +9,8 @@ const fetcher = async (url: string) => {
 }
 
 export function useDashboardSWR<T>(url: string) {
-  return useSWR<T>(url, fetcher, {
+  const { buildVersion } = useBuild()
+  return useSWR<T>([url, buildVersion], ([u]: [string]) => fetcher(u), {
     keepPreviousData: true,
     revalidateOnFocus: false,
     revalidateOnReconnect: false,

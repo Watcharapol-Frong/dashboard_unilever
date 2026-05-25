@@ -1,7 +1,7 @@
 'use client'
 
 import { useMemo, useState } from 'react'
-import useSWR from 'swr'
+import { useDashboardSWR } from '@/hooks/useDashboardSWR'
 import {
   AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
 } from 'recharts'
@@ -42,12 +42,6 @@ type Channel    = 'all' | 'online' | 'offline'
 type Conversion = 'all' | 'converted' | 'not_converted'
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
-
-const fetcher = (url: string) =>
-  fetch(url).then(r => r.json()).then(j => {
-    if (!j.ok) throw new Error(j.error ?? 'fetch error')
-    return j.data as SalesData
-  })
 
 function lastDayOfMonth(isoDate: string) {
   const [y, m] = isoDate.split('-').map(Number)
@@ -129,12 +123,7 @@ export default function SalesClient() {
     return `/api/data/sales?${p.toString()}`
   }, [calculatedInterval, channel, cmg, agent, conversion, effectiveStart, effectiveEnd])
 
-  const { data, isLoading } = useSWR<SalesData>(apiUrl, fetcher, {
-    keepPreviousData: true,
-    revalidateOnFocus: false,
-    revalidateOnReconnect: false,
-    dedupingInterval: 300_000,
-  })
+  const { data, isLoading } = useDashboardSWR<SalesData>(apiUrl)
 
   if (isLoading && !data) return <PageLoading cols={4} />
   if (!data || data.kpi.total_sales === 0) {
