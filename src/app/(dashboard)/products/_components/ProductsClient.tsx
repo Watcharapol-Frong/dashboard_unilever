@@ -11,6 +11,7 @@ import { KpiCard } from '@/components/dashboard/KpiCard'
 import { KpiGrid } from '@/components/dashboard/KpiGrid'
 import { DataTable } from '@/components/ui/data-table'
 import { PageLoading, PageEmpty } from '@/components/dashboard/PageState'
+import { useBuild } from '@/context/BuildContext'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { CHART_AXIS_CLS, CHART_TOOLTIP_STYLE } from '@/lib/chart-utils'
 import { formatTHB, formatNumber, formatPct, fmtBaht } from '@/lib/formatters'
@@ -243,6 +244,8 @@ const brandColumns: ColumnDef<BrandRow>[] = [
 // ── Component ─────────────────────────────────────────────────────────────────
 
 export default function ProductsClient() {
+  const { buildVersion } = useBuild()
+
   // Date range
   const [rangeFrom,  setRangeFrom]  = useState<string | null>(null)
   const [rangeTo,    setRangeTo]    = useState<string | null>(null)
@@ -310,7 +313,7 @@ export default function ProductsClient() {
         if (!cancelled) setIsLoading(false)
       })
     return () => { cancelled = true }
-  }, [apiUrl])
+  }, [apiUrl, buildVersion])
 
   const hasFilter = filterBrands !== 'all' || filterClass !== 'all' ||
     filterSeniorBuyer !== 'all' || filterBuyer !== 'all' || filterSubclass !== 'all'

@@ -13,6 +13,7 @@ interface BuildContextValue {
   buildLoading: boolean
   elapsedSeconds: number
   buildResult: BuildResult | null
+  buildVersion: number
   clearBuildResult: () => void
   startBuild: (effectiveDays: number) => Promise<void>
 }
@@ -21,6 +22,7 @@ const BuildContext = createContext<BuildContextValue>({
   buildLoading: false,
   elapsedSeconds: 0,
   buildResult: null,
+  buildVersion: 0,
   clearBuildResult: () => {},
   startBuild: async () => {},
 })
@@ -29,6 +31,7 @@ export function BuildProvider({ children }: { children: React.ReactNode }) {
   const [buildLoading, setBuildLoading] = useState(false)
   const [elapsedSeconds, setElapsedSeconds] = useState(0)
   const [buildResult, setBuildResult]   = useState<BuildResult | null>(null)
+  const [buildVersion, setBuildVersion] = useState(0)
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null)
 
   const clearBuildResult = useCallback(() => setBuildResult(null), [])
@@ -59,7 +62,10 @@ export function BuildProvider({ children }: { children: React.ReactNode }) {
         attribution_days: effectiveDays,
         rows: { mart_main: data.mart_main ?? 0, performance: data.performance ?? 0 },
       })
-      swrMutate('/api/data/mart-status')
+
+      // Revalidate all dashboard data endpoints + increment version for non-SWR pages
+      setBuildVersion(v => v + 1)
+      swrMutate((key) => typeof key === 'string' && key.startsWith('/api/data/'))
     } catch {
       setBuildResult({ ok: false, error: 'Network error' })
     } finally {
@@ -71,7 +77,7 @@ export function BuildProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => () => { if (timerRef.current) clearInterval(timerRef.current) }, [])
 
   return (
-    <BuildContext.Provider value={{ buildLoading, elapsedSeconds, buildResult, clearBuildResult, startBuild }}>
+    <BuildContext.Provider value={{ buildLoading, elapsedSeconds, buildResult, buildVersion, clearBuildResult, startBuild }}>
       {children}
     </BuildContext.Provider>
   )
