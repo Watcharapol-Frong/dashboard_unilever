@@ -16,7 +16,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { CHART_AXIS_CLS, CHART_TOOLTIP_STYLE } from '@/lib/chart-utils'
 import { formatTHB, formatNumber, formatPct, fmtBaht } from '@/lib/formatters'
 import { columns as baseProductColumns } from '../columns'
-import { Package, ShoppingCart, TrendingUp, BarChart2, Filter, UserPlus, Users } from 'lucide-react'
+import { Package, ShoppingCart, TrendingUp, BarChart2, Calendar, UserPlus, Users } from 'lucide-react'
 import { ColumnDef } from '@tanstack/react-table'
 import { DataTableColumnHeader } from '@/components/ui/data-table-column-header'
 
@@ -61,6 +61,7 @@ interface ProductData {
   total_skus: number
   total_orders: number
   avg_order_value: number
+  months: string[]
   options: {
     brands: string[]
     class_names: string[]
@@ -79,6 +80,11 @@ const fetcher = (url: string) =>
     if (!j.ok) throw new Error(j.error ?? 'fetch error')
     return j.data as ProductData
   })
+
+function lastDayOfMonth(isoDate: string) {
+  const [y, m] = isoDate.split('-').map(Number)
+  return new Date(y, m, 0).toISOString().split('T')[0]
+}
 
 // ── New vs Retention columns ──────────────────────────────────────────────────
 
@@ -237,6 +243,12 @@ const brandColumns: ColumnDef<BrandRow>[] = [
 // ── Component ─────────────────────────────────────────────────────────────────
 
 export default function ProductsClient() {
+  // Date range
+  const [rangeFrom,  setRangeFrom]  = useState<string | null>(null)
+  const [rangeTo,    setRangeTo]    = useState<string | null>(null)
+  const [hoverMonth, setHoverMonth] = useState<string | null>(null)
+
+  // Dimension filters
   const [filterBrands,      setFilterBrands]      = useState('all')
   const [filterClass,       setFilterClass]       = useState('all')
   const [filterSeniorBuyer, setFilterSeniorBuyer] = useState('all')
@@ -245,6 +257,23 @@ export default function ProductsClient() {
   const [prodSearch,        setProdSearch]        = useState('')
   const [activeTab,         setActiveTab]         = useState('products')
 
+  const handleChipClick = (m: string) => {
+    if (!rangeFrom || (rangeFrom && rangeTo)) {
+      setRangeFrom(m); setRangeTo(null)
+    } else if (m === rangeFrom) {
+      setRangeFrom(null); setRangeTo(null)
+    } else if (m < rangeFrom) {
+      setRangeFrom(m); setRangeTo(rangeFrom)
+    } else {
+      setRangeTo(m)
+    }
+  }
+
+  const effectiveStart = rangeFrom ?? null
+  const effectiveEnd   = rangeFrom
+    ? lastDayOfMonth(rangeTo ?? rangeFrom)
+    : null
+
   const apiUrl = useMemo(() => {
     const p = new URLSearchParams()
     if (filterBrands      !== 'all') p.set('brands',       filterBrands)
@@ -252,9 +281,11 @@ export default function ProductsClient() {
     if (filterSeniorBuyer !== 'all') p.set('senior_buyer', filterSeniorBuyer)
     if (filterBuyer       !== 'all') p.set('buyer',        filterBuyer)
     if (filterSubclass    !== 'all') p.set('subclass',     filterSubclass)
+    if (effectiveStart) p.set('startDate', effectiveStart)
+    if (effectiveEnd)   p.set('endDate',   effectiveEnd)
     const qs = p.toString()
     return `/api/data/products${qs ? `?${qs}` : ''}`
-  }, [filterBrands, filterClass, filterSeniorBuyer, filterBuyer, filterSubclass])
+  }, [filterBrands, filterClass, filterSeniorBuyer, filterBuyer, filterSubclass, effectiveStart, effectiveEnd])
 
   const { data, isLoading } = useSWR<ProductData>(apiUrl, fetcher, {
     keepPreviousData: true,
@@ -265,10 +296,12 @@ export default function ProductsClient() {
 
   const hasFilter = filterBrands !== 'all' || filterClass !== 'all' ||
     filterSeniorBuyer !== 'all' || filterBuyer !== 'all' || filterSubclass !== 'all'
+  const hasRange  = !!rangeFrom
 
-  const clearFilters = () => {
+  const clearAll = () => {
     setFilterBrands('all'); setFilterClass('all')
     setFilterSeniorBuyer('all'); setFilterBuyer('all'); setFilterSubclass('all')
+    setRangeFrom(null); setRangeTo(null)
   }
 
   const filteredProducts = useMemo(() => {
@@ -287,64 +320,111 @@ export default function ProductsClient() {
     return <PageEmpty message="No product sales data available" hint="Please build mart first." />
   }
 
-  const opts       = data.options
-  const top5       = data.top5_brands
-  const trendData  = data.by_brand_trend
+  const opts      = data.options
+  const top5      = data.top5_brands
+  const trendData = data.by_brand_trend
+  const months    = data.months ?? []
+
+  const activeRangeLabel = (() => {
+    if (!rangeFrom) return 'All available periods'
+    const fromLabel = new Date(rangeFrom).toLocaleDateString('en-GB', { month: 'short', year: 'numeric' })
+    if (!rangeTo) return `Month: ${fromLabel}`
+    const toLabel = new Date(rangeTo).toLocaleDateString('en-GB', { month: 'short', year: 'numeric' })
+    return `${fromLabel} – ${toLabel}`
+  })()
 
   return (
     <div className="space-y-6">
 
-      {/* ── Filters ────────────────────────────────────────────────────────── */}
+      {/* ── Filter & Range Selection ──────────────────────────────────────── */}
       <Card>
         <CardHeader className="pb-3">
           <div className="flex items-center gap-2">
-            <Filter className="h-4 w-4 text-[#003DA6]" />
-            <CardTitle className="text-sm font-medium">Filter by Product</CardTitle>
+            <Calendar className="h-4 w-4 text-[#003DA6]" />
+            <CardTitle className="text-sm font-medium">Filter & Range Selection</CardTitle>
           </div>
         </CardHeader>
         <CardContent>
-          <div className="flex flex-wrap items-center gap-3">
+          <div className="flex flex-wrap items-center gap-4">
+            {/* Month chips */}
+            <div className="flex items-center gap-1.5 flex-wrap">
+              {months.map(m => {
+                const effectiveTo = rangeTo ?? (rangeFrom ? hoverMonth : null)
+                const active   = m === rangeFrom || m === rangeTo
+                const inRange  = !!(rangeFrom && effectiveTo && m > rangeFrom && m < effectiveTo)
+                const preview  = !!(!rangeTo && rangeFrom && hoverMonth && m > rangeFrom && m <= hoverMonth)
+                return (
+                  <button
+                    key={m}
+                    onClick={() => handleChipClick(m)}
+                    onMouseEnter={() => setHoverMonth(m)}
+                    onMouseLeave={() => setHoverMonth(null)}
+                    className={[
+                      'px-3.5 py-1.5 rounded-full text-xs font-semibold transition-all select-none border',
+                      active
+                        ? 'bg-[#003DA6] text-white border-[#003DA6] shadow-sm'
+                        : inRange || preview
+                        ? 'bg-[#003DA6]/10 text-[#003DA6] border-[#003DA6]/20'
+                        : 'bg-background text-muted-foreground border-gray-200 hover:bg-gray-50 hover:text-foreground',
+                    ].join(' ')}
+                  >
+                    {new Date(m).toLocaleDateString('en-GB', { month: 'short', year: '2-digit' })}
+                  </button>
+                )
+              })}
+            </div>
+
+            <div className="w-px h-6 bg-border hidden lg:block" />
+
+            {/* Dimension filters */}
             <Select value={filterBrands} onValueChange={setFilterBrands}>
-              <SelectTrigger className="h-7 text-xs w-[150px]"><SelectValue placeholder="All Brands" /></SelectTrigger>
+              <SelectTrigger className="h-7 text-xs w-[140px]"><SelectValue placeholder="All Brands" /></SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">All Brands</SelectItem>
                 {opts.brands.map(v => <SelectItem key={v} value={v}>{v}</SelectItem>)}
               </SelectContent>
             </Select>
             <Select value={filterSeniorBuyer} onValueChange={setFilterSeniorBuyer}>
-              <SelectTrigger className="h-7 text-xs w-[175px]"><SelectValue placeholder="All Senior Buyers" /></SelectTrigger>
+              <SelectTrigger className="h-7 text-xs w-[165px]"><SelectValue placeholder="All Senior Buyers" /></SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">All Senior Buyers</SelectItem>
                 {opts.senior_buyers.map(v => <SelectItem key={v} value={v}>{v}</SelectItem>)}
               </SelectContent>
             </Select>
             <Select value={filterBuyer} onValueChange={setFilterBuyer}>
-              <SelectTrigger className="h-7 text-xs w-[150px]"><SelectValue placeholder="All Buyers" /></SelectTrigger>
+              <SelectTrigger className="h-7 text-xs w-[140px]"><SelectValue placeholder="All Buyers" /></SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">All Buyers</SelectItem>
                 {opts.buyers.map(v => <SelectItem key={v} value={v}>{v}</SelectItem>)}
               </SelectContent>
             </Select>
             <Select value={filterClass} onValueChange={setFilterClass}>
-              <SelectTrigger className="h-7 text-xs w-[150px]"><SelectValue placeholder="All Classes" /></SelectTrigger>
+              <SelectTrigger className="h-7 text-xs w-[140px]"><SelectValue placeholder="All Classes" /></SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">All Classes</SelectItem>
                 {opts.class_names.map(v => <SelectItem key={v} value={v}>{v}</SelectItem>)}
               </SelectContent>
             </Select>
             <Select value={filterSubclass} onValueChange={setFilterSubclass}>
-              <SelectTrigger className="h-7 text-xs w-[155px]"><SelectValue placeholder="All Subclasses" /></SelectTrigger>
+              <SelectTrigger className="h-7 text-xs w-[145px]"><SelectValue placeholder="All Subclasses" /></SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">All Subclasses</SelectItem>
                 {opts.subclasses.map(v => <SelectItem key={v} value={v}>{v}</SelectItem>)}
               </SelectContent>
             </Select>
-            {hasFilter && (
-              <button onClick={clearFilters} className="text-xs text-[#003DA6] hover:underline font-semibold">
+
+            {(hasFilter || hasRange) && (
+              <button onClick={clearAll} className="text-xs text-[#003DA6] hover:underline font-semibold">
                 Reset All
               </button>
             )}
           </div>
+
+          {rangeFrom && (
+            <p className="text-xs text-muted-foreground mt-3">
+              Selected range: <span className="font-semibold text-foreground">{activeRangeLabel}</span>
+            </p>
+          )}
         </CardContent>
       </Card>
 
@@ -416,7 +496,7 @@ export default function ProductsClient() {
               <TabsTrigger value="brands">By Brand</TabsTrigger>
             </TabsList>
 
-            {/* ── Top SKUs (original) ─────────────────────────────────── */}
+            {/* ── Top SKUs ────────────────────────────────────────────── */}
             <TabsContent value="products" className="pt-2">
               <DataTable
                 columns={baseProductColumns as ColumnDef<ExtProductRow>[]}
@@ -424,45 +504,6 @@ export default function ProductsClient() {
                 searchValue={prodSearch}
                 onSearchChange={setProdSearch}
                 searchPlaceholder="Search product ID or name…"
-                toolbarLeft={
-                  <>
-                    <Select value={filterBrands} onValueChange={setFilterBrands}>
-                      <SelectTrigger className="h-8 text-xs w-[130px]"><SelectValue placeholder="Brand" /></SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="all">All Brands</SelectItem>
-                        {opts.brands.map(v => <SelectItem key={v} value={v}>{v}</SelectItem>)}
-                      </SelectContent>
-                    </Select>
-                    <Select value={filterSeniorBuyer} onValueChange={setFilterSeniorBuyer}>
-                      <SelectTrigger className="h-8 text-xs w-[150px]"><SelectValue placeholder="Senior Buyer" /></SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="all">All Senior Buyers</SelectItem>
-                        {opts.senior_buyers.map(v => <SelectItem key={v} value={v}>{v}</SelectItem>)}
-                      </SelectContent>
-                    </Select>
-                    <Select value={filterBuyer} onValueChange={setFilterBuyer}>
-                      <SelectTrigger className="h-8 text-xs w-[130px]"><SelectValue placeholder="Buyer" /></SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="all">All Buyers</SelectItem>
-                        {opts.buyers.map(v => <SelectItem key={v} value={v}>{v}</SelectItem>)}
-                      </SelectContent>
-                    </Select>
-                    <Select value={filterClass} onValueChange={setFilterClass}>
-                      <SelectTrigger className="h-8 text-xs w-[130px]"><SelectValue placeholder="Class" /></SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="all">All Classes</SelectItem>
-                        {opts.class_names.map(v => <SelectItem key={v} value={v}>{v}</SelectItem>)}
-                      </SelectContent>
-                    </Select>
-                    <Select value={filterSubclass} onValueChange={setFilterSubclass}>
-                      <SelectTrigger className="h-8 text-xs w-[130px]"><SelectValue placeholder="Subclass" /></SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="all">All Subclasses</SelectItem>
-                        {opts.subclasses.map(v => <SelectItem key={v} value={v}>{v}</SelectItem>)}
-                      </SelectContent>
-                    </Select>
-                  </>
-                }
               />
             </TabsContent>
 
