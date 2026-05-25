@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from 'react'
 import {
-  AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, Legend,
+  BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend,
   ResponsiveContainer,
 } from 'recharts'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
@@ -157,12 +157,12 @@ const newVsRetentionColumns: ColumnDef<ExtProductRow>[] = [
       if (seg === 'no_data') return <span className="text-xs text-muted-foreground">—</span>
       if (seg === 'hook_new') return (
         <span className="inline-flex items-center gap-1 text-xs font-semibold text-emerald-600">
-          <UserPlus className="h-3 w-3" /> Hook คนใหม่
+          <UserPlus className="h-3 w-3" /> New Customer Driver
         </span>
       )
       if (seg === 'pull_old') return (
         <span className="inline-flex items-center gap-1 text-xs font-semibold text-teal-600">
-          <Users className="h-3 w-3" /> ดึงคนเก่า
+          <Users className="h-3 w-3" /> Retention Driver
         </span>
       )
       return <span className="text-xs text-muted-foreground font-medium">Mixed</span>
@@ -476,15 +476,7 @@ export default function ProductsClient() {
         </CardHeader>
         <CardContent className="pt-0">
           <ResponsiveContainer width="100%" height={300}>
-            <AreaChart data={trendData} margin={{ top: 10, right: 10, left: 10, bottom: 0 }}>
-              <defs>
-                {top5.map((brand, i) => (
-                  <linearGradient key={brand} id={`grad_${i}`} x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%"  stopColor={BRAND_COLORS[i % BRAND_COLORS.length]} stopOpacity={0.25} />
-                    <stop offset="95%" stopColor={BRAND_COLORS[i % BRAND_COLORS.length]} stopOpacity={0}   />
-                  </linearGradient>
-                ))}
-              </defs>
+            <BarChart data={trendData} margin={{ top: 10, right: 10, left: 10, bottom: 0 }}>
               <CartesianGrid strokeDasharray="3 3" vertical={false} className="stroke-muted" />
               <XAxis dataKey="month_label" tickLine={false} axisLine={false} tickMargin={8} className={CHART_AXIS_CLS} />
               <YAxis tickLine={false} axisLine={false} tickMargin={8} className={CHART_AXIS_CLS}
@@ -496,18 +488,15 @@ export default function ProductsClient() {
               />
               <Legend wrapperStyle={{ fontSize: '11px', paddingTop: '8px' }} />
               {top5.map((brand, i) => (
-                <Area
+                <Bar
                   key={brand}
-                  type="monotone"
                   dataKey={brand}
-                  stroke={BRAND_COLORS[i % BRAND_COLORS.length]}
-                  strokeWidth={2}
-                  fill={`url(#grad_${i})`}
-                  dot={false}
-                  activeDot={{ r: 4 }}
+                  stackId="revenue"
+                  fill={BRAND_COLORS[i % BRAND_COLORS.length]}
+                  radius={i === top5.length - 1 ? [4, 4, 0, 0] : [0, 0, 0, 0]}
                 />
               ))}
-            </AreaChart>
+            </BarChart>
           </ResponsiveContainer>
         </CardContent>
       </Card>
@@ -538,11 +527,11 @@ export default function ProductsClient() {
               <div className="flex items-center gap-4 mb-3 px-1 flex-wrap">
                 <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
                   <UserPlus className="h-3.5 w-3.5 text-emerald-600" />
-                  <span><span className="font-semibold text-emerald-600">Hook คนใหม่</span> — new ≥ 70%</span>
+                  <span><span className="font-semibold text-emerald-600">New Customer Driver</span> — new ≥ 70%</span>
                 </div>
                 <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
                   <Users className="h-3.5 w-3.5 text-teal-600" />
-                  <span><span className="font-semibold text-teal-600">ดึงคนเก่า</span> — retention ≥ 70%</span>
+                  <span><span className="font-semibold text-teal-600">Retention Driver</span> — retention ≥ 70%</span>
                 </div>
                 <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
                   <span className="font-semibold text-muted-foreground">Mixed</span>
@@ -562,8 +551,8 @@ export default function ProductsClient() {
                     </SelectTrigger>
                     <SelectContent>
                       <SelectItem value="all">All Segments</SelectItem>
-                      <SelectItem value="hook_new">Hook คนใหม่</SelectItem>
-                      <SelectItem value="pull_old">ดึงคนเก่า</SelectItem>
+                      <SelectItem value="hook_new">New Customer Driver</SelectItem>
+                      <SelectItem value="pull_old">Retention Driver</SelectItem>
                       <SelectItem value="mixed">Mixed</SelectItem>
                     </SelectContent>
                   </Select>
