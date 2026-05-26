@@ -1,12 +1,12 @@
 import { NextResponse } from 'next/server'
-import { withAdmin } from '@/lib/auth'
+import { withAuth } from '@/lib/auth'
 import { query } from '@/lib/db'
 
 export const dynamic = 'force-dynamic'
 
 // Filter options never change between filter applications — cache for 1 hour
 export async function GET() {
-  return withAdmin(async () => {
+  return withAuth(async () => {
     const [rows, monthsRaw] = await Promise.all([
       query<{
         brands: string | null

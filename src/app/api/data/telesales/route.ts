@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server'
-import { withAdmin } from '@/lib/auth'
+import { withAuth } from '@/lib/auth'
 import { query, queryOne } from '@/lib/db'
 
 export const dynamic = 'force-dynamic'
@@ -58,7 +58,7 @@ function buildFilters(
 }
 
 export async function GET(request: Request) {
-  return withAdmin(async () => {
+  return withAuth(async () => {
     const { searchParams } = new URL(request.url)
     const startDate = searchParams.get('startDate')
     const endDate   = searchParams.get('endDate')
