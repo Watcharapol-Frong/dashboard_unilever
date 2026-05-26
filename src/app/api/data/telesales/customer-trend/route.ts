@@ -10,19 +10,31 @@ export async function GET(request: Request) {
     const rawInterval = searchParams.get('interval') ?? 'monthly'
     const interval: 'daily' | 'weekly' | 'monthly' =
       rawInterval === 'daily' ? 'daily' : rawInterval === 'weekly' ? 'weekly' : 'monthly'
+
     const startDate = searchParams.get('startDate')
-    const endDate = searchParams.get('endDate')
+    const endDate   = searchParams.get('endDate')
+    const channel   = (searchParams.get('channel') || '').split(',').filter(Boolean)
+    const cmg       = (searchParams.get('cmg')     || '').split(',').filter(Boolean)
 
     const conditions: string[] = []
     const params: any[] = []
 
+    // Use month column for month-level date filtering (matches Overview range chips)
     if (startDate) {
       params.push(startDate)
-      conditions.push(`order_date >= $${params.length}::date`)
+      conditions.push(`month >= $${params.length}::date`)
     }
     if (endDate) {
       params.push(endDate)
-      conditions.push(`order_date <= $${params.length}::date`)
+      conditions.push(`month <= $${params.length}::date`)
+    }
+    if (channel.length > 0) {
+      params.push(channel)
+      conditions.push(`channel = ANY($${params.length})`)
+    }
+    if (cmg.length > 0) {
+      params.push(cmg)
+      conditions.push(`dynamic_cmg = ANY($${params.length})`)
     }
 
     const whereClause = conditions.length > 0 ? 'WHERE ' + conditions.join(' AND ') : ''
@@ -82,12 +94,12 @@ export async function GET(request: Request) {
     }>(sql, params)
 
     const data = rows.map(r => ({
-      period: r.period,
-      period_label: r.period_label,
-      new_customer: Number(r.new_customer ?? 0),
-      retention: Number(r.retention ?? 0),
+      period:                    r.period,
+      period_label:              r.period_label,
+      new_customer:              Number(r.new_customer ?? 0),
+      retention:                 Number(r.retention ?? 0),
       first_order_not_converted: Number(r.first_order_not_converted ?? 0),
-      retention_not_converted: Number(r.retention_not_converted ?? 0),
+      retention_not_converted:   Number(r.retention_not_converted ?? 0),
     }))
 
     const res = NextResponse.json({ ok: true, data })
