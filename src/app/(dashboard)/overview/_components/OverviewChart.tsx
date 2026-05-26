@@ -201,23 +201,19 @@ export function OverviewChart({
                 cursor={false}
                 content={props => <SalesTooltip {...props} filterChannel={filterChannel} />}
               />
-              {channelLabel ? (
-                <Bar
-                  yAxisId="sales"
-                  dataKey="hoc_sales"
-                  name={channelLabel}
-                  fill={activeBarColor}
-                  radius={[4, 4, 0, 0]}
-                  barSize={48}
-                />
-              ) : (
-                <>
-                  <Bar yAxisId="sales" dataKey="offline_sales" name="Offline Sales" fill={salesChartConfig.offline_sales.color} stackId="sales" radius={[0, 0, 0, 0]} barSize={48} />
-                  <Bar yAxisId="sales" dataKey="online_sales"  name="Online Sales"  fill={salesChartConfig.online_sales.color}  stackId="sales" radius={[4, 4, 0, 0]} barSize={48} />
-                </>
+              {/* Stacked bars — visible when all channels */}
+              {!channelLabel && (
+                <Bar yAxisId="sales" dataKey="offline_sales" name="Offline Sales" fill="var(--color-offline_sales)" stackId="sales" radius={[0, 0, 0, 0]} barSize={48} />
               )}
-              <Bar yAxisId="sales" dataKey="sales_target" name="Target" fill={salesChartConfig.sales_target.color} radius={[4, 4, 0, 0]} barSize={48} />
-              <Line yAxisId="pct" dataKey="achievement" name="Achievement" type="monotone" stroke={salesChartConfig.achievement.color} strokeWidth={2.5} dot={{ r: 3 }} />
+              {!channelLabel && (
+                <Bar yAxisId="sales" dataKey="online_sales" name="Online Sales" fill="var(--color-online_sales)" stackId="sales" radius={[4, 4, 0, 0]} barSize={48} />
+              )}
+              {/* Single bar — visible when channel is filtered */}
+              {!!channelLabel && (
+                <Bar yAxisId="sales" dataKey="hoc_sales" name={channelLabel} fill={activeBarColor} radius={[4, 4, 0, 0]} barSize={48} />
+              )}
+              <Bar yAxisId="sales" dataKey="sales_target" name="Target" fill="var(--color-sales_target)" radius={[4, 4, 0, 0]} barSize={48} />
+              <Line yAxisId="pct" dataKey="achievement" name="Achievement" type="monotone" stroke="var(--color-achievement)" strokeWidth={2.5} dot={{ r: 3 }} />
             </ComposedChart>
           </ChartContainer>
         </CardContent>
