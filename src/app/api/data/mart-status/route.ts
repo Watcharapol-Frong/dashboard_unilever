@@ -33,7 +33,7 @@ export async function GET() {
           MIN(month)::text                      AS min_month,
           MAX(month)::text                      AS max_month,
           MAX(refreshed_at)::text               AS last_refreshed
-        FROM mart_performance
+        FROM mart_performance_cmg
       `),
     ])
 

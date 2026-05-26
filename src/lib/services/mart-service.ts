@@ -104,13 +104,15 @@ export async function refreshMartChunk(
 }
 
 export async function buildMartPerformance(): Promise<number> {
+  // Drop old single table if it exists (migration cleanup)
   await query(`DROP TABLE IF EXISTS mart_performance`)
+  await query(`DROP TABLE IF EXISTS mart_performance_cmg`)
+  await query(`DROP TABLE IF EXISTS mart_performance_month`)
+
   await query(`
-    CREATE TABLE mart_performance (
+    CREATE TABLE mart_performance_cmg (
       month              DATE NOT NULL,
       dynamic_cmg        TEXT NOT NULL,
-      total_calls        INTEGER,
-      reached            INTEGER,
       ordered            INTEGER,
       new_customers      INTEGER,
       retention          INTEGER,
@@ -120,19 +122,63 @@ export async function buildMartPerformance(): Promise<number> {
       hoc_sales          NUMERIC,
       sales_target       NUMERIC,
       achievement_ratio  NUMERIC,
-      incentive_per_head NUMERIC,
-      total_incentive    NUMERIC,
-      cost_per_agent     NUMERIC,
-      cost_per_supervisor NUMERIC,
-      supervisor_count   INTEGER,
-      agent_count        INTEGER,
-      total_agent_cost   NUMERIC,
-      total_expense      NUMERIC,
-      roi                NUMERIC,
       refreshed_at       TIMESTAMPTZ DEFAULT NOW(),
       PRIMARY KEY (month, dynamic_cmg)
     )
   `)
+
+  await query(`
+    CREATE TABLE mart_performance_month (
+      month               DATE NOT NULL,
+      total_calls         INTEGER,
+      reached             INTEGER,
+      incentive_per_head  NUMERIC,
+      total_incentive     NUMERIC,
+      cost_per_agent      NUMERIC,
+      cost_per_supervisor NUMERIC,
+      supervisor_count    INTEGER,
+      agent_count         INTEGER,
+      total_agent_cost    NUMERIC,
+      total_expense       NUMERIC,
+      roi                 NUMERIC,
+      refreshed_at        TIMESTAMPTZ DEFAULT NOW(),
+      PRIMARY KEY (month)
+    )
+  `)
+
+  // Build mart_performance_cmg — CMG-specific metrics only
+  await query(`
+    WITH telesales_metrics AS (
+      SELECT
+        month, dynamic_cmg,
+        COUNT(DISTINCT mmid) FILTER (WHERE customer_type IN ('new_customer','retention'))         AS ordered,
+        COUNT(DISTINCT mmid) FILTER (WHERE customer_type = 'new_customer')                       AS new_customers,
+        COUNT(DISTINCT mmid) FILTER (WHERE customer_type = 'retention')                          AS retention,
+        COUNT(DISTINCT mmid) FILTER (WHERE customer_type = 'first_order_not_converted')          AS not_conv_new,
+        COUNT(DISTINCT mmid) FILTER (WHERE customer_type = 'retention_not_converted')            AS not_conv_retention,
+        COUNT(DISTINCT order_number) FILTER (WHERE customer_type IN ('new_customer','retention')) AS hoc_orders,
+        COALESCE(SUM(sales_in_vat) FILTER (WHERE customer_type IN ('new_customer','retention')), 0) AS hoc_sales
+      FROM mart_telesales_orders
+      GROUP BY month, dynamic_cmg
+    )
+    INSERT INTO mart_performance_cmg (
+      month, dynamic_cmg, ordered, new_customers, retention,
+      not_conv_new, not_conv_retention, hoc_orders, hoc_sales,
+      sales_target, achievement_ratio
+    )
+    SELECT
+      tm.month, tm.dynamic_cmg,
+      tm.ordered, tm.new_customers, tm.retention,
+      tm.not_conv_new, tm.not_conv_retention,
+      tm.hoc_orders, tm.hoc_sales,
+      COALESCE(tg.sales_target, 0) AS sales_target,
+      CASE WHEN COALESCE(tg.sales_target, 0) > 0
+           THEN tm.hoc_sales / tg.sales_target ELSE 0 END AS achievement_ratio
+    FROM telesales_metrics tm
+    LEFT JOIN targets tg ON tg.month = tm.month AND tg.dynamic_cmg = tm.dynamic_cmg
+  `)
+
+  // Build mart_performance_month — month-level metrics (calls, costs, ROI)
   await query(`
     WITH tier_calls AS (
       SELECT
@@ -146,32 +192,23 @@ export async function buildMartPerformance(): Promise<number> {
       WHERE first_connected_date IS NOT NULL
       GROUP BY 1
     ),
-    telesales_metrics AS (
-      SELECT
-        month, dynamic_cmg,
-        COUNT(DISTINCT mmid) FILTER (WHERE customer_type IN ('new_customer','retention'))                  AS ordered,
-        COUNT(DISTINCT mmid) FILTER (WHERE customer_type = 'new_customer')                                AS new_customers,
-        COUNT(DISTINCT mmid) FILTER (WHERE customer_type = 'retention')                                   AS retention,
-        COUNT(DISTINCT mmid) FILTER (WHERE customer_type = 'first_order_not_converted')                   AS not_conv_new,
-        COUNT(DISTINCT mmid) FILTER (WHERE customer_type = 'retention_not_converted')                     AS not_conv_retention,
-        COUNT(DISTINCT order_number) FILTER (WHERE customer_type IN ('new_customer','retention'))         AS hoc_orders,
-        COALESCE(SUM(sales_in_vat) FILTER (WHERE customer_type IN ('new_customer','retention')), 0)      AS hoc_sales
-      FROM mart_telesales_orders
-      GROUP BY month, dynamic_cmg
+    month_sales AS (
+      SELECT month, SUM(hoc_sales) AS total_hoc_sales
+      FROM mart_performance_cmg
+      GROUP BY month
     ),
     month_achievement AS (
       SELECT
-        tm.month,
+        ms.month,
         CASE WHEN COALESCE(SUM(tg.sales_target), 0) > 0
-             THEN SUM(tm.hoc_sales) / SUM(tg.sales_target)
+             THEN ms.total_hoc_sales / SUM(tg.sales_target)
              ELSE 0 END AS achievement_ratio
-      FROM telesales_metrics tm
-      LEFT JOIN targets tg ON tg.month = tm.month AND tg.dynamic_cmg = tm.dynamic_cmg
-      GROUP BY tm.month
+      FROM month_sales ms
+      LEFT JOIN targets tg ON tg.month = ms.month
+      GROUP BY ms.month, ms.total_hoc_sales
     ),
     month_incentive AS (
       SELECT ma.month,
-        ma.achievement_ratio AS month_achievement_ratio,
         COALESCE(inc.incentive_per_head, 0) AS incentive_per_head
       FROM month_achievement ma
       LEFT JOIN LATERAL (
@@ -182,95 +219,50 @@ export async function buildMartPerformance(): Promise<number> {
     ),
     month_roi AS (
       SELECT
-        tm.month,
+        ms.month,
         ROUND(
-          SUM(tm.hoc_sales) / NULLIF(
-            COALESCE(ah.agent_count, 0) * COALESCE(mi.incentive_per_head, 0)
+          ms.total_hoc_sales / NULLIF(
+            COALESCE(ah.agent_count, 0)      * COALESCE(mi.incentive_per_head, 0)
             + COALESCE(ah.supervisor_count, 0) * COALESCE(co.cost_per_supervisor, 0)
             + COALESCE(ah.agent_count, 0)      * COALESCE(co.cost_per_agent, 0)
           , 0), 2
         ) AS roi
-      FROM telesales_metrics tm
-      LEFT JOIN month_incentive  mi ON mi.month = tm.month
-      LEFT JOIN costs            co ON co.month = tm.month
-      LEFT JOIN agent_headcount  ah ON ah.month = tm.month
-      GROUP BY tm.month, mi.incentive_per_head, ah.agent_count, ah.supervisor_count,
-               co.cost_per_supervisor, co.cost_per_agent
-    ),
-    base AS (
-      SELECT
-        tm.month, tm.dynamic_cmg,
-        COALESCE(tc.total_calls, 0) AS total_calls,
-        COALESCE(tc.reached,     0) AS reached,
-        tm.ordered, tm.new_customers, tm.retention,
-        tm.not_conv_new, tm.not_conv_retention,
-        tm.hoc_orders, tm.hoc_sales,
-        COALESCE(tg.sales_target, 0) AS sales_target,
-        CASE WHEN COALESCE(tg.sales_target, 0) > 0
-             THEN tm.hoc_sales / tg.sales_target ELSE 0 END AS achievement_ratio,
-        mi.incentive_per_head,
-        mi.month_achievement_ratio,
-        mr.roi AS month_roi
-      FROM telesales_metrics tm
-      LEFT JOIN tier_calls tc      ON tc.month = tm.month
-      LEFT JOIN targets tg         ON tg.month = tm.month AND tg.dynamic_cmg = tm.dynamic_cmg
-      LEFT JOIN month_incentive mi ON mi.month = tm.month
-      LEFT JOIN month_roi       mr ON mr.month = tm.month
+      FROM month_sales ms
+      LEFT JOIN month_incentive mi ON mi.month = ms.month
+      LEFT JOIN costs           co ON co.month = ms.month
+      LEFT JOIN agent_headcount ah ON ah.month = ms.month
     )
-    INSERT INTO mart_performance (
-      month, dynamic_cmg, total_calls, reached, ordered,
-      new_customers, retention, not_conv_new, not_conv_retention, hoc_orders, hoc_sales,
-      sales_target, achievement_ratio,
+    INSERT INTO mart_performance_month (
+      month, total_calls, reached,
       incentive_per_head, total_incentive,
-      cost_per_agent, cost_per_supervisor, supervisor_count, agent_count,
+      cost_per_agent, cost_per_supervisor,
+      supervisor_count, agent_count,
       total_agent_cost, total_expense, roi
     )
     SELECT
-      b.month, b.dynamic_cmg,
-      b.total_calls, b.reached,
-      b.ordered, b.new_customers, b.retention,
-      b.not_conv_new, b.not_conv_retention,
-      b.hoc_orders, b.hoc_sales,
-      b.sales_target, b.achievement_ratio,
-      b.incentive_per_head,
-      COALESCE(ah.agent_count, 0) * b.incentive_per_head                                        AS total_incentive,
+      tc.month,
+      tc.total_calls,
+      tc.reached,
+      COALESCE(mi.incentive_per_head, 0),
+      COALESCE(ah.agent_count, 0) * COALESCE(mi.incentive_per_head, 0)          AS total_incentive,
       co.cost_per_agent,
       co.cost_per_supervisor,
       ah.supervisor_count,
       ah.agent_count,
       COALESCE(ah.supervisor_count, 0) * COALESCE(co.cost_per_supervisor, 0)
-        + COALESCE(ah.agent_count, 0)   * COALESCE(co.cost_per_agent, 0)                        AS total_agent_cost,
-      COALESCE(ah.agent_count, 0) * b.incentive_per_head
+        + COALESCE(ah.agent_count, 0)   * COALESCE(co.cost_per_agent, 0)        AS total_agent_cost,
+      COALESCE(ah.agent_count, 0)      * COALESCE(mi.incentive_per_head, 0)
         + COALESCE(ah.supervisor_count, 0) * COALESCE(co.cost_per_supervisor, 0)
-        + COALESCE(ah.agent_count, 0)      * COALESCE(co.cost_per_agent, 0)                     AS total_expense,
-      b.month_roi                                                                                 AS roi
-    FROM base b
-    LEFT JOIN costs co           ON co.month = b.month
-    LEFT JOIN agent_headcount ah ON ah.month = b.month
-    ON CONFLICT (month, dynamic_cmg) DO UPDATE SET
-      total_calls         = EXCLUDED.total_calls,
-      reached             = EXCLUDED.reached,
-      ordered             = EXCLUDED.ordered,
-      new_customers       = EXCLUDED.new_customers,
-      retention           = EXCLUDED.retention,
-      not_conv_new        = EXCLUDED.not_conv_new,
-      not_conv_retention  = EXCLUDED.not_conv_retention,
-      hoc_orders          = EXCLUDED.hoc_orders,
-      hoc_sales           = EXCLUDED.hoc_sales,
-      sales_target        = EXCLUDED.sales_target,
-      achievement_ratio   = EXCLUDED.achievement_ratio,
-      incentive_per_head  = EXCLUDED.incentive_per_head,
-      total_incentive     = EXCLUDED.total_incentive,
-      cost_per_agent      = EXCLUDED.cost_per_agent,
-      cost_per_supervisor = EXCLUDED.cost_per_supervisor,
-      supervisor_count    = EXCLUDED.supervisor_count,
-      agent_count         = EXCLUDED.agent_count,
-      total_agent_cost    = EXCLUDED.total_agent_cost,
-      total_expense       = EXCLUDED.total_expense,
-      roi                 = EXCLUDED.roi,
-      refreshed_at        = NOW()
+        + COALESCE(ah.agent_count, 0)      * COALESCE(co.cost_per_agent, 0)     AS total_expense,
+      mr.roi
+    FROM tier_calls tc
+    LEFT JOIN month_incentive mi ON mi.month = tc.month
+    LEFT JOIN costs           co ON co.month = tc.month
+    LEFT JOIN agent_headcount ah ON ah.month = tc.month
+    LEFT JOIN month_roi       mr ON mr.month = tc.month
   `)
-  const row = await queryOne<{ cnt: string }>(`SELECT COUNT(*) AS cnt FROM mart_performance`)
+
+  const row = await queryOne<{ cnt: string }>(`SELECT COUNT(*) AS cnt FROM mart_performance_cmg`)
   return Number(row?.cnt ?? 0)
 }
 

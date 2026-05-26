@@ -38,9 +38,8 @@ export async function GET() {
     `)
 
     // 3. Monthly Incentives & Performance Expenses
-    // total_incentive / total_agent_cost / total_expense / roi / incentive_per_head are month-level
-    // values stored identically across every dynamic_cmg row → use MAX() not SUM().
-    // hoc_sales / sales_target ARE CMG-specific → SUM() is correct.
+    // mart_performance_month has one row per month (no duplication)
+    // mart_performance_cmg has CMG-specific sales/target — SUM to get month totals
     const monthlySummary = await query<{
       month: string
       total_incentive: string
@@ -53,20 +52,21 @@ export async function GET() {
       incentive_per_head: string
     }>(`
       SELECT
-        month::text,
-        MAX(total_incentive)::text   AS total_incentive,
-        MAX(total_agent_cost)::text  AS total_agent_cost,
-        MAX(total_expense)::text     AS total_expense,
-        MAX(roi)::text               AS roi,
-        (CASE WHEN SUM(sales_target) > 0
-              THEN SUM(hoc_sales) / SUM(sales_target)
-              ELSE 0 END)::text      AS achievement_ratio,
-        SUM(hoc_sales)::text         AS hoc_sales,
-        SUM(sales_target)::text      AS sales_target,
-        MAX(incentive_per_head)::text AS incentive_per_head
-      FROM mart_performance
-      GROUP BY month
-      ORDER BY month DESC
+        m.month::text,
+        m.total_incentive::text                                                        AS total_incentive,
+        m.total_agent_cost::text                                                       AS total_agent_cost,
+        m.total_expense::text                                                          AS total_expense,
+        m.roi::text                                                                    AS roi,
+        (CASE WHEN SUM(c.sales_target) > 0
+              THEN SUM(c.hoc_sales) / SUM(c.sales_target)
+              ELSE 0 END)::text                                                         AS achievement_ratio,
+        SUM(c.hoc_sales)::text                                                         AS hoc_sales,
+        SUM(c.sales_target)::text                                                      AS sales_target,
+        m.incentive_per_head::text                                                     AS incentive_per_head
+      FROM mart_performance_month m
+      LEFT JOIN mart_performance_cmg c ON c.month = m.month
+      GROUP BY m.month, m.total_incentive, m.total_agent_cost, m.total_expense, m.roi, m.incentive_per_head
+      ORDER BY m.month DESC
     `)
 
     const data = {
