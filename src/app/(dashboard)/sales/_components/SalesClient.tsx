@@ -7,6 +7,7 @@ import {
 } from 'recharts'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import { MultiSelect } from '@/components/dashboard/MultiSelect'
 import { KpiCard } from '@/components/dashboard/KpiCard'
 import { KpiGrid } from '@/components/dashboard/KpiGrid'
 import { DataTable } from '@/components/ui/data-table'
@@ -38,7 +39,6 @@ interface SalesData {
 }
 
 type Interval   = 'monthly' | 'weekly' | 'custom'
-type Channel    = 'all' | 'online' | 'offline'
 type Conversion = 'all' | 'converted' | 'not_converted'
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -62,9 +62,9 @@ export default function SalesClient() {
   const [customEnd,   setCustomEnd]   = useState('2026-05-31')
 
   // Dimension filters
-  const [channel,    setChannel]    = useState<Channel>('all')
-  const [cmg,        setCmg]        = useState('all')
-  const [agent,      setAgent]      = useState('all')
+  const [channel,    setChannel]    = useState<string[]>([])
+  const [cmg,        setCmg]        = useState<string[]>([])
+  const [agent,      setAgent]      = useState<string[]>([])
   const [conversion, setConversion] = useState<Conversion>('all')
 
   // Chip click — same logic as Overview
@@ -114,9 +114,9 @@ export default function SalesClient() {
 
   const apiUrl = useMemo(() => {
     const p = new URLSearchParams({ interval: calculatedInterval })
-    if (channel    !== 'all') p.set('channel',    channel)
-    if (cmg        !== 'all') p.set('cmg',        cmg)
-    if (agent      !== 'all') p.set('agent',      agent)
+    if (channel.length > 0) p.set('channel', channel.join(','))
+    if (cmg.length > 0)     p.set('cmg',     cmg.join(','))
+    if (agent.length > 0)   p.set('agent',   agent.join(','))
     if (conversion !== 'all') p.set('conversion', conversion)
     if (effectiveStart) p.set('startDate', effectiveStart)
     if (effectiveEnd)   p.set('endDate',   effectiveEnd)
@@ -134,7 +134,7 @@ export default function SalesClient() {
 
   const onlinePct  = kpi.total_sales > 0 ? (kpi.online_sales  / kpi.total_sales) * 100 : 0
   const offlinePct = kpi.total_sales > 0 ? (kpi.offline_sales / kpi.total_sales) * 100 : 0
-  const hasFilter  = channel !== 'all' || cmg !== 'all' || agent !== 'all' || conversion !== 'all'
+  const hasFilter  = channel.length > 0 || cmg.length > 0 || agent.length > 0 || conversion !== 'all'
   const hasRange   = !!(rangeFrom || (interval === 'custom' && (customStart !== '2026-05-01' || customEnd !== '2026-05-31')))
 
   const activeRangeLabel = (() => {
@@ -222,30 +222,32 @@ export default function SalesClient() {
 
             {/* Row 2: Dropdown Filters */}
             <div className="flex flex-wrap items-center gap-4">
-              <Select value={channel} onValueChange={v => setChannel(v as Channel)}>
-                <SelectTrigger className="h-7 text-xs w-[130px]"><SelectValue placeholder="All Channels" /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">All Channels</SelectItem>
-                  <SelectItem value="online">Online</SelectItem>
-                  <SelectItem value="offline">Offline</SelectItem>
-                </SelectContent>
-              </Select>
+              <MultiSelect
+                label="All Channels"
+                value={channel}
+                onChange={setChannel}
+                options={[
+                  { value: 'online', label: 'Online' },
+                  { value: 'offline', label: 'Offline' },
+                ]}
+                width="w-[130px]"
+              />
 
-              <Select value={cmg} onValueChange={setCmg}>
-                <SelectTrigger className="h-7 text-xs w-[150px]"><SelectValue placeholder="All CMG" /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">All CMG</SelectItem>
-                  {options.cmg.map(v => <SelectItem key={v} value={v}>{v}</SelectItem>)}
-                </SelectContent>
-              </Select>
+              <MultiSelect
+                label="All CMG"
+                value={cmg}
+                onChange={setCmg}
+                options={options.cmg.map(v => ({ value: v, label: v }))}
+                width="w-[150px]"
+              />
 
-              <Select value={agent} onValueChange={setAgent}>
-                <SelectTrigger className="h-7 text-xs w-[150px]"><SelectValue placeholder="All Agents" /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">All Agents</SelectItem>
-                  {options.agents.map(v => <SelectItem key={v} value={v}>{v}</SelectItem>)}
-                </SelectContent>
-              </Select>
+              <MultiSelect
+                label="All Agents"
+                value={agent}
+                onChange={setAgent}
+                options={options.agents.map(v => ({ value: v, label: v }))}
+                width="w-[150px]"
+              />
 
               <Select value={conversion} onValueChange={v => setConversion(v as Conversion)}>
                 <SelectTrigger className="h-7 text-xs w-[155px]"><SelectValue placeholder="All Customers" /></SelectTrigger>
@@ -259,7 +261,7 @@ export default function SalesClient() {
               {(hasFilter || hasRange) && (
                 <button
                   onClick={() => {
-                    setChannel('all'); setCmg('all'); setAgent('all'); setConversion('all')
+                    setChannel([]); setCmg([]); setAgent([]); setConversion('all')
                     setRangeFrom(null); setRangeTo(null); setInterval('custom')
                     setCustomStart('2026-05-01'); setCustomEnd('2026-05-31')
                   }}

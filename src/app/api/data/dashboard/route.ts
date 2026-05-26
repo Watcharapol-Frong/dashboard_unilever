@@ -127,7 +127,7 @@ export async function GET() {
   }
 
   const res = NextResponse.json({ status, history: batches })
-  res.headers.set('Cache-Control', 'public, s-maxage=30, stale-while-revalidate=60')
+  res.headers.set('Cache-Control', 'public, s-maxage=120, stale-while-revalidate=300')
   return res
   } catch (err) {
     console.error('[dashboard]', err)

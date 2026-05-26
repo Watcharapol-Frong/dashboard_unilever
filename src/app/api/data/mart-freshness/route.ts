@@ -18,9 +18,11 @@ export async function GET() {
     FROM mart_telesales_orders
   `)
 
-  return NextResponse.json({
+  const res = NextResponse.json({
     ok: true,
     max_date:       row?.max_date       ?? null,
     last_refreshed: row?.last_refreshed ?? null,
   })
+  res.headers.set('Cache-Control', 'public, s-maxage=60, stale-while-revalidate=120')
+  return res
 }

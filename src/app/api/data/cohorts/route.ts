@@ -124,6 +124,8 @@ export async function GET(request: Request) {
       churn_customers: Number(r.churn_customers ?? 0),
     }))
 
-    return NextResponse.json({ ok: true, data })
+    const res = NextResponse.json({ ok: true, data })
+    res.headers.set('Cache-Control', 'public, s-maxage=300, stale-while-revalidate=600')
+    return res
   })
 }

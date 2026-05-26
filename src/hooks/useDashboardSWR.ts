@@ -1,4 +1,4 @@
-import useSWR from 'swr'
+import useSWR, { SWRConfiguration } from 'swr'
 import { useBuild } from '@/context/BuildContext'
 
 const fetcher = async (url: string) => {
@@ -8,12 +8,13 @@ const fetcher = async (url: string) => {
   return json.data
 }
 
-export function useDashboardSWR<T>(url: string) {
+export function useDashboardSWR<T>(url: string, overrides?: SWRConfiguration<T>) {
   const { buildVersion } = useBuild()
   return useSWR<T>([url, buildVersion], ([u]: [string]) => fetcher(u), {
     keepPreviousData: true,
     revalidateOnFocus: false,
     revalidateOnReconnect: false,
     dedupingInterval: 300_000,
+    ...overrides,
   })
 }

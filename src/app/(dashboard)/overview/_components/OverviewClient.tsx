@@ -7,6 +7,7 @@ import { Skeleton } from '@/components/ui/skeleton'
 import { KpiCard } from '@/components/dashboard/KpiCard'
 import { KpiGrid } from '@/components/dashboard/KpiGrid'
 import { FilterSelect } from '@/components/dashboard/FilterSelect'
+import { MultiSelect } from '@/components/dashboard/MultiSelect'
 import { PageLoading, PageEmpty } from '@/components/dashboard/PageState'
 
 import { useDashboardSWR } from '@/hooks/useDashboardSWR'
@@ -71,7 +72,7 @@ export default function OverviewClient() {
   const [rangeFrom,  setRangeFrom]  = useState<string | null>(null)
   const [rangeTo,    setRangeTo]    = useState<string | null>(null)
   const [hoverMonth, setHoverMonth] = useState<string | null>(null)
-  const [filterCmg,  setFilterCmg]  = useState('all')
+  const [filterCmg,  setFilterCmg]  = useState<string[]>([])
   const [filterChannel, setFilterChannel] = useState('all')
 
   const handleChipClick = (m: string) => {
@@ -89,7 +90,7 @@ export default function OverviewClient() {
   const filtered = useMemo(() => {
     const effectiveTo = rangeTo ?? (rangeFrom ? hoverMonth : null)
     return rows.filter(r => {
-      if (filterCmg !== 'all' && r.dynamic_cmg !== filterCmg) return false
+      if (filterCmg.length > 0 && !filterCmg.includes(r.dynamic_cmg)) return false
       if (rangeFrom) {
         if (!effectiveTo) return r.month === rangeFrom
         if (r.month < rangeFrom || r.month > effectiveTo) return false
@@ -189,7 +190,7 @@ export default function OverviewClient() {
 
             <div className="w-px h-6 bg-border hidden lg:block" />
 
-            <FilterSelect
+            <MultiSelect
               label="Customer Segmentation"
               value={filterCmg}
               onChange={setFilterCmg}
@@ -208,9 +209,9 @@ export default function OverviewClient() {
               width="w-full sm:w-48"
             />
 
-            {(rangeFrom || filterCmg !== 'all' || filterChannel !== 'all') && (
+            {(rangeFrom || filterCmg.length > 0 || filterChannel !== 'all') && (
               <button
-                onClick={() => { setRangeFrom(null); setRangeTo(null); setFilterCmg('all'); setFilterChannel('all') }}
+                onClick={() => { setRangeFrom(null); setRangeTo(null); setFilterCmg([]); setFilterChannel('all') }}
                 className="text-xs text-[#003DA6] hover:underline font-semibold"
               >
                 Reset Filters

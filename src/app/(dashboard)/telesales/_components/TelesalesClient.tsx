@@ -6,7 +6,7 @@ import {
   BarChart, Bar, Legend
 } from 'recharts'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import { MultiSelect } from '@/components/dashboard/MultiSelect'
 import { KpiCard } from '@/components/dashboard/KpiCard'
 import { KpiGrid } from '@/components/dashboard/KpiGrid'
 import { ChartCard } from '@/components/dashboard/ChartCard'
@@ -143,9 +143,9 @@ export default function TelesalesClient() {
   const [customEnd,   setCustomEnd]   = useState('2026-05-31')
 
   // Dimension filters
-  const [channel,     setChannel]     = useState<string>('all')
-  const [cmg,         setCmg]         = useState<string>('all')
-  const [agent,       setAgent]       = useState<string>('all')
+  const [channel,     setChannel]     = useState<string[]>([])
+  const [cmg,         setCmg]         = useState<string[]>([])
+  const [agent,       setAgent]       = useState<string[]>([])
 
   // Chip click handler
   const handleChipClick = (m: string) => {
@@ -176,9 +176,9 @@ export default function TelesalesClient() {
     const p = new URLSearchParams()
     if (effectiveStart) p.set('startDate', effectiveStart)
     if (effectiveEnd)   p.set('endDate',   effectiveEnd)
-    if (channel !== 'all') p.set('channel', channel)
-    if (cmg !== 'all')     p.set('cmg', cmg)
-    if (agent !== 'all')   p.set('agent', agent)
+    if (channel.length > 0) p.set('channel', channel.join(','))
+    if (cmg.length > 0)     p.set('cmg', cmg.join(','))
+    if (agent.length > 0)   p.set('agent', agent.join(','))
     return `/api/data/telesales?${p.toString()}`
   }, [effectiveStart, effectiveEnd, channel, cmg, agent])
 
@@ -274,7 +274,7 @@ export default function TelesalesClient() {
   const reachRate = data.summary.total_calls > 0 ? data.summary.reached / data.summary.total_calls : 0
   const conversionRate = data.summary.reached > 0 ? data.summary.total_converted / data.summary.reached : 0
 
-  const hasFilter = channel !== 'all' || cmg !== 'all' || agent !== 'all'
+  const hasFilter = channel.length > 0 || cmg.length > 0 || agent.length > 0
   const hasRange = !!(rangeFrom || (interval === 'custom' && (customStart !== '2026-05-01' || customEnd !== '2026-05-31')))
 
   return (
@@ -347,37 +347,39 @@ export default function TelesalesClient() {
 
             {/* Row 2: Dropdown Filters */}
             <div className="flex flex-wrap items-center gap-4">
-              <Select value={channel} onValueChange={setChannel}>
-                <SelectTrigger className="h-7 text-xs w-[130px]"><SelectValue placeholder="All Channels" /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">All Channels</SelectItem>
-                  <SelectItem value="online">Online</SelectItem>
-                  <SelectItem value="offline">Offline</SelectItem>
-                </SelectContent>
-              </Select>
+              <MultiSelect
+                label="All Channels"
+                value={channel}
+                onChange={setChannel}
+                options={[
+                  { value: 'online', label: 'Online' },
+                  { value: 'offline', label: 'Offline' },
+                ]}
+                width="w-[130px]"
+              />
 
-              <Select value={cmg} onValueChange={setCmg}>
-                <SelectTrigger className="h-7 text-xs w-[150px]"><SelectValue placeholder="All CMG" /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">All CMG</SelectItem>
-                  {(data?.options?.cmg || []).map(v => <SelectItem key={v} value={v}>{v}</SelectItem>)}
-                </SelectContent>
-              </Select>
+              <MultiSelect
+                label="All CMG"
+                value={cmg}
+                onChange={setCmg}
+                options={(data?.options?.cmg || []).map(v => ({ value: v, label: v }))}
+                width="w-[150px]"
+              />
 
-              <Select value={agent} onValueChange={setAgent}>
-                <SelectTrigger className="h-7 text-xs w-[150px]"><SelectValue placeholder="All Agents" /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">All Agents</SelectItem>
-                  {(data?.options?.agents || []).map(v => <SelectItem key={v} value={v}>{v}</SelectItem>)}
-                </SelectContent>
-              </Select>
+              <MultiSelect
+                label="All Agents"
+                value={agent}
+                onChange={setAgent}
+                options={(data?.options?.agents || []).map(v => ({ value: v, label: v }))}
+                width="w-[150px]"
+              />
 
               {(hasFilter || hasRange) && (
                 <button
                   onClick={() => {
-                    setChannel('all')
-                    setCmg('all')
-                    setAgent('all')
+                    setChannel([])
+                    setCmg([])
+                    setAgent([])
                     setRangeFrom(null)
                     setRangeTo(null)
                     setInterval('monthly')

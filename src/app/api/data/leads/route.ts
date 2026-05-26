@@ -12,22 +12,22 @@ export async function GET(req: NextRequest) {
     const page    = Math.max(1, Number(sp.get('page')  ?? 1))
     const limit   = Math.min(PAGE_SIZE, Math.max(1, Number(sp.get('limit') ?? PAGE_SIZE)))
     const search  = sp.get('search')?.trim()  || null
-    const tier    = sp.get('tier')            || null
-    const contact = sp.get('contact')         || null
-    const conv    = sp.get('conv')            || null
-    const cmg     = sp.get('cmg')             || null
-    const agent   = sp.get('agent')           || null
+    const tier    = (sp.get('tier')    || '').split(',').filter(Boolean)
+    const contact = (sp.get('contact') || '').split(',').filter(Boolean)
+    const conv    = (sp.get('conv')    || '').split(',').filter(Boolean)
+    const cmg     = (sp.get('cmg')     || '').split(',').filter(Boolean)
+    const agent   = (sp.get('agent')   || '').split(',').filter(Boolean)
 
     const offset = (page - 1) * limit
 
-    const params: (string | number | null)[] = []
+    const params: (string | number | string[] | null)[] = []
     const conditions: string[] = []
 
-    if (tier)    { params.push(tier);    conditions.push(`l.lead_customers = $${params.length}`) }
-    if (contact) { params.push(contact); conditions.push(`COALESCE(cs.contact_status,'not_called') = $${params.length}`) }
-    if (conv)    { params.push(conv);    conditions.push(`CASE WHEN os.is_converted THEN 'converted' WHEN os.mmid IS NOT NULL THEN 'not_converted' ELSE 'no_hoc_order' END = $${params.length}`) }
-    if (cmg)     { params.push(cmg);     conditions.push(`os.dynamic_cmg = $${params.length}`) }
-    if (agent)   { params.push(agent);   conditions.push(`cs.agent = $${params.length}`) }
+    if (tier.length > 0)    { params.push(tier);    conditions.push(`l.lead_customers = ANY($${params.length})`) }
+    if (contact.length > 0) { params.push(contact); conditions.push(`COALESCE(cs.contact_status,'not_called') = ANY($${params.length})`) }
+    if (conv.length > 0)    { params.push(conv);    conditions.push(`CASE WHEN os.is_converted THEN 'converted' WHEN os.mmid IS NOT NULL THEN 'not_converted' ELSE 'no_hoc_order' END = ANY($${params.length})`) }
+    if (cmg.length > 0)     { params.push(cmg);     conditions.push(`os.dynamic_cmg = ANY($${params.length})`) }
+    if (agent.length > 0)   { params.push(agent);   conditions.push(`cs.agent = ANY($${params.length})`) }
     if (search)  { params.push(`%${search}%`); conditions.push(`(l.mmid ILIKE $${params.length} OR COALESCE(l.cust_name,'') ILIKE $${params.length})`) }
 
     const whereClause = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : ''
