@@ -49,7 +49,7 @@ export async function GET(request: Request) {
         SELECT DISTINCT
           mmid,
           DATE_TRUNC('${truncUnit}', order_date)::date AS period
-        FROM mart_telesales_orders
+        FROM sales_hoc_orders
         ${whereClause}
       ),
       customer_stats AS (

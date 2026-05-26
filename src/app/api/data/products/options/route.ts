@@ -15,13 +15,13 @@ export async function GET() {
         buyer_name: string | null
         subclass: string | null
       }>(`
-        SELECT DISTINCT brands, class_name, senior_buyer_name, buyer_name, subclass
-        FROM products
-        WHERE prod_num IN (SELECT DISTINCT prod_num FROM mart_telesales_orders)
-        ORDER BY brands, class_name
+        SELECT DISTINCT m.brands, m.class_name, p.senior_buyer_name, p.buyer_name, m.subclass
+        FROM sales_hoc_orders m
+        LEFT JOIN products p ON m.prod_num = p.prod_num
+        ORDER BY m.brands, m.class_name
       `),
       query<{ month: string }>(`
-        SELECT DISTINCT month::text AS month FROM mart_telesales_orders ORDER BY month
+        SELECT DISTINCT month::text AS month FROM sales_hoc_orders ORDER BY month
       `),
     ])
 

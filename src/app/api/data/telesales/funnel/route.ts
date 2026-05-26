@@ -40,7 +40,7 @@ export async function GET(request: Request) {
         subConditions.push(`dynamic_cmg = ANY($${params.length})`)
       }
       conditions.push(`mmid IN (
-        SELECT DISTINCT mmid FROM mart_telesales_orders
+        SELECT DISTINCT mmid FROM sales_hoc_orders
         WHERE ${subConditions.join(' AND ')}
       )`)
     }
@@ -96,7 +96,7 @@ export async function GET(request: Request) {
           BOOL_OR(customer_type = 'retention')                AS is_repeat,
           BOOL_OR(customer_type = 'first_order_not_converted') AS is_not_conv_new,
           BOOL_OR(customer_type = 'retention_not_converted')   AS is_not_conv_ret
-        FROM mart_telesales_orders
+        FROM sales_hoc_orders
         WHERE customer_type IN ('new_customer', 'retention', 'first_order_not_converted', 'retention_not_converted')
           ${orderExtra}
         GROUP BY mmid

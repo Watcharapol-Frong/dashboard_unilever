@@ -137,12 +137,12 @@ export async function GET() {
     const [months, cmgs] = await Promise.all([
       query<{ month: string }>(`
         SELECT DISTINCT month::text AS month
-        FROM mart_telesales_orders
+        FROM sales_hoc_orders
         ORDER BY month
       `),
       query<{ cmg: string }>(`
         SELECT DISTINCT COALESCE(dynamic_cmg,'Unknown') AS cmg
-        FROM mart_telesales_orders
+        FROM sales_hoc_orders
         ORDER BY cmg
       `),
     ])
@@ -237,7 +237,7 @@ export async function POST(req: NextRequest) {
 
     const baseSQL = `
       SELECT ${selectSQL}
-      FROM mart_telesales_orders mto
+      FROM sales_hoc_orders mto
       ${leadsJoin}
       ${whereSQL}
       ${groupBySQL}

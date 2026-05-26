@@ -1,26 +1,14 @@
 import { NextResponse } from 'next/server'
 import { withAdmin } from '@/lib/auth'
-import { refreshMartChunk } from '@/lib/services/mart-service'
 
 export const dynamic = 'force-dynamic'
 
-export async function POST(request: Request) {
+export async function POST() {
   return withAdmin(async () => {
-    const body = await request.json().catch(() => ({}))
-    const offset            = Number(body.offset ?? 0)
-    const limit             = Math.min(5000, Math.max(1, Number(body.limit ?? 2000)))
-    const attributionDays   = Number(body.attribution_days ?? 14)
-    const truncate          = Boolean(body.truncate ?? false)
-    const precomputedTotal  = body.total !== undefined && body.total !== null
-      ? Number(body.total)
-      : undefined
-
-    try {
-      const result = await refreshMartChunk(offset, limit, attributionDays, truncate, precomputedTotal)
-      return NextResponse.json({ ok: true, ...result })
-    } catch (err) {
-      console.error('[refresh-mart/chunk]', err)
-      return NextResponse.json({ error: (err as Error).message }, { status: 500 })
-    }
+    // Chunked mart build is no longer supported — use the main refresh endpoint instead.
+    return NextResponse.json(
+      { error: 'Chunked build removed. Use POST /api/data/refresh-mart instead.' },
+      { status: 410 }
+    )
   })
 }

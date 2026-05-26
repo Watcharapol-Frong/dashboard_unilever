@@ -44,7 +44,7 @@ export async function GET() {
           COUNT(DISTINCT mmid) FILTER (WHERE channel = 'offline' AND customer_type = 'new_customer')        AS offline_new_customers,
           COUNT(DISTINCT mmid) FILTER (WHERE channel = 'online'  AND customer_type = 'retention')           AS online_retention,
           COUNT(DISTINCT mmid) FILTER (WHERE channel = 'offline' AND customer_type = 'retention')           AS offline_retention
-        FROM mart_telesales_orders
+        FROM sales_hoc_orders
         GROUP BY month, dynamic_cmg
       )
       SELECT

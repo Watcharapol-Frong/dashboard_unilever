@@ -30,7 +30,7 @@ export async function GET() {
           SELECT mmid,
             COUNT(DISTINCT order_number) FILTER (WHERE customer_type IN ('new_customer','retention')) AS hoc_orders,
             BOOL_OR(customer_type IN ('new_customer','retention')) AS is_converted
-          FROM mart_telesales_orders
+          FROM sales_hoc_orders
           GROUP BY mmid
         )
         SELECT
@@ -48,7 +48,7 @@ export async function GET() {
       ),
 
       query<{ dynamic_cmg: string }>(
-        `SELECT DISTINCT dynamic_cmg FROM mart_telesales_orders WHERE dynamic_cmg IS NOT NULL ORDER BY dynamic_cmg`
+        `SELECT DISTINCT dynamic_cmg FROM sales_hoc_orders WHERE dynamic_cmg IS NOT NULL ORDER BY dynamic_cmg`
       ),
 
       query<{ agent: string }>(

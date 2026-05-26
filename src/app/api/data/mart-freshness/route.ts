@@ -15,7 +15,7 @@ export async function GET() {
     SELECT
       MAX(order_date)::text    AS max_date,
       MAX(refreshed_at)::text  AS last_refreshed
-    FROM mart_telesales_orders
+    FROM sales_hoc_orders
   `)
 
   const res = NextResponse.json({

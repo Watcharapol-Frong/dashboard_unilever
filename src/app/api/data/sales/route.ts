@@ -55,7 +55,7 @@ async function fetchKpis(where: string, params: any[]) {
       COUNT(DISTINCT mmid) FILTER (WHERE customer_type='new_customer')::text                     AS new_customers,
       COUNT(DISTINCT mmid) FILTER (WHERE customer_type='retention')::text                        AS retention_customers,
       COALESCE(SUM(sales_qty), 0)::text                                                          AS total_qty
-    FROM mart_telesales_orders
+    FROM sales_hoc_orders
     ${where}
   `, params)
 }
@@ -73,7 +73,7 @@ async function fetchLastTwoPeriods(interval: Interval, where: string, params: an
       COUNT(DISTINCT order_number)::text                                              AS total_orders,
       COUNT(DISTINCT mmid) FILTER (WHERE customer_type='new_customer')::text          AS new_customers,
       COUNT(DISTINCT mmid) FILTER (WHERE customer_type='retention')::text             AS retention_customers
-    FROM mart_telesales_orders
+    FROM sales_hoc_orders
     ${where}
     GROUP BY ${grp}
     ORDER BY ${grp} DESC
@@ -143,7 +143,7 @@ export async function GET(request: Request) {
           ${lbl}   AS period_label,
           COALESCE(SUM(CASE WHEN channel='online'  THEN sales_in_vat ELSE 0 END), 0)::text AS online,
           COALESCE(SUM(CASE WHEN channel='offline' THEN sales_in_vat ELSE 0 END), 0)::text AS offline
-        FROM mart_telesales_orders
+        FROM sales_hoc_orders
         ${trendFilter.where}
         GROUP BY ${grpBy}
         ORDER BY ${grpBy}
@@ -158,7 +158,7 @@ export async function GET(request: Request) {
         SELECT order_number, order_date::text, mmid, prod_num,
                sales_qty::text, sales_in_vat::text, dynamic_cmg,
                channel, agent, customer_type
-        FROM mart_telesales_orders
+        FROM sales_hoc_orders
         ${curr.where}
         ORDER BY order_date DESC, order_number DESC
         LIMIT 100
@@ -167,14 +167,14 @@ export async function GET(request: Request) {
       // Unfiltered filter options
       query<{ cmg: string; agent: string }>(`
         SELECT DISTINCT dynamic_cmg AS cmg, agent
-        FROM mart_telesales_orders
+        FROM sales_hoc_orders
         WHERE dynamic_cmg IS NOT NULL AND agent IS NOT NULL
         ORDER BY dynamic_cmg, agent
       `),
 
       // Available months for range chips (unfiltered)
       query<{ month: string }>(`
-        SELECT DISTINCT month::text AS month FROM mart_telesales_orders ORDER BY month
+        SELECT DISTINCT month::text AS month FROM sales_hoc_orders ORDER BY month
       `),
     ])
 

@@ -15,7 +15,7 @@ export async function GET() {
       safeQuery<{ cnt: string; min_date: string | null; max_date: string | null; last_refreshed: string | null; avg_days: string | null }>(`
         SELECT COUNT(*) AS cnt, MIN(order_date)::text AS min_date, MAX(order_date)::text AS max_date,
                MAX(refreshed_at)::text AS last_refreshed, ROUND(AVG(days_to_order), 1)::text AS avg_days
-        FROM mart_telesales_orders
+        FROM sales_hoc_orders
       `),
       safeQuery<{ cnt: string; min_month: string | null; max_month: string | null; last_refreshed: string | null }>(`
         SELECT COUNT(*) AS cnt, MIN(month)::text AS min_month, MAX(month)::text AS max_month,

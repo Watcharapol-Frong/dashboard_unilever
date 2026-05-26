@@ -5,7 +5,7 @@ import { query, queryOne } from '@/lib/db'
 export const dynamic = 'force-dynamic'
 
 // Builds WHERE clauses for telesales_calls (bare + tc.-prefixed) and the
-// agent_conversions CTE for mart_telesales_orders — all from one set of params.
+// agent_conversions CTE for sales_hoc_orders — all from one set of params.
 function buildFilters(
   startDate: string | null,
   endDate: string | null,
@@ -38,12 +38,20 @@ function buildFilters(
     prefixed.push(`tc.agent = ANY($${i})`)
   }
   if (channel.length > 0 || cmg.length > 0) {
-    const sub: string[] = []
-    if (channel.length > 0) { const i = push(channel); sub.push(`channel = ANY($${i})`);      orderConds.push(`channel = ANY($${i})`) }
-    if (cmg.length > 0)     { const i = push(cmg);     sub.push(`dynamic_cmg = ANY($${i})`); orderConds.push(`dynamic_cmg = ANY($${i})`) }
-    const subWhere = sub.join(' AND ')
-    bare.push(`mmid IN (SELECT DISTINCT mmid FROM mart_telesales_orders WHERE ${subWhere})`)
-    prefixed.push(`tc.mmid IN (SELECT DISTINCT mmid FROM mart_telesales_orders WHERE ${subWhere})`)
+    // Channel filter: use sales_hoc_orders (HOC orders)
+    // CMG filter: use mart_telesales_orders.primary_cmg (covers all called mmids)
+    if (channel.length > 0) {
+      const i = push(channel)
+      bare.push(`mmid IN (SELECT DISTINCT mmid FROM sales_hoc_orders WHERE channel = ANY($${i}))`)
+      prefixed.push(`tc.mmid IN (SELECT DISTINCT mmid FROM sales_hoc_orders WHERE channel = ANY($${i}))`)
+      orderConds.push(`channel = ANY($${i})`)
+    }
+    if (cmg.length > 0) {
+      const i = push(cmg)
+      bare.push(`mmid IN (SELECT DISTINCT mmid FROM mart_telesales_orders WHERE primary_cmg = ANY($${i}))`)
+      prefixed.push(`tc.mmid IN (SELECT DISTINCT mmid FROM mart_telesales_orders WHERE primary_cmg = ANY($${i}))`)
+      orderConds.push(`dynamic_cmg = ANY($${i})`)
+    }
   }
 
   return {
@@ -51,7 +59,7 @@ function buildFilters(
     where:   'WHERE ' + bare.join(' AND '),
     whereTc: 'WHERE ' + prefixed.join(' AND '),
     agentConvCTE: `WITH agent_conversions AS (
-      SELECT DISTINCT mmid FROM mart_telesales_orders
+      SELECT DISTINCT mmid FROM sales_hoc_orders
       WHERE ${orderConds.join(' AND ')}
     )`,
   }
@@ -148,8 +156,8 @@ export async function GET(request: Request) {
         FROM telesales_calls WHERE first_connected_date IS NOT NULL ORDER BY month
       `),
       query<{ cmg: string }>(`
-        SELECT DISTINCT dynamic_cmg AS cmg FROM mart_telesales_orders
-        WHERE dynamic_cmg IS NOT NULL ORDER BY dynamic_cmg
+        SELECT DISTINCT primary_cmg AS cmg FROM mart_telesales_orders
+        WHERE primary_cmg IS NOT NULL ORDER BY primary_cmg
       `),
       query<{ agent: string }>(`
         SELECT DISTINCT agent FROM telesales_calls WHERE agent IS NOT NULL ORDER BY agent

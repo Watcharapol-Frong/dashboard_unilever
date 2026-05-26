@@ -37,7 +37,7 @@ export async function GET(request: Request) {
           COUNT(DISTINCT mmid) FILTER (WHERE customer_type = 'retention')                 AS retention,
           COUNT(DISTINCT mmid) FILTER (WHERE customer_type = 'first_order_not_converted') AS first_order_not_converted,
           COUNT(DISTINCT mmid) FILTER (WHERE customer_type = 'retention_not_converted')   AS retention_not_converted
-        FROM mart_telesales_orders
+        FROM sales_hoc_orders
         ${whereClause}
         GROUP BY month
         ORDER BY month
@@ -51,7 +51,7 @@ export async function GET(request: Request) {
           COUNT(DISTINCT mmid) FILTER (WHERE customer_type = 'retention')                 AS retention,
           COUNT(DISTINCT mmid) FILTER (WHERE customer_type = 'first_order_not_converted') AS first_order_not_converted,
           COUNT(DISTINCT mmid) FILTER (WHERE customer_type = 'retention_not_converted')   AS retention_not_converted
-        FROM mart_telesales_orders
+        FROM sales_hoc_orders
         ${whereClause}
         GROUP BY DATE_TRUNC('week', order_date)::date
         ORDER BY period
@@ -65,7 +65,7 @@ export async function GET(request: Request) {
           COUNT(DISTINCT mmid) FILTER (WHERE customer_type = 'retention')                 AS retention,
           COUNT(DISTINCT mmid) FILTER (WHERE customer_type = 'first_order_not_converted') AS first_order_not_converted,
           COUNT(DISTINCT mmid) FILTER (WHERE customer_type = 'retention_not_converted')   AS retention_not_converted
-        FROM mart_telesales_orders
+        FROM sales_hoc_orders
         ${whereClause}
         GROUP BY order_date
         ORDER BY order_date
