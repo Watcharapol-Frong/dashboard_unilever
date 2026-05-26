@@ -5,6 +5,7 @@ import { ComposedChart, Bar, XAxis, YAxis, CartesianGrid } from 'recharts'
 import { ChartContainer, ChartTooltip, type ChartConfig } from '@/components/ui/chart'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
 import { Skeleton } from '@/components/ui/skeleton'
 import { cn } from '@/lib/utils'
 import { DateRangePicker } from '@/components/dashboard/DateRangePicker'
@@ -170,34 +171,61 @@ export function CustomerTrendChart({ filterCmg = [], filterChannel = 'all', star
 
         <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3 flex-wrap">
           {/* Conversion filter */}
-          <Select value={conversion} onValueChange={v => setConversion(v as Conversion)}>
-            <SelectTrigger className="h-7 text-xs w-[150px]">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">All Customers</SelectItem>
-              <SelectItem value="converted">Converted Only</SelectItem>
-              <SelectItem value="not_converted">Not Converted</SelectItem>
-            </SelectContent>
-          </Select>
+          <TooltipProvider delayDuration={300}>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <div>
+                  <Select value={conversion} onValueChange={v => setConversion(v as Conversion)}>
+                    <SelectTrigger className="h-7 text-xs w-[150px]">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">All Customers</SelectItem>
+                      <SelectItem value="converted">Converted Only</SelectItem>
+                      <SelectItem value="not_converted">Not Converted</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              </TooltipTrigger>
+              <TooltipContent side="bottom" className="max-w-[220px] text-xs">
+                {conversion === 'converted'
+                  ? 'Showing customers who ordered within the attribution window (New + Retention).'
+                  : conversion === 'not_converted'
+                  ? 'Showing customers who were called but did not order within the attribution window.'
+                  : 'Showing all customer types — both converted and not converted.'}
+              </TooltipContent>
+            </Tooltip>
+          </TooltipProvider>
 
           {/* Interval tabs */}
-          <div className="flex items-center bg-gray-100/80 p-0.5 rounded-lg border border-gray-200">
-            {(['monthly', 'weekly', 'custom'] as const).map(v => (
-              <button
-                key={v}
-                onClick={() => setInterval(v)}
-                className={cn(
-                  'px-3 py-1 rounded-md text-xs font-bold transition-all duration-200 capitalize',
-                  interval === v
-                    ? 'bg-white text-[#003DA6] shadow-xs'
-                    : 'text-muted-foreground hover:text-foreground'
-                )}
-              >
-                {v.charAt(0).toUpperCase() + v.slice(1)}
-              </button>
-            ))}
-          </div>
+          <TooltipProvider delayDuration={300}>
+            <div className="flex items-center bg-gray-100/80 p-0.5 rounded-lg border border-gray-200">
+              {(['monthly', 'weekly', 'custom'] as const).map(v => {
+                const tipText =
+                  v === 'monthly' ? 'Group data by calendar month'
+                  : v === 'weekly' ? 'Group data by ISO week (Mon–Sun)'
+                  : 'Select a custom date range — overrides the Overview date filter'
+                return (
+                  <Tooltip key={v}>
+                    <TooltipTrigger asChild>
+                      <button
+                        onClick={() => setInterval(v)}
+                        className={cn(
+                          'px-3 py-1 rounded-md text-xs font-bold transition-all duration-200 capitalize',
+                          interval === v
+                            ? 'bg-white text-[#003DA6] shadow-xs'
+                            : 'text-muted-foreground hover:text-foreground'
+                        )}
+                      >
+                        {v.charAt(0).toUpperCase() + v.slice(1)}
+                      </button>
+                    </TooltipTrigger>
+                    <TooltipContent side="bottom" className="text-xs">{tipText}</TooltipContent>
+                  </Tooltip>
+                )
+              })}
+            </div>
+          </TooltipProvider>
 
           {/* Custom date picker */}
           {interval === 'custom' && (
@@ -217,20 +245,50 @@ export function CustomerTrendChart({ filterCmg = [], filterChannel = 'all', star
           )}
 
           {/* Legend */}
-          <div className="flex items-center gap-3 flex-wrap">
-            {visibleSeries.includes('new_customer') && (
-              <LegendDot color="#10b981" label="New" />
-            )}
-            {visibleSeries.includes('retention') && (
-              <LegendDot color="#0d9488" label="Retention" />
-            )}
-            {visibleSeries.includes('first_order_not_converted') && (
-              <LegendDot color="#3b82f6" label="First (Not Conv.)" />
-            )}
-            {visibleSeries.includes('retention_not_converted') && (
-              <LegendDot color="#94a3b8" label="Repeat (Not Conv.)" />
-            )}
-          </div>
+          <TooltipProvider delayDuration={300}>
+            <div className="flex items-center gap-3 flex-wrap">
+              {visibleSeries.includes('new_customer') && (
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <div><LegendDot color="#10b981" label="New" /></div>
+                  </TooltipTrigger>
+                  <TooltipContent side="bottom" className="max-w-[200px] text-xs">
+                    First-time customers who ordered within the attribution window.
+                  </TooltipContent>
+                </Tooltip>
+              )}
+              {visibleSeries.includes('retention') && (
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <div><LegendDot color="#0d9488" label="Retention" /></div>
+                  </TooltipTrigger>
+                  <TooltipContent side="bottom" className="max-w-[200px] text-xs">
+                    Returning customers who reordered within the attribution window.
+                  </TooltipContent>
+                </Tooltip>
+              )}
+              {visibleSeries.includes('first_order_not_converted') && (
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <div><LegendDot color="#3b82f6" label="First (Not Conv.)" /></div>
+                  </TooltipTrigger>
+                  <TooltipContent side="bottom" className="max-w-[200px] text-xs">
+                    First-time customers whose order fell outside the attribution window.
+                  </TooltipContent>
+                </Tooltip>
+              )}
+              {visibleSeries.includes('retention_not_converted') && (
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <div><LegendDot color="#94a3b8" label="Repeat (Not Conv.)" /></div>
+                  </TooltipTrigger>
+                  <TooltipContent side="bottom" className="max-w-[200px] text-xs">
+                    Returning customers whose reorder fell outside the attribution window.
+                  </TooltipContent>
+                </Tooltip>
+              )}
+            </div>
+          </TooltipProvider>
         </div>
       </CardHeader>
 
