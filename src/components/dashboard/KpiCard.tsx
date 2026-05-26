@@ -1,7 +1,8 @@
 import { Card, CardContent } from '@/components/ui/card'
 import { Skeleton } from '@/components/ui/skeleton'
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
 import { cn } from '@/lib/utils'
-import { TrendingUp, TrendingDown, Minus, type LucideIcon } from 'lucide-react'
+import { TrendingUp, TrendingDown, Minus, Info, type LucideIcon } from 'lucide-react'
 
 interface KpiExtra {
   label: string
@@ -19,10 +20,11 @@ interface KpiCardProps {
   extras?: KpiExtra[]
   loading?: boolean
   className?: string
-  valueClassName?: string   // extra classes on the value text (e.g. color)
+  valueClassName?: string
+  tooltip?: string
 }
 
-export function KpiCard({ title, value, comparison, comparisonLabel, subtitle, icon: Icon, extras, loading, className, valueClassName }: KpiCardProps) {
+export function KpiCard({ title, value, comparison, comparisonLabel, subtitle, icon: Icon, extras, loading, className, valueClassName, tooltip }: KpiCardProps) {
   if (loading) {
     return (
       <Card className={className}>
@@ -46,6 +48,18 @@ export function KpiCard({ title, value, comparison, comparisonLabel, subtitle, i
           <div className="flex items-center gap-1.5">
             {Icon && <Icon className="h-3.5 w-3.5 text-muted-foreground shrink-0" />}
             <span className="text-xs font-medium text-muted-foreground leading-tight">{title}</span>
+            {tooltip && (
+              <TooltipProvider delayDuration={200}>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Info className="h-3 w-3 text-muted-foreground/60 cursor-help shrink-0" />
+                  </TooltipTrigger>
+                  <TooltipContent side="top" className="max-w-[220px] text-xs">
+                    {tooltip}
+                  </TooltipContent>
+                </Tooltip>
+              </TooltipProvider>
+            )}
           </div>
           {hasComparison && (
             <span className={cn(

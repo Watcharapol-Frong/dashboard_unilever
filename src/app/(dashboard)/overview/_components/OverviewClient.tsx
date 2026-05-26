@@ -128,6 +128,19 @@ export default function OverviewClient() {
 
   const kpi = useMemo(() => aggregate(mappedFiltered), [mappedFiltered])
 
+  // ROI uses month-level data regardless of CMG filter (costs are not CMG-specific)
+  const roiKpi = useMemo(() => {
+    const effectiveTo = rangeTo ?? (rangeFrom ? hoverMonth : null)
+    const monthRows = rows.filter(r => {
+      if (rangeFrom) {
+        if (!effectiveTo) return r.month === rangeFrom
+        if (r.month < rangeFrom || r.month > effectiveTo) return false
+      }
+      return true
+    })
+    return aggregate(monthRows)
+  }, [rows, rangeFrom, rangeTo, hoverMonth])
+
   const byMonth = useMemo(() => {
     const monthSet = [...new Set(mappedFiltered.map(r => r.month))].sort()
     return monthSet.map(month => {
@@ -256,10 +269,11 @@ export default function OverviewClient() {
         />
         <KpiCard
           title="Program ROI"
-          value={kpi.roi > 0 ? `${kpi.roi.toFixed(2)}x` : '—'}
+          value={roiKpi.roi > 0 ? `${roiKpi.roi.toFixed(2)}x` : '—'}
           subtitle="Sales / Expense multiplier"
-          valueClassName={colorRoi(kpi.roi)}
+          valueClassName={colorRoi(roiKpi.roi)}
           icon={Calculator}
+          tooltip="ROI คำนวณจากยอดขายรวมและค่าใช้จ่ายทั้งเดือน ไม่ขึ้นกับ CMG filter เนื่องจากค่าใช้จ่าย (agent cost + incentive) เป็นต้นทุนรวมของทุก CMG"
         />
       </KpiGrid>
 
