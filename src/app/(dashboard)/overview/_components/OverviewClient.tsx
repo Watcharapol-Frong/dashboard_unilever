@@ -273,7 +273,7 @@ export default function OverviewClient() {
           subtitle="Sales / Expense multiplier"
           valueClassName={colorRoi(roiKpi.roi)}
           icon={Calculator}
-          tooltip="ROI คำนวณจากยอดขายรวมและค่าใช้จ่ายทั้งเดือน ไม่ขึ้นกับ CMG filter เนื่องจากค่าใช้จ่าย (agent cost + incentive) เป็นต้นทุนรวมของทุก CMG"
+          tooltip="Calculated from total monthly sales and expenses. Not affected by CMG filter — agent costs and incentives are shared across all CMGs."
         />
       </KpiGrid>
 
