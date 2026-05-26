@@ -77,7 +77,10 @@ export async function GET() {
       LEFT JOIN mart_performance_month m  ON m.month = c.month
       LEFT JOIN channel_metrics ch        ON ch.month = c.month AND ch.dynamic_cmg = c.dynamic_cmg
       ORDER BY c.month, c.dynamic_cmg
-    `).catch(() => [] as any[])
+    `).catch((err: unknown) => {
+      console.error('[overview] query error:', err)
+      return [] as any[]
+    })
 
     const data = rows.map((r: any) => ({
       month:             r.month,
