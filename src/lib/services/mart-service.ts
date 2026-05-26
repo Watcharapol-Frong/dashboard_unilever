@@ -214,12 +214,13 @@ export async function buildMartPerformance(): Promise<number> {
       FROM sales_hoc_orders
       GROUP BY month, dynamic_cmg
     ),
+    mmid_cmg AS (
+      SELECT DISTINCT mmid, primary_cmg FROM mart_telesales_orders WHERE primary_cmg IS NOT NULL
+    ),
     calls_cmg AS (
-      -- Count calls per CMG using primary_cmg from mart_telesales_orders
-      -- Only mmids with at least one order can be assigned a CMG
       SELECT
         DATE_TRUNC('month', tc.first_connected_date)::date AS month,
-        mto.primary_cmg AS dynamic_cmg,
+        mc.primary_cmg AS dynamic_cmg,
         COUNT(DISTINCT tc.mmid) AS total_calls,
         COUNT(DISTINCT tc.mmid) FILTER (
           WHERE tc.call_status NOT LIKE 'ไม่รับสาย%'
@@ -228,8 +229,7 @@ export async function buildMartPerformance(): Promise<number> {
             AND tc.call_status IS DISTINCT FROM 'ยังไม่ต้องการสินค้า'
         ) AS reached
       FROM telesales_calls tc
-      INNER JOIN (SELECT DISTINCT mmid, primary_cmg FROM mart_telesales_orders) mto
-        ON mto.mmid = tc.mmid
+      JOIN mmid_cmg mc ON mc.mmid = tc.mmid
       WHERE tc.first_connected_date IS NOT NULL
       GROUP BY 1, 2
     )
@@ -250,7 +250,7 @@ export async function buildMartPerformance(): Promise<number> {
     FROM telesales_metrics tm
     LEFT JOIN calls_cmg cc ON cc.month = tm.month AND cc.dynamic_cmg = tm.dynamic_cmg
     LEFT JOIN targets tg ON tg.month = tm.month AND tg.dynamic_cmg = tm.dynamic_cmg
-  `).catch(() => [] as any[])
+  `)
 
   // Build mart_performance_month — month-level metrics (calls, costs, ROI)
   await query(`
