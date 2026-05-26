@@ -42,13 +42,15 @@ function aggregate(rows: OverviewRow[]): Agg {
   const online_sales  = s('online_sales')
   const offline_sales = s('offline_sales')
 
+  // total_calls/reached are now CMG-specific — sum directly
+  // total_incentive/total_agent_cost are month-level — deduplicate by month
   const seen = new Set<string>()
   let total_calls = 0, reached = 0, total_incentive = 0, total_agent_cost = 0
   for (const r of rows) {
+    total_calls += r.total_calls
+    reached     += r.reached
     if (!seen.has(r.month)) {
       seen.add(r.month)
-      total_calls      += r.total_calls
-      reached          += r.reached
       total_incentive  += r.total_incentive
       total_agent_cost += r.total_agent_cost
     }
@@ -266,6 +268,7 @@ export default function OverviewClient() {
           value={kpi.total_calls.toLocaleString()}
           subtitle={`Reached ${kpi.reached.toLocaleString()}`}
           icon={PhoneCall}
+          tooltip={filterCmg.length > 0 ? "Counts calls to customers with at least one order in the selected CMG. Customers with no orders cannot be assigned a CMG." : undefined}
         />
         <KpiCard
           title="Program ROI"

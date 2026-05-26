@@ -164,6 +164,8 @@ export async function buildMartPerformance(): Promise<number> {
     CREATE TABLE mart_performance_cmg (
       month              DATE NOT NULL,
       dynamic_cmg        TEXT NOT NULL,
+      total_calls        INTEGER,
+      reached            INTEGER,
       ordered            INTEGER,
       new_customers      INTEGER,
       retention          INTEGER,
@@ -197,7 +199,7 @@ export async function buildMartPerformance(): Promise<number> {
     )
   `)
 
-  // Build mart_performance_cmg — CMG-specific metrics only (from sales_hoc_orders)
+  // Build mart_performance_cmg — CMG-specific metrics (sales_hoc_orders + calls via primary_cmg)
   await query(`
     WITH telesales_metrics AS (
       SELECT
@@ -211,14 +213,34 @@ export async function buildMartPerformance(): Promise<number> {
         COALESCE(SUM(sales_in_vat) FILTER (WHERE customer_type IN ('new_customer','retention')), 0) AS hoc_sales
       FROM sales_hoc_orders
       GROUP BY month, dynamic_cmg
+    ),
+    calls_cmg AS (
+      -- Count calls per CMG using primary_cmg from mart_telesales_orders
+      -- Only mmids with at least one order can be assigned a CMG
+      SELECT
+        DATE_TRUNC('month', tc.first_connected_date)::date AS month,
+        mto.primary_cmg AS dynamic_cmg,
+        COUNT(DISTINCT tc.mmid) AS total_calls,
+        COUNT(DISTINCT tc.mmid) FILTER (
+          WHERE tc.call_status NOT LIKE 'ไม่รับสาย%'
+            AND tc.call_status IS DISTINCT FROM 'ปิดเครื่อง/ติดต่อไม่ได้'
+            AND tc.call_status IS DISTINCT FROM 'ไม่สะดวกคุย'
+            AND tc.call_status IS DISTINCT FROM 'ยังไม่ต้องการสินค้า'
+        ) AS reached
+      FROM telesales_calls tc
+      INNER JOIN (SELECT DISTINCT mmid, primary_cmg FROM mart_telesales_orders) mto
+        ON mto.mmid = tc.mmid
+      WHERE tc.first_connected_date IS NOT NULL
+      GROUP BY 1, 2
     )
     INSERT INTO mart_performance_cmg (
-      month, dynamic_cmg, ordered, new_customers, retention,
+      month, dynamic_cmg, total_calls, reached, ordered, new_customers, retention,
       not_conv_new, not_conv_retention, hoc_orders, hoc_sales,
       sales_target, achievement_ratio
     )
     SELECT
       tm.month, tm.dynamic_cmg,
+      COALESCE(cc.total_calls, 0), COALESCE(cc.reached, 0),
       tm.ordered, tm.new_customers, tm.retention,
       tm.not_conv_new, tm.not_conv_retention,
       tm.hoc_orders, tm.hoc_sales,
@@ -226,6 +248,7 @@ export async function buildMartPerformance(): Promise<number> {
       CASE WHEN COALESCE(tg.sales_target, 0) > 0
            THEN tm.hoc_sales / tg.sales_target ELSE 0 END AS achievement_ratio
     FROM telesales_metrics tm
+    LEFT JOIN calls_cmg cc ON cc.month = tm.month AND cc.dynamic_cmg = tm.dynamic_cmg
     LEFT JOIN targets tg ON tg.month = tm.month AND tg.dynamic_cmg = tm.dynamic_cmg
   `).catch(() => [] as any[])
 
