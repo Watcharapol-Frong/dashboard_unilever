@@ -288,7 +288,7 @@ export default function OverviewClient() {
         filterCmg={filterCmg}
         filterChannel={filterChannel}
         startDate={rangeFrom}
-        endDate={rangeTo}
+        endDate={rangeTo ?? rangeFrom}
       />
     </div>
   )
