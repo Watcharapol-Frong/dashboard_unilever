@@ -1,7 +1,7 @@
 'use client'
 
-import { useState, Suspense } from 'react'
-import { useSignIn } from '@clerk/nextjs'
+import { useState, Suspense, useEffect } from 'react'
+import { useSignIn, useAuth } from '@clerk/nextjs'
 import { useRouter, useSearchParams } from 'next/navigation'
 import Link from 'next/link'
 import { Loader2 } from 'lucide-react'
@@ -11,9 +11,16 @@ import { Field, FieldDescription, FieldGroup, FieldLabel } from '@/components/ui
 
 function LoginForm() {
   const { signIn, setActive, isLoaded } = useSignIn()
+  const { isSignedIn, isLoaded: isAuthLoaded } = useAuth()
   const router      = useRouter()
   const params      = useSearchParams()
   const registered  = params.get('registered') === 'true'
+
+  useEffect(() => {
+    if (isAuthLoaded && isSignedIn) {
+      router.push('/overview')
+    }
+  }, [isAuthLoaded, isSignedIn, router])
 
   const [email,   setEmail]   = useState('')
   const [code,    setCode]    = useState('')
