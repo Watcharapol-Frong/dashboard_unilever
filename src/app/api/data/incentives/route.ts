@@ -67,7 +67,7 @@ export async function GET() {
       LEFT JOIN mart_performance_cmg c ON c.month = m.month
       GROUP BY m.month, m.total_incentive, m.total_agent_cost, m.total_expense, m.roi, m.incentive_per_head
       ORDER BY m.month DESC
-    `)
+    `).catch(() => [] as any[])
 
     const data = {
       incentive_tiers: tiers.map(t => ({
