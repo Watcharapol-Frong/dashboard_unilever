@@ -1,106 +1,157 @@
 import { query, queryOne, queryRowCount } from '@/lib/db'
 
-const ON_CONFLICT_CLAUSE = `
-  ON CONFLICT (mmid, order_number, prod_num) DO UPDATE SET
-    days_to_order       = EXCLUDED.days_to_order,
-    order_seq_in_window = EXCLUDED.order_seq_in_window,
-    is_first_ever_order = EXCLUDED.is_first_ever_order,
-    customer_type       = EXCLUDED.customer_type,
-    month_label         = EXCLUDED.month_label,
-    week_label          = EXCLUDED.week_label,
-    refreshed_at        = EXCLUDED.refreshed_at`
-
-const buildInsertSQL = (withMmidFilter: boolean, upsert = true) => `
-  WITH base AS (
-    SELECT
-      tc.mmid, tc.first_connected_date, tc.agent, tc.call_status, tc.lead_customers,
-      s.order_number, s.prod_num, s.order_date, s.channel, s.dynamic_cmg,
-      s.sales_qty, s.sales_in_vat, s.product_name_th, s.product_name_en,
-      s.brands, s.class_name, s.month,
-      (s.order_date - tc.first_connected_date)::INT AS days_to_order
-    FROM telesales_calls tc
-    JOIN sales_hoc_all s
-      ON  s.mmid       = tc.mmid
-      AND s.order_date >= tc.first_connected_date
-    WHERE tc.first_connected_date IS NOT NULL
-    ${withMmidFilter ? 'AND tc.mmid = ANY($2)' : ''}
-  ),
-  first_orders AS (
-    SELECT mmid, MIN(order_date) AS first_order_date FROM base GROUP BY mmid
-  ),
-  ranked AS (
-    SELECT b.*, fo.first_order_date,
-      ROW_NUMBER() OVER (PARTITION BY b.mmid ORDER BY b.order_date, b.order_number) AS order_seq_in_window
-    FROM base b JOIN first_orders fo ON fo.mmid = b.mmid
-  )
-  INSERT INTO mart_telesales_orders (
-    mmid, order_number, order_date, channel, prod_num, sales_qty, sales_in_vat,
-    dynamic_cmg, first_connected_date, agent, call_status, lead_customers,
-    days_to_order, order_seq_in_window, is_first_ever_order, customer_type,
-    product_name_th, product_name_en, brands, class_name, is_hoc_unilever, month, month_label, week_label, refreshed_at
-  )
-  SELECT
-    mmid, order_number, order_date, channel, prod_num, sales_qty, sales_in_vat,
-    dynamic_cmg, first_connected_date, agent, call_status, lead_customers,
-    days_to_order, order_seq_in_window,
-    (order_date = first_order_date) AS is_first_ever_order,
-    CASE
-      WHEN days_to_order > $1 AND order_date = first_order_date THEN 'first_order_not_converted'
-      WHEN days_to_order > $1                                   THEN 'retention_not_converted'
-      WHEN order_date = first_order_date                        THEN 'new_customer'
-      ELSE                                                           'retention'
-    END AS customer_type,
-    product_name_th, product_name_en, brands, class_name,
-    TRUE AS is_hoc_unilever, month,
-    TO_CHAR(month, 'FMMonth') AS month_label,
-    'W' || LPAD(EXTRACT(WEEK FROM order_date)::TEXT, 2, '0')
-      || '-' || TO_CHAR(DATE_TRUNC('week', order_date)::DATE, 'DD/Mon')
-      || '-' || TO_CHAR(DATE_TRUNC('week', order_date)::DATE + 6, 'DD/Mon') AS week_label,
-    NOW() AS refreshed_at
-  FROM ranked
-  ${upsert ? ON_CONFLICT_CLAUSE : ''}
-`
-
 export async function buildMartMain(attributionDays = 14): Promise<number> {
-  await query(`DELETE FROM mart_telesales_orders WHERE true`)
-  return queryRowCount(buildInsertSQL(false, false), [attributionDays])
-}
+  // ── 1. Rebuild mart_telesales_orders (ALL orders for called mmids, any product) ──
 
-export async function refreshMartForMmids(mmids: string[], attributionDays = 14): Promise<number> {
-  if (mmids.length === 0) return 0
-  await query(`DELETE FROM mart_telesales_orders WHERE mmid = ANY($1)`, [mmids])
-  await query(buildInsertSQL(true), [attributionDays, mmids])
-  const row = await queryOne<{ cnt: string }>(`SELECT COUNT(*) AS cnt FROM mart_telesales_orders WHERE mmid = ANY($1)`, [mmids])
-  return Number(row?.cnt ?? 0)
-}
+  await query(`DROP TABLE IF EXISTS mart_telesales_orders`)
 
-export async function refreshMartChunk(
-  offset: number,
-  limit: number,
-  attributionDays = 14,
-  truncate = false,
-  precomputedTotal?: number,
-): Promise<{ processed: number; done: boolean; next_offset: number; total: number }> {
-  if (truncate) await query(`TRUNCATE TABLE mart_telesales_orders`)
+  await query(`
+    CREATE TABLE mart_telesales_orders (
+      mmid                  TEXT        NOT NULL,
+      order_number          TEXT        NOT NULL,
+      order_date            DATE        NOT NULL,
+      channel               TEXT,
+      prod_num              TEXT        NOT NULL,
+      sales_qty             NUMERIC,
+      sales_in_vat          NUMERIC,
+      dynamic_cmg           TEXT,
+      primary_cmg           TEXT,
+      first_connected_date  DATE,
+      agent                 TEXT,
+      call_status           TEXT,
+      lead_customers        TEXT,
+      days_to_order         INTEGER,
+      product_name_th       TEXT,
+      product_name_en       TEXT,
+      brands                TEXT,
+      class_name            TEXT,
+      subclass              TEXT,
+      is_hoc_unilever       BOOLEAN     NOT NULL DEFAULT FALSE,
+      month                 DATE,
+      month_label           TEXT,
+      week_label            TEXT,
+      refreshed_at          TIMESTAMPTZ DEFAULT NOW(),
+      PRIMARY KEY (mmid, order_number, prod_num)
+    )
+  `)
 
-  const total = (precomputedTotal !== undefined && precomputedTotal > 0)
-    ? precomputedTotal
-    : await queryOne<{ cnt: string }>(
-        `SELECT COUNT(*) AS cnt FROM telesales_calls WHERE first_connected_date IS NOT NULL`
-      ).then(r => Number(r?.cnt ?? 0))
+  await query(`
+    WITH all_sales AS (
+      SELECT order_number, prod_num, order_date, 'online' AS channel, mmid, dynamic_cmg, sales_qty, sales_in_vat
+      FROM online_sales WHERE mmid IS NOT NULL
+      UNION ALL
+      SELECT order_number, prod_num, order_date, 'offline' AS channel, mmid, dynamic_cmg, sales_qty, sales_in_vat
+      FROM offline_sales WHERE mmid IS NOT NULL
+    ),
+    cmg_priority AS (
+      SELECT mmid,
+        CASE
+          WHEN BOOL_OR(dynamic_cmg = 'FOOD RETAILER') THEN 'FOOD RETAILER'
+          WHEN BOOL_OR(dynamic_cmg = 'HORECA')        THEN 'HORECA'
+          WHEN BOOL_OR(dynamic_cmg = 'END USER')      THEN 'END USER'
+          ELSE MAX(dynamic_cmg)
+        END AS primary_cmg
+      FROM all_sales GROUP BY mmid
+    )
+    INSERT INTO mart_telesales_orders (
+      mmid, order_number, order_date, channel, prod_num, sales_qty, sales_in_vat,
+      dynamic_cmg, primary_cmg, first_connected_date, agent, call_status, lead_customers,
+      days_to_order, product_name_th, product_name_en, brands, class_name, subclass,
+      is_hoc_unilever, month, month_label, week_label, refreshed_at
+    )
+    SELECT
+      tc.mmid, s.order_number, s.order_date, s.channel, s.prod_num,
+      s.sales_qty, s.sales_in_vat,
+      s.dynamic_cmg, COALESCE(cp.primary_cmg, s.dynamic_cmg),
+      tc.first_connected_date, tc.agent, tc.call_status, tc.lead_customers,
+      (s.order_date - tc.first_connected_date)::INT,
+      p.product_name_th, p.product_name_en, p.brands, p.class_name, p.subclass,
+      (p.product_name_en IS NOT NULL),
+      DATE_TRUNC('month', s.order_date)::date,
+      TO_CHAR(DATE_TRUNC('month', s.order_date)::date, 'FMMonth'),
+      'W' || LPAD(EXTRACT(WEEK FROM s.order_date)::TEXT, 2, '0')
+        || '-' || TO_CHAR(DATE_TRUNC('week', s.order_date)::DATE, 'DD/Mon')
+        || '-' || TO_CHAR(DATE_TRUNC('week', s.order_date)::DATE + 6, 'DD/Mon'),
+      NOW()
+    FROM telesales_calls tc
+    JOIN all_sales s ON s.mmid = tc.mmid AND s.order_date >= tc.first_connected_date
+    LEFT JOIN products p ON p.prod_num = s.prod_num
+    LEFT JOIN cmg_priority cp ON cp.mmid = tc.mmid
+    WHERE tc.first_connected_date IS NOT NULL
+  `)
 
-  const rows = await query<{ mmid: string }>(
-    `SELECT mmid FROM telesales_calls WHERE first_connected_date IS NOT NULL ORDER BY mmid LIMIT $1 OFFSET $2`,
-    [limit, offset]
-  )
-  const mmids = rows.map(r => r.mmid)
+  // ── 2. Rebuild sales_hoc_orders (HOC-only attributed orders, full attribution logic) ──
 
-  if (mmids.length > 0) {
-    await query(buildInsertSQL(true), [attributionDays, mmids])
-  }
+  await query(`DROP TABLE IF EXISTS sales_hoc_orders`)
 
-  const done = mmids.length < limit
-  return { processed: mmids.length, done, next_offset: offset + mmids.length, total }
+  await query(`
+    CREATE TABLE sales_hoc_orders (
+      mmid                  TEXT        NOT NULL,
+      order_number          TEXT        NOT NULL,
+      order_date            DATE        NOT NULL,
+      channel               TEXT,
+      prod_num              TEXT        NOT NULL,
+      sales_qty             NUMERIC,
+      sales_in_vat          NUMERIC,
+      dynamic_cmg           TEXT,
+      primary_cmg           TEXT,
+      first_connected_date  DATE,
+      agent                 TEXT,
+      call_status           TEXT,
+      lead_customers        TEXT,
+      days_to_order         INTEGER,
+      order_seq_in_window   INTEGER,
+      is_first_ever_order   BOOLEAN,
+      customer_type         TEXT,
+      product_name_th       TEXT,
+      product_name_en       TEXT,
+      brands                TEXT,
+      class_name            TEXT,
+      subclass              TEXT,
+      month                 DATE,
+      month_label           TEXT,
+      week_label            TEXT,
+      refreshed_at          TIMESTAMPTZ DEFAULT NOW(),
+      PRIMARY KEY (mmid, order_number, prod_num)
+    )
+  `)
+
+  const rowCount = await queryRowCount(`
+    WITH hoc_base AS (
+      SELECT * FROM mart_telesales_orders WHERE is_hoc_unilever = TRUE
+    ),
+    first_orders AS (
+      SELECT mmid, MIN(order_date) AS first_order_date FROM hoc_base GROUP BY mmid
+    ),
+    ranked AS (
+      SELECT b.*, fo.first_order_date,
+        ROW_NUMBER() OVER (PARTITION BY b.mmid ORDER BY b.order_date, b.order_number) AS order_seq_in_window
+      FROM hoc_base b JOIN first_orders fo ON fo.mmid = b.mmid
+    )
+    INSERT INTO sales_hoc_orders (
+      mmid, order_number, order_date, channel, prod_num, sales_qty, sales_in_vat,
+      dynamic_cmg, primary_cmg, first_connected_date, agent, call_status, lead_customers,
+      days_to_order, order_seq_in_window, is_first_ever_order, customer_type,
+      product_name_th, product_name_en, brands, class_name, subclass,
+      month, month_label, week_label, refreshed_at
+    )
+    SELECT
+      mmid, order_number, order_date, channel, prod_num, sales_qty, sales_in_vat,
+      dynamic_cmg, primary_cmg, first_connected_date, agent, call_status, lead_customers,
+      days_to_order, order_seq_in_window,
+      (order_date = first_order_date) AS is_first_ever_order,
+      CASE
+        WHEN days_to_order > $1 AND order_date = first_order_date THEN 'first_order_not_converted'
+        WHEN days_to_order > $1                                   THEN 'retention_not_converted'
+        WHEN order_date = first_order_date                        THEN 'new_customer'
+        ELSE                                                           'retention'
+      END AS customer_type,
+      product_name_th, product_name_en, brands, class_name, subclass,
+      month, month_label, week_label, NOW()
+    FROM ranked
+  `, [attributionDays])
+
+  return rowCount
 }
 
 export async function buildMartPerformance(): Promise<number> {
@@ -113,6 +164,8 @@ export async function buildMartPerformance(): Promise<number> {
     CREATE TABLE mart_performance_cmg (
       month              DATE NOT NULL,
       dynamic_cmg        TEXT NOT NULL,
+      total_calls        INTEGER,
+      reached            INTEGER,
       ordered            INTEGER,
       new_customers      INTEGER,
       retention          INTEGER,
@@ -146,7 +199,7 @@ export async function buildMartPerformance(): Promise<number> {
     )
   `)
 
-  // Build mart_performance_cmg — CMG-specific metrics only
+  // Build mart_performance_cmg — CMG-specific metrics (sales_hoc_orders + calls via primary_cmg)
   await query(`
     WITH telesales_metrics AS (
       SELECT
@@ -158,16 +211,36 @@ export async function buildMartPerformance(): Promise<number> {
         COUNT(DISTINCT mmid) FILTER (WHERE customer_type = 'retention_not_converted')            AS not_conv_retention,
         COUNT(DISTINCT order_number) FILTER (WHERE customer_type IN ('new_customer','retention')) AS hoc_orders,
         COALESCE(SUM(sales_in_vat) FILTER (WHERE customer_type IN ('new_customer','retention')), 0) AS hoc_sales
-      FROM mart_telesales_orders
+      FROM sales_hoc_orders
       GROUP BY month, dynamic_cmg
+    ),
+    mmid_cmg AS (
+      SELECT DISTINCT mmid, primary_cmg FROM mart_telesales_orders WHERE primary_cmg IS NOT NULL
+    ),
+    calls_cmg AS (
+      SELECT
+        DATE_TRUNC('month', tc.first_connected_date)::date AS month,
+        mc.primary_cmg AS dynamic_cmg,
+        COUNT(DISTINCT tc.mmid) AS total_calls,
+        COUNT(DISTINCT tc.mmid) FILTER (
+          WHERE tc.call_status NOT LIKE 'ไม่รับสาย%'
+            AND tc.call_status IS DISTINCT FROM 'ปิดเครื่อง/ติดต่อไม่ได้'
+            AND tc.call_status IS DISTINCT FROM 'ไม่สะดวกคุย'
+            AND tc.call_status IS DISTINCT FROM 'ยังไม่ต้องการสินค้า'
+        ) AS reached
+      FROM telesales_calls tc
+      JOIN mmid_cmg mc ON mc.mmid = tc.mmid
+      WHERE tc.first_connected_date IS NOT NULL
+      GROUP BY 1, 2
     )
     INSERT INTO mart_performance_cmg (
-      month, dynamic_cmg, ordered, new_customers, retention,
+      month, dynamic_cmg, total_calls, reached, ordered, new_customers, retention,
       not_conv_new, not_conv_retention, hoc_orders, hoc_sales,
       sales_target, achievement_ratio
     )
     SELECT
       tm.month, tm.dynamic_cmg,
+      COALESCE(cc.total_calls, 0), COALESCE(cc.reached, 0),
       tm.ordered, tm.new_customers, tm.retention,
       tm.not_conv_new, tm.not_conv_retention,
       tm.hoc_orders, tm.hoc_sales,
@@ -175,6 +248,7 @@ export async function buildMartPerformance(): Promise<number> {
       CASE WHEN COALESCE(tg.sales_target, 0) > 0
            THEN tm.hoc_sales / tg.sales_target ELSE 0 END AS achievement_ratio
     FROM telesales_metrics tm
+    LEFT JOIN calls_cmg cc ON cc.month = tm.month AND cc.dynamic_cmg = tm.dynamic_cmg
     LEFT JOIN targets tg ON tg.month = tm.month AND tg.dynamic_cmg = tm.dynamic_cmg
   `)
 
@@ -267,6 +341,7 @@ export async function buildMartPerformance(): Promise<number> {
   `)
 
   const row = await queryOne<{ cnt: string }>(`SELECT COUNT(*) AS cnt FROM mart_performance_cmg`)
+    .catch(() => null)
   return Number(row?.cnt ?? 0)
 }
 

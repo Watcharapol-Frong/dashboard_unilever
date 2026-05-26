@@ -31,7 +31,7 @@ type Agg = {
   online_sales: number; offline_sales: number
 }
 
-function aggregate(rows: OverviewRow[]): Agg {
+function aggregate(rows: OverviewRow[], filterChannel = 'all'): Agg {
   const s = (k: keyof OverviewRow) => rows.reduce((a, r) => a + (r[k] as number), 0)
   const hoc_sales     = s('hoc_sales')
   const new_customers = s('new_customers')
@@ -39,16 +39,19 @@ function aggregate(rows: OverviewRow[]): Agg {
   const ordered       = s('ordered')
   const hoc_orders    = s('hoc_orders')
   const sales_target  = s('sales_target')
-  const online_sales  = s('online_sales')
-  const offline_sales = s('offline_sales')
+  // Remap online/offline based on channel filter so chart bars reflect the selection
+  const online_sales  = filterChannel === 'offline' ? 0 : s('online_sales')
+  const offline_sales = filterChannel === 'online'  ? 0 : s('offline_sales')
 
+  // total_calls/reached are now CMG-specific — sum directly
+  // total_incentive/total_agent_cost are month-level — deduplicate by month
   const seen = new Set<string>()
   let total_calls = 0, reached = 0, total_incentive = 0, total_agent_cost = 0
   for (const r of rows) {
+    total_calls += r.total_calls
+    reached     += r.reached
     if (!seen.has(r.month)) {
       seen.add(r.month)
-      total_calls      += r.total_calls
-      reached          += r.reached
       total_incentive  += r.total_incentive
       total_agent_cost += r.total_agent_cost
     }
@@ -126,16 +129,29 @@ export default function OverviewClient() {
     })
   }, [filtered, filterChannel])
 
-  const kpi = useMemo(() => aggregate(mappedFiltered), [mappedFiltered])
+  const kpi = useMemo(() => aggregate(mappedFiltered, filterChannel), [mappedFiltered, filterChannel])
+
+  // ROI uses month-level data regardless of CMG filter (costs are not CMG-specific)
+  const roiKpi = useMemo(() => {
+    const effectiveTo = rangeTo ?? (rangeFrom ? hoverMonth : null)
+    const monthRows = rows.filter(r => {
+      if (rangeFrom) {
+        if (!effectiveTo) return r.month === rangeFrom
+        if (r.month < rangeFrom || r.month > effectiveTo) return false
+      }
+      return true
+    })
+    return aggregate(monthRows, filterChannel)
+  }, [rows, rangeFrom, rangeTo, hoverMonth, filterChannel])
 
   const byMonth = useMemo(() => {
     const monthSet = [...new Set(mappedFiltered.map(r => r.month))].sort()
     return monthSet.map(month => {
       const mRows = mappedFiltered.filter(r => r.month === month)
-      const agg   = aggregate(mRows)
+      const agg   = aggregate(mRows, filterChannel)
       return { month_label: mRows[0]?.month_label ?? month, ...agg }
     })
-  }, [mappedFiltered])
+  }, [mappedFiltered, filterChannel])
 
   if (isLoading) return <PageLoading cols={6} />
   if (rows.length === 0) return (
@@ -253,18 +269,27 @@ export default function OverviewClient() {
           value={kpi.total_calls.toLocaleString()}
           subtitle={`Reached ${kpi.reached.toLocaleString()}`}
           icon={PhoneCall}
+          tooltip={filterCmg.length > 0 ? "Counts calls to customers with at least one order in the selected CMG. Customers with no orders cannot be assigned a CMG." : undefined}
         />
         <KpiCard
           title="Program ROI"
-          value={kpi.roi > 0 ? `${kpi.roi.toFixed(2)}x` : '—'}
+          value={roiKpi.roi > 0 ? `${roiKpi.roi.toFixed(2)}x` : '—'}
           subtitle="Sales / Expense multiplier"
-          valueClassName={colorRoi(kpi.roi)}
+          valueClassName={colorRoi(roiKpi.roi)}
           icon={Calculator}
+          tooltip="Calculated from total monthly sales and expenses. Not affected by CMG filter — agent costs and incentives are shared across all CMGs."
         />
       </KpiGrid>
 
       {/* Charts — rendered client-side only (recharts SSR fix) */}
-      <OverviewChart byMonth={byMonth} kpi={kpi} />
+      <OverviewChart
+        byMonth={byMonth}
+        kpi={kpi}
+        filterCmg={filterCmg}
+        filterChannel={filterChannel}
+        startDate={rangeFrom}
+        endDate={rangeTo}
+      />
     </div>
   )
 }

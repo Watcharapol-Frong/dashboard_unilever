@@ -67,7 +67,7 @@ export async function GET(req: NextRequest) {
           COALESCE(SUM(sales_in_vat)   FILTER (WHERE customer_type IN ('new_customer','retention')), 0) AS hoc_sales,
           BOOL_OR(customer_type IN ('new_customer','retention')) AS is_converted,
           MAX(dynamic_cmg) AS dynamic_cmg
-        FROM mart_telesales_orders
+        FROM sales_hoc_orders
         GROUP BY mmid
       ),
       base AS (

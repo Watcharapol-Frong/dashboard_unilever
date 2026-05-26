@@ -44,15 +44,15 @@ export async function GET() {
           COUNT(DISTINCT mmid) FILTER (WHERE channel = 'offline' AND customer_type = 'new_customer')        AS offline_new_customers,
           COUNT(DISTINCT mmid) FILTER (WHERE channel = 'online'  AND customer_type = 'retention')           AS online_retention,
           COUNT(DISTINCT mmid) FILTER (WHERE channel = 'offline' AND customer_type = 'retention')           AS offline_retention
-        FROM mart_telesales_orders
+        FROM sales_hoc_orders
         GROUP BY month, dynamic_cmg
       )
       SELECT
         c.month::text,
         TO_CHAR(c.month, 'FMMonth') AS month_label,
         c.dynamic_cmg,
-        COALESCE(m.total_calls, 0)      AS total_calls,
-        COALESCE(m.reached, 0)          AS reached,
+        COALESCE(c.total_calls, 0)      AS total_calls,
+        COALESCE(c.reached, 0)          AS reached,
         c.ordered,
         c.new_customers,
         c.retention,
@@ -79,7 +79,7 @@ export async function GET() {
       ORDER BY c.month, c.dynamic_cmg
     `).catch((err: unknown) => {
       console.error('[overview] query error:', err)
-      return [] as any[]
+      throw err
     })
 
     const data = rows.map((r: any) => ({
