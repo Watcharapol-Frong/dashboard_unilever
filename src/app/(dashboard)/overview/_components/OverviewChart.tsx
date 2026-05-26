@@ -100,11 +100,15 @@ export interface OverviewChartProps {
     sales_target: number
     achievement: number
   }
+  filterCmg?: string[]
+  filterChannel?: string
+  startDate?: string | null
+  endDate?: string | null
 }
 
 // ── Component ─────────────────────────────────────────────────────────────────
 
-export function OverviewChart({ byMonth, kpi }: OverviewChartProps) {
+export function OverviewChart({ byMonth, kpi, filterCmg, filterChannel, startDate, endDate }: OverviewChartProps) {
   return (
     <div className="space-y-6">
       {/* HOC Sales vs Target */}
@@ -169,7 +173,12 @@ export function OverviewChart({ byMonth, kpi }: OverviewChartProps) {
       </Card>
 
       {/* New & Reactivated Customers Trend */}
-      <CustomerTrendChart />
+      <CustomerTrendChart
+        filterCmg={filterCmg}
+        filterChannel={filterChannel}
+        startDate={startDate}
+        endDate={endDate}
+      />
     </div>
   )
 }

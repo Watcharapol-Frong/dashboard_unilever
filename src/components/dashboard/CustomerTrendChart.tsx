@@ -102,7 +102,14 @@ function TrendTooltip({ active, payload, label, visibleSeries }: {
 
 // ── Main Component ────────────────────────────────────────────────────────────
 
-export function CustomerTrendChart() {
+interface CustomerTrendChartProps {
+  filterCmg?: string[]
+  filterChannel?: string
+  startDate?: string | null
+  endDate?: string | null
+}
+
+export function CustomerTrendChart({ filterCmg = [], filterChannel = 'all', startDate, endDate }: CustomerTrendChartProps) {
   const [interval, setInterval] = useState<Interval>('monthly')
   const [customStart, setCustomStart] = useState('2026-02-01')
   const [customEnd, setCustomEnd] = useState('2026-05-31')
@@ -125,9 +132,14 @@ export function CustomerTrendChart() {
     if (interval === 'custom') {
       if (customStart) url += `&startDate=${customStart}`
       if (customEnd)   url += `&endDate=${customEnd}`
+    } else {
+      if (startDate) url += `&startDate=${startDate}`
+      if (endDate)   url += `&endDate=${endDate}`
     }
+    if (filterCmg.length > 0)  url += `&cmg=${filterCmg.join(',')}`
+    if (filterChannel !== 'all') url += `&channel=${filterChannel}`
     return url
-  }, [calculatedInterval, interval, customStart, customEnd])
+  }, [calculatedInterval, interval, customStart, customEnd, filterCmg, filterChannel, startDate, endDate])
 
   const { data = [], isLoading } = useDashboardSWR<TrendRow[]>(apiUrl)
 

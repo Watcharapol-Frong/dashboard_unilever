@@ -281,7 +281,14 @@ export default function OverviewClient() {
       </KpiGrid>
 
       {/* Charts — rendered client-side only (recharts SSR fix) */}
-      <OverviewChart byMonth={byMonth} kpi={kpi} />
+      <OverviewChart
+        byMonth={byMonth}
+        kpi={kpi}
+        filterCmg={filterCmg}
+        filterChannel={filterChannel}
+        startDate={rangeFrom}
+        endDate={rangeTo}
+      />
     </div>
   )
 }
