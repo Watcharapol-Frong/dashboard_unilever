@@ -193,7 +193,10 @@ export async function buildMartPerformance(): Promise<number> {
       GROUP BY 1
     ),
     month_sales AS (
-      SELECT month, SUM(hoc_sales) AS total_hoc_sales
+      -- incentive คิดจาก FOOD RETAILER + HORECA เท่านั้น ไม่รวม DISTRIBUTOR / END USER
+      SELECT month,
+        SUM(hoc_sales) FILTER (WHERE dynamic_cmg IN ('FOOD RETAILER', 'HORECA')) AS incentive_hoc_sales,
+        SUM(hoc_sales)                                                            AS total_hoc_sales
       FROM mart_performance_cmg
       GROUP BY month
     ),
@@ -201,11 +204,12 @@ export async function buildMartPerformance(): Promise<number> {
       SELECT
         ms.month,
         CASE WHEN COALESCE(SUM(tg.sales_target), 0) > 0
-             THEN ms.total_hoc_sales / SUM(tg.sales_target)
+             THEN ms.incentive_hoc_sales / SUM(tg.sales_target)
              ELSE 0 END AS achievement_ratio
       FROM month_sales ms
       LEFT JOIN targets tg ON tg.month = ms.month
-      GROUP BY ms.month, ms.total_hoc_sales
+        AND tg.dynamic_cmg IN ('FOOD RETAILER', 'HORECA')
+      GROUP BY ms.month, ms.incentive_hoc_sales
     ),
     month_incentive AS (
       SELECT ma.month,
