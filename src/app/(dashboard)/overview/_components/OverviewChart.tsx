@@ -1,8 +1,7 @@
 'use client'
 
 import {
-  ComposedChart, Bar, Line, XAxis, YAxis,
-  CartesianGrid,
+  ComposedChart, Bar, Line, XAxis, YAxis, CartesianGrid,
 } from 'recharts'
 import {
   ChartContainer, ChartTooltip, type ChartConfig,
@@ -24,45 +23,52 @@ const salesChartConfig = {
 
 // ── Sales Tooltip ─────────────────────────────────────────────────────────────
 
-interface TooltipProps {
+interface SalesTooltipProps {
   active?: boolean
   payload?: any[]
   label?: string
+  filterChannel?: string
 }
 
-function SalesTooltip({ active, payload, label }: TooltipProps) {
+function SalesTooltip({ active, payload, label, filterChannel = 'all' }: SalesTooltipProps) {
   if (!active || !payload?.length) return null
-  const data = payload[0].payload
+  const d = payload[0].payload
 
-  const onlineSales  = Number(data.online_sales ?? 0)
-  const offlineSales = Number(data.offline_sales ?? 0)
+  const onlineSales  = Number(d.online_sales  ?? 0)
+  const offlineSales = Number(d.offline_sales ?? 0)
   const totalSales   = onlineSales + offlineSales
-  const target       = Number(data.sales_target ?? 0)
-  const achievement  = Number(data.achievement ?? 0)
+  const target       = Number(d.sales_target  ?? 0)
+  const achievement  = Number(d.achievement   ?? 0)
+
+  const salesLabel =
+    filterChannel === 'online'  ? 'Online Sales' :
+    filterChannel === 'offline' ? 'Offline Sales' : 'Total Sales'
 
   return (
     <div className="rounded-lg border border-border/50 bg-background p-3 text-xs shadow-xl min-w-[12rem] space-y-2">
       <div className="font-semibold text-muted-foreground text-[10px] uppercase tracking-wider">{label}</div>
       <div className="space-y-0.5">
-        <div className="text-[10px] text-muted-foreground">Total Sales</div>
+        <div className="text-[10px] text-muted-foreground">{salesLabel}</div>
         <div className="text-base font-bold text-foreground">{fmtBaht(totalSales)}</div>
       </div>
-      <div className="space-y-1.5 pt-1">
-        <div className="flex items-center justify-between gap-4">
-          <div className="flex items-center gap-1.5 text-muted-foreground">
-            <span className="h-2 w-2 rounded-full border border-black/5" style={{ backgroundColor: salesChartConfig.online_sales.color }} />
-            <span>Online Sales</span>
+      {filterChannel === 'all' && (
+        <div className="space-y-1.5 pt-1">
+          <div className="flex items-center justify-between gap-4">
+            <div className="flex items-center gap-1.5 text-muted-foreground">
+              <span className="h-2 w-2 rounded-full border border-black/5" style={{ backgroundColor: salesChartConfig.online_sales.color }} />
+              <span>Online Sales</span>
+            </div>
+            <span className="font-semibold tabular-nums text-foreground">{fmtBaht(onlineSales)}</span>
           </div>
-          <span className="font-semibold tabular-nums text-foreground">{fmtBaht(onlineSales)}</span>
-        </div>
-        <div className="flex items-center justify-between gap-4">
-          <div className="flex items-center gap-1.5 text-muted-foreground">
-            <span className="h-2 w-2 rounded-full border border-black/5" style={{ backgroundColor: salesChartConfig.offline_sales.color }} />
-            <span>Offline Sales</span>
+          <div className="flex items-center justify-between gap-4">
+            <div className="flex items-center gap-1.5 text-muted-foreground">
+              <span className="h-2 w-2 rounded-full border border-black/5" style={{ backgroundColor: salesChartConfig.offline_sales.color }} />
+              <span>Offline Sales</span>
+            </div>
+            <span className="font-semibold tabular-nums text-foreground">{fmtBaht(offlineSales)}</span>
           </div>
-          <span className="font-semibold tabular-nums text-foreground">{fmtBaht(offlineSales)}</span>
         </div>
-      </div>
+      )}
       <hr className="border-t border-border/80 border-dashed my-1.5" />
       <div className="space-y-1.5">
         <div className="flex items-center justify-between gap-4">
@@ -108,11 +114,26 @@ export interface OverviewChartProps {
 
 // ── Component ─────────────────────────────────────────────────────────────────
 
-export function OverviewChart({ byMonth, kpi, filterCmg, filterChannel, startDate, endDate }: OverviewChartProps) {
-  const channelLabel = filterChannel === 'online' ? 'Online Sales' : filterChannel === 'offline' ? 'Offline Sales' : null
+export function OverviewChart({
+  byMonth,
+  kpi,
+  filterCmg,
+  filterChannel = 'all',
+  startDate,
+  endDate,
+}: OverviewChartProps) {
+  const channelLabel =
+    filterChannel === 'online'  ? 'Online Sales' :
+    filterChannel === 'offline' ? 'Offline Sales' : null
+
+  const activeBarColor =
+    filterChannel === 'online'  ? salesChartConfig.online_sales.color :
+    filterChannel === 'offline' ? salesChartConfig.offline_sales.color :
+    salesChartConfig.offline_sales.color
 
   return (
     <div className="space-y-6">
+
       {/* HOC Sales vs Target */}
       <Card className="w-full py-6 gap-8 shadow-xs border">
         <CardHeader className="flex sm:flex-row flex-col justify-between sm:items-center items-start gap-3 px-6">
@@ -138,12 +159,12 @@ export function OverviewChart({ byMonth, kpi, filterCmg, filterChannel, startDat
               </span>
             </div>
           </div>
+
+          {/* Legend */}
           <div className="flex items-center gap-4 flex-wrap">
-            {/* Show both legend items when all channels, single item when filtered */}
             {channelLabel ? (
               <div className="flex items-center gap-1.5">
-                <span className="w-2.5 h-2.5 rounded-full border border-black/5"
-                  style={{ backgroundColor: filterChannel === 'online' ? salesChartConfig.online_sales.color : salesChartConfig.offline_sales.color }} />
+                <span className="w-2.5 h-2.5 rounded-full border border-black/5" style={{ backgroundColor: activeBarColor }} />
                 <p className="text-sm text-muted-foreground">{channelLabel}</p>
               </div>
             ) : (
@@ -168,6 +189,7 @@ export function OverviewChart({ byMonth, kpi, filterCmg, filterChannel, startDat
             </div>
           </div>
         </CardHeader>
+
         <CardContent className="px-6">
           <ChartContainer config={salesChartConfig} className="h-[300px] w-full">
             <ComposedChart data={byMonth} margin={{ left: 10, right: 10, top: 10, bottom: 0 }}>
@@ -175,25 +197,27 @@ export function OverviewChart({ byMonth, kpi, filterCmg, filterChannel, startDat
               <XAxis dataKey="month_label" tickLine={false} tickMargin={10} axisLine={false} fontSize={12} />
               <YAxis yAxisId="sales" tickFormatter={fmt} tickLine={false} axisLine={false} tickMargin={10} fontSize={12} width={50} />
               <YAxis yAxisId="pct" orientation="right" tickFormatter={v => `${v}%`} tickLine={false} axisLine={false} tickMargin={10} fontSize={12} width={40} />
-              <ChartTooltip cursor={false} content={<SalesTooltip />} />
-              {/* When channel is filtered, show hoc_sales as a single bar */}
+              <ChartTooltip
+                cursor={false}
+                content={props => <SalesTooltip {...props} filterChannel={filterChannel} />}
+              />
               {channelLabel ? (
                 <Bar
                   yAxisId="sales"
                   dataKey="hoc_sales"
                   name={channelLabel}
-                  fill={filterChannel === 'online' ? salesChartConfig.online_sales.color : salesChartConfig.offline_sales.color}
+                  fill={activeBarColor}
                   radius={[4, 4, 0, 0]}
                   barSize={48}
                 />
               ) : (
                 <>
-                  <Bar yAxisId="sales" dataKey="offline_sales" name="Offline Sales" fill="var(--color-offline_sales)" stackId="sales" radius={[0, 0, 0, 0]} barSize={48} />
-                  <Bar yAxisId="sales" dataKey="online_sales"  name="Online Sales"  fill="var(--color-online_sales)"  stackId="sales" radius={[4, 4, 0, 0]} barSize={48} />
+                  <Bar yAxisId="sales" dataKey="offline_sales" name="Offline Sales" fill={salesChartConfig.offline_sales.color} stackId="sales" radius={[0, 0, 0, 0]} barSize={48} />
+                  <Bar yAxisId="sales" dataKey="online_sales"  name="Online Sales"  fill={salesChartConfig.online_sales.color}  stackId="sales" radius={[4, 4, 0, 0]} barSize={48} />
                 </>
               )}
-              <Bar yAxisId="sales" dataKey="sales_target" name="Target" fill="var(--color-sales_target)" radius={[4, 4, 0, 0]} barSize={48} />
-              <Line yAxisId="pct" dataKey="achievement" name="Achievement" type="monotone" stroke="var(--color-achievement)" strokeWidth={2.5} dot={{ r: 3 }} />
+              <Bar yAxisId="sales" dataKey="sales_target" name="Target" fill={salesChartConfig.sales_target.color} radius={[4, 4, 0, 0]} barSize={48} />
+              <Line yAxisId="pct" dataKey="achievement" name="Achievement" type="monotone" stroke={salesChartConfig.achievement.color} strokeWidth={2.5} dot={{ r: 3 }} />
             </ComposedChart>
           </ChartContainer>
         </CardContent>
