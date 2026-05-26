@@ -10,6 +10,11 @@ export async function requireAdmin(): Promise<void> {
   if (sessionClaims?.publicMetadata?.role !== 'admin') throw new ForbiddenError()
 }
 
+export async function requireAuth(): Promise<void> {
+  const { userId } = await auth()
+  if (!userId) throw new UnauthorizedError()
+}
+
 export function unauthorizedResponse() {
   return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 }
@@ -28,6 +33,20 @@ export async function withAdmin(
     if (err instanceof UnauthorizedError) return unauthorizedResponse()
     if (err instanceof ForbiddenError) return forbiddenResponse()
     console.error('[withAdmin] handler error:', err)
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
+  }
+}
+
+// For routes accessible to any logged-in user (viewer or admin)
+export async function withAuth(
+  handler: () => Promise<NextResponse>
+): Promise<NextResponse> {
+  try {
+    await requireAuth()
+    return await handler()
+  } catch (err) {
+    if (err instanceof UnauthorizedError) return unauthorizedResponse()
+    console.error('[withAuth] handler error:', err)
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
   }
 }

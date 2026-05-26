@@ -1,11 +1,11 @@
 import { NextResponse } from 'next/server'
-import { withAdmin } from '@/lib/auth'
+import { withAuth } from '@/lib/auth'
 import { query } from '@/lib/db'
 
 export const dynamic = 'force-dynamic'
 
 export async function GET(request: Request) {
-  return withAdmin(async () => {
+  return withAuth(async () => {
     const { searchParams } = new URL(request.url)
     const rawInterval = searchParams.get('interval') ?? 'monthly'
     const interval: 'daily' | 'weekly' | 'monthly' =

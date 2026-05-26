@@ -2,6 +2,7 @@
 
 import * as React from "react"
 import { usePathname } from "next/navigation"
+import { useUser } from "@clerk/nextjs"
 import {
   IconChartBar,
   IconDashboard,
@@ -27,87 +28,51 @@ import {
   SidebarRail,
 } from "@/components/ui/sidebar"
 
-const data = {
-  user: {
-    name: "Makro Admin",
-    email: "admin@makro.co.th",
-    avatar: "",
+const navMain = [
+  {
+    title: "Overview",
+    url: "/overview",
+    icon: IconDashboard,
   },
-  navMain: [
-    {
-      title: "Overview",
-      url: "/overview",
-      icon: IconDashboard,
-    },
-    {
-      title: "Performance",
-      url: "#",
-      icon: IconChartBar,
-      isActive: true,
-      items: [
-        {
-          title: "Sales Performance",
-          url: "/sales",
-        },
-        {
-          title: "Telesales",
-          url: "/telesales",
-        },
-        {
-          title: "Product Performance",
-          url: "/products",
-        },
-      ],
-    },
-    {
-      title: "Programs",
-      url: "#",
-      icon: IconGift,
-      items: [
-        {
-          title: "Incentives & Bonuses",
-          url: "/incentives",
-        },
-      ],
-    },
-  ],
-  navSecondary: [
-    {
-      title: "Get Help",
-      url: "#",
-      icon: IconHelp,
-    },
-  ],
-  documents: [
-    {
-      name: "Leads",
-      url: "/leads",
-      icon: IconUsers,
-    },
-    {
-      name: "Data Hub",
-      url: "/data-hub",
-      icon: IconUpload,
-    },
-    {
-      name: "Exports",
-      url: "/exports",
-      icon: IconFileExport,
-      desktopOnly: true,
-    },
-  ],
-}
+  {
+    title: "Performance",
+    url: "#",
+    icon: IconChartBar,
+    isActive: true,
+    items: [
+      { title: "Sales Performance",  url: "/sales" },
+      { title: "Telesales",          url: "/telesales" },
+      { title: "Product Performance", url: "/products" },
+    ],
+  },
+  {
+    title: "Programs",
+    url: "#",
+    icon: IconGift,
+    items: [
+      { title: "Incentives & Bonuses", url: "/incentives" },
+    ],
+  },
+]
+
+const navSecondary = [
+  { title: "Get Help", url: "#", icon: IconHelp },
+]
+
+const adminDocuments = [
+  { name: "Leads",    url: "/leads",    icon: IconUsers },
+  { name: "Data Hub", url: "/data-hub", icon: IconUpload },
+  { name: "Exports",  url: "/exports",  icon: IconFileExport, desktopOnly: true },
+]
 
 export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
   const pathname = usePathname()
+  const { user } = useUser()
+  const isAdmin = user?.publicMetadata?.role === 'admin'
 
-  // Update isActive based on pathname
-  const navMain = data.navMain.map(item => {
+  const activeNavMain = navMain.map(item => {
     const hasActiveSubItem = item.items?.some(sub => pathname === sub.url)
-    return {
-      ...item,
-      isActive: hasActiveSubItem || pathname === item.url,
-    }
+    return { ...item, isActive: hasActiveSubItem || pathname === item.url }
   })
 
   return (
@@ -128,9 +93,9 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
         </SidebarMenu>
       </SidebarHeader>
       <SidebarContent>
-        <NavMain items={navMain} />
-        <NavDocuments items={data.documents} />
-        <NavSecondary items={data.navSecondary} className="mt-auto" />
+        <NavMain items={activeNavMain} />
+        {isAdmin && <NavDocuments items={adminDocuments} />}
+        <NavSecondary items={navSecondary} className="mt-auto" />
       </SidebarContent>
       <SidebarFooter>
         <NavUser />

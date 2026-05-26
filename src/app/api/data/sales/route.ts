@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server'
-import { withAdmin } from '@/lib/auth'
+import { withAuth } from '@/lib/auth'
 import { query, queryOne } from '@/lib/db'
 
 export const dynamic = 'force-dynamic'
@@ -84,7 +84,7 @@ async function fetchLastTwoPeriods(interval: Interval, where: string, params: an
 const cmpRatio = (curr: number, prev: number) => prev > 0 ? (curr - prev) / prev : null
 
 export async function GET(request: Request) {
-  return withAdmin(async () => {
+  return withAuth(async () => {
     const { searchParams } = new URL(request.url)
     const rawInterval = searchParams.get('interval') ?? 'monthly'
     const interval: Interval =

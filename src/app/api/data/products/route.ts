@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server'
-import { withAdmin } from '@/lib/auth'
+import { withAuth } from '@/lib/auth'
 import { query, queryOne } from '@/lib/db'
 
 export const dynamic = 'force-dynamic'
@@ -28,7 +28,7 @@ function buildProductWhere(
 }
 
 export async function GET(request: Request) {
-  return withAdmin(async () => {
+  return withAuth(async () => {
     const { searchParams } = new URL(request.url)
     const brands      = (searchParams.get('brands')       || '').split(',').filter(Boolean)
     const className   = (searchParams.get('class_name')   || '').split(',').filter(Boolean)
