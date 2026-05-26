@@ -141,7 +141,7 @@ export function CustomerTrendChart({ filterCmg = [], filterChannel = 'all', star
     return url
   }, [calculatedInterval, interval, customStart, customEnd, filterCmg, filterChannel, startDate, endDate])
 
-  const { data = [], isLoading } = useDashboardSWR<TrendRow[]>(apiUrl)
+  const { data = [], isLoading, isValidating } = useDashboardSWR<TrendRow[]>(apiUrl)
 
   const visibleSeries = useMemo<string[]>(() => {
     if (conversion === 'converted')     return ['new_customer', 'retention']
@@ -155,7 +155,14 @@ export function CustomerTrendChart({ filterCmg = [], filterChannel = 'all', star
     <Card className="w-full py-6 gap-8 shadow-xs border">
       <CardHeader className="flex sm:flex-row flex-col justify-between sm:items-start items-start gap-4 px-6 pb-2">
         <div className="flex flex-col gap-1">
-          <CardTitle className="text-lg font-medium">New & Reactivated Customers Trend</CardTitle>
+          <div className="flex items-center gap-2">
+            <CardTitle className="text-lg font-medium">New & Reactivated Customers Trend</CardTitle>
+            {isValidating && !isLoading && (
+              <span className="text-[10px] font-medium text-muted-foreground bg-muted px-2 py-0.5 rounded-full animate-pulse">
+                Updating…
+              </span>
+            )}
+          </div>
           <span className="text-xs text-muted-foreground font-medium">
             Customer acquisition and retention breakdown — converted vs. not converted, by period.
           </span>

@@ -31,7 +31,7 @@ type Agg = {
   online_sales: number; offline_sales: number
 }
 
-function aggregate(rows: OverviewRow[]): Agg {
+function aggregate(rows: OverviewRow[], filterChannel = 'all'): Agg {
   const s = (k: keyof OverviewRow) => rows.reduce((a, r) => a + (r[k] as number), 0)
   const hoc_sales     = s('hoc_sales')
   const new_customers = s('new_customers')
@@ -39,8 +39,9 @@ function aggregate(rows: OverviewRow[]): Agg {
   const ordered       = s('ordered')
   const hoc_orders    = s('hoc_orders')
   const sales_target  = s('sales_target')
-  const online_sales  = s('online_sales')
-  const offline_sales = s('offline_sales')
+  // Remap online/offline based on channel filter so chart bars reflect the selection
+  const online_sales  = filterChannel === 'offline' ? 0 : s('online_sales')
+  const offline_sales = filterChannel === 'online'  ? 0 : s('offline_sales')
 
   // total_calls/reached are now CMG-specific — sum directly
   // total_incentive/total_agent_cost are month-level — deduplicate by month
@@ -128,7 +129,7 @@ export default function OverviewClient() {
     })
   }, [filtered, filterChannel])
 
-  const kpi = useMemo(() => aggregate(mappedFiltered), [mappedFiltered])
+  const kpi = useMemo(() => aggregate(mappedFiltered, filterChannel), [mappedFiltered, filterChannel])
 
   // ROI uses month-level data regardless of CMG filter (costs are not CMG-specific)
   const roiKpi = useMemo(() => {
@@ -140,17 +141,17 @@ export default function OverviewClient() {
       }
       return true
     })
-    return aggregate(monthRows)
-  }, [rows, rangeFrom, rangeTo, hoverMonth])
+    return aggregate(monthRows, filterChannel)
+  }, [rows, rangeFrom, rangeTo, hoverMonth, filterChannel])
 
   const byMonth = useMemo(() => {
     const monthSet = [...new Set(mappedFiltered.map(r => r.month))].sort()
     return monthSet.map(month => {
       const mRows = mappedFiltered.filter(r => r.month === month)
-      const agg   = aggregate(mRows)
+      const agg   = aggregate(mRows, filterChannel)
       return { month_label: mRows[0]?.month_label ?? month, ...agg }
     })
-  }, [mappedFiltered])
+  }, [mappedFiltered, filterChannel])
 
   if (isLoading) return <PageLoading cols={6} />
   if (rows.length === 0) return (
