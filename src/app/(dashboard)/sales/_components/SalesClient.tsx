@@ -1,10 +1,12 @@
 'use client'
 
 import { useMemo, useState } from 'react'
-import useSWR from 'swr'
 import {
-  AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
+  AreaChart, Area, XAxis, YAxis, CartesianGrid,
 } from 'recharts'
+import {
+  ChartContainer, ChartTooltip, type ChartConfig,
+} from '@/components/ui/chart'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { MultiSelect } from '@/components/dashboard/MultiSelect'
@@ -13,11 +15,10 @@ import { KpiGrid } from '@/components/dashboard/KpiGrid'
 import { DataTable } from '@/components/ui/data-table'
 import { PageLoading, PageEmpty } from '@/components/dashboard/PageState'
 import { DateRangePicker } from '@/components/dashboard/DateRangePicker'
+import { useDashboardSWR } from '@/hooks/useDashboardSWR'
 import { fmtBaht, fmt } from '@/lib/formatters'
-import { cn } from '@/lib/utils'
 import { columns } from '../columns'
 import { TrendingUp, UserPlus, Users, CreditCard, Calendar } from 'lucide-react'
-import { CHART_AXIS_CLS, CHART_TOOLTIP_STYLE } from '@/lib/chart-utils'
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -41,13 +42,48 @@ interface SalesData {
 type Interval   = 'monthly' | 'weekly' | 'custom'
 type Conversion = 'all' | 'converted' | 'not_converted'
 
-// ── Helpers ───────────────────────────────────────────────────────────────────
+// ── Chart Config ──────────────────────────────────────────────────────────────
 
-const fetcher = (url: string) =>
-  fetch(url).then(r => r.json()).then(j => {
-    if (!j.ok) throw new Error(j.error ?? 'fetch error')
-    return j.data as SalesData
-  })
+const salesChartConfig = {
+  Online:  { label: 'Online',  color: '#003DA6' },
+  Offline: { label: 'Offline', color: '#EE2737' },
+} satisfies ChartConfig
+
+// ── Tooltip ───────────────────────────────────────────────────────────────────
+
+function SalesTooltip({ active, payload, label }: { active?: boolean; payload?: any[]; label?: string }) {
+  if (!active || !payload?.length) return null
+  const online  = Number(payload.find(p => p.dataKey === 'Online')?.value  ?? 0)
+  const offline = Number(payload.find(p => p.dataKey === 'Offline')?.value ?? 0)
+  const total   = online + offline
+  return (
+    <div className="rounded-lg border border-border/50 bg-background p-3 text-xs shadow-xl min-w-[12rem] space-y-2">
+      <div className="font-semibold text-muted-foreground text-[10px] uppercase tracking-wider">{label}</div>
+      <div className="space-y-0.5">
+        <div className="text-[10px] text-muted-foreground">Total Sales</div>
+        <div className="text-base font-bold text-foreground">{fmtBaht(total)}</div>
+      </div>
+      <div className="space-y-1.5 pt-1">
+        <div className="flex items-center justify-between gap-4">
+          <div className="flex items-center gap-1.5 text-muted-foreground">
+            <span className="h-2 w-2 rounded-full" style={{ backgroundColor: '#003DA6' }} />
+            <span>Online</span>
+          </div>
+          <span className="font-semibold tabular-nums text-foreground">{fmtBaht(online)}</span>
+        </div>
+        <div className="flex items-center justify-between gap-4">
+          <div className="flex items-center gap-1.5 text-muted-foreground">
+            <span className="h-2 w-2 rounded-full" style={{ backgroundColor: '#EE2737' }} />
+            <span>Offline</span>
+          </div>
+          <span className="font-semibold tabular-nums text-foreground">{fmtBaht(offline)}</span>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+// ── Helpers ───────────────────────────────────────────────────────────────────
 
 function lastDayOfMonth(isoDate: string) {
   const [y, m] = isoDate.split('-').map(Number)
@@ -57,25 +93,18 @@ function lastDayOfMonth(isoDate: string) {
 // ── Component ─────────────────────────────────────────────────────────────────
 
 export default function SalesClient() {
-  // Range chip state
   const [rangeFrom,   setRangeFrom]   = useState<string | null>(null)
   const [rangeTo,     setRangeTo]     = useState<string | null>(null)
   const [hoverMonth,  setHoverMonth]  = useState<string | null>(null)
-
-  // Trend interval state
   const [interval,    setInterval]    = useState<Interval>('custom')
   const [customStart, setCustomStart] = useState('2026-05-01')
   const [customEnd,   setCustomEnd]   = useState('2026-05-31')
-
-  // Dimension filters
   const [channel,    setChannel]    = useState<string[]>([])
   const [cmg,        setCmg]        = useState<string[]>([])
   const [agent,      setAgent]      = useState<string[]>([])
   const [conversion, setConversion] = useState<Conversion>('all')
 
-  // Chip click — same logic as Overview
   const handleChipClick = (m: string) => {
-    // Switching to chips clears custom date mode
     if (interval === 'custom') setInterval('monthly')
     if (!rangeFrom || (rangeFrom && rangeTo)) {
       setRangeFrom(m); setRangeTo(null)
@@ -88,31 +117,17 @@ export default function SalesClient() {
     }
   }
 
-  // Switching to Custom mode clears chip range
-  const handleIntervalChange = (v: Interval) => {
-    if (v === 'custom') { setRangeFrom(null); setRangeTo(null) }
-    setInterval(v)
-  }
-
   const durationDays = useMemo(() => {
     if (interval !== 'custom' || !customStart || !customEnd) return 0
     return Math.ceil(Math.abs(new Date(customEnd).getTime() - new Date(customStart).getTime()) / 86_400_000)
   }, [interval, customStart, customEnd])
 
   const calculatedInterval = useMemo<'daily' | 'weekly' | 'monthly'>(() => {
-    if (interval === 'custom') {
-      return 'daily'
-    }
-    if (rangeFrom) {
-      if (!rangeTo || rangeFrom === rangeTo) {
-        return 'daily'
-      }
-      return 'monthly'
-    }
+    if (interval === 'custom') return 'daily'
+    if (rangeFrom && rangeTo && rangeFrom !== rangeTo) return 'monthly'
     return 'daily'
   }, [interval, rangeFrom, rangeTo])
 
-  // Effective dates: chips take priority over custom date picker
   const effectiveStart = rangeFrom ?? (interval === 'custom' ? customStart : null)
   const effectiveEnd   = rangeFrom
     ? lastDayOfMonth(rangeTo ?? rangeFrom)
@@ -120,24 +135,19 @@ export default function SalesClient() {
 
   const apiUrl = useMemo(() => {
     const p = new URLSearchParams({ interval: calculatedInterval })
-    if (channel.length > 0) p.set('channel', channel.join(','))
-    if (cmg.length > 0)     p.set('cmg',     cmg.join(','))
-    if (agent.length > 0)   p.set('agent',   agent.join(','))
-    if (conversion !== 'all') p.set('conversion', conversion)
-    if (effectiveStart) p.set('startDate', effectiveStart)
-    if (effectiveEnd)   p.set('endDate',   effectiveEnd)
+    if (channel.length > 0)    p.set('channel',    channel.join(','))
+    if (cmg.length > 0)        p.set('cmg',        cmg.join(','))
+    if (agent.length > 0)      p.set('agent',      agent.join(','))
+    if (conversion !== 'all')  p.set('conversion', conversion)
+    if (effectiveStart)        p.set('startDate',  effectiveStart)
+    if (effectiveEnd)          p.set('endDate',    effectiveEnd)
     return `/api/data/sales?${p.toString()}`
   }, [calculatedInterval, channel, cmg, agent, conversion, effectiveStart, effectiveEnd])
 
-  const { data, isLoading } = useSWR<SalesData>(apiUrl, fetcher, {
-    keepPreviousData: true,
-    revalidateOnFocus: false,
-    revalidateOnReconnect: false,
-    dedupingInterval: 300_000,
-  })
+  const { data, isLoading, isValidating } = useDashboardSWR<SalesData>(apiUrl)
 
   if (isLoading && !data) return <PageLoading cols={4} />
-  if (!data || data.kpi.total_sales === 0) {
+  if (!data || data.months.length === 0) {
     return <PageEmpty message="No telesales sales data available" hint="Please build mart first." />
   }
 
@@ -146,7 +156,7 @@ export default function SalesClient() {
   const onlinePct  = kpi.total_sales > 0 ? (kpi.online_sales  / kpi.total_sales) * 100 : 0
   const offlinePct = kpi.total_sales > 0 ? (kpi.offline_sales / kpi.total_sales) * 100 : 0
   const hasFilter  = channel.length > 0 || cmg.length > 0 || agent.length > 0 || conversion !== 'all'
-  const hasRange   = !!(rangeFrom || (interval === 'custom' && (customStart !== '2026-05-01' || customEnd !== '2026-05-31')))
+  const hasRange   = !!(rangeFrom || (interval === 'custom'))
 
   const activeRangeLabel = (() => {
     if (!rangeFrom) return 'All available periods'
@@ -162,6 +172,10 @@ export default function SalesClient() {
     Offline: p.offline,
   }))
 
+  const intervalBadge = interval === 'custom' && durationDays > 0
+    ? `${calculatedInterval} · ${durationDays}d`
+    : `${calculatedInterval} view`
+
   return (
     <div className="space-y-6">
 
@@ -170,20 +184,20 @@ export default function SalesClient() {
         <CardHeader className="pb-3">
           <div className="flex items-center gap-2">
             <Calendar className="h-4 w-4 text-[#003DA6]" />
-            <CardTitle className="text-sm font-medium">Filter & Range Selection</CardTitle>
+            <CardTitle className="text-sm font-medium">Filter &amp; Range Selection</CardTitle>
           </div>
         </CardHeader>
         <CardContent>
           <div className="space-y-4">
-            {/* Row 1: Date & Range Selection */}
+
+            {/* Row 1: Date chips + date picker */}
             <div className="flex flex-wrap items-center gap-4">
-              {/* Month chips */}
               <div className="flex items-center gap-1.5 flex-wrap">
                 {months.map(m => {
                   const effectiveTo = rangeTo ?? (rangeFrom ? hoverMonth : null)
-                  const active  = m === rangeFrom || m === rangeTo
-                  const inRange = !!(rangeFrom && effectiveTo && m > rangeFrom && m < effectiveTo)
-                  const preview = !!(!rangeTo && rangeFrom && hoverMonth && m > rangeFrom && m <= hoverMonth)
+                  const active   = m === rangeFrom || m === rangeTo
+                  const inRange  = !!(rangeFrom && effectiveTo && m > rangeFrom && m < effectiveTo)
+                  const preview  = !!(!rangeTo && rangeFrom && hoverMonth && m > rangeFrom && m <= hoverMonth)
                   return (
                     <button
                       key={m}
@@ -205,23 +219,12 @@ export default function SalesClient() {
                 })}
               </div>
 
-              {/* Custom Date Range Picker */}
               <div className="flex items-center gap-2">
                 <DateRangePicker
                   from={interval === 'custom' ? customStart : ''}
                   to={interval === 'custom' ? customEnd : ''}
-                  onFromChange={(start) => {
-                    setCustomStart(start)
-                    setRangeFrom(null)
-                    setRangeTo(null)
-                    setInterval('custom')
-                  }}
-                  onToChange={(end) => {
-                    setCustomEnd(end)
-                    setRangeFrom(null)
-                    setRangeTo(null)
-                    setInterval('custom')
-                  }}
+                  onFromChange={start => { setCustomStart(start); setRangeFrom(null); setRangeTo(null); setInterval('custom') }}
+                  onToChange={end   => { setCustomEnd(end);   setRangeFrom(null); setRangeTo(null); setInterval('custom') }}
                 />
                 {interval === 'custom' && durationDays > 0 && (
                   <span className="text-[9px] bg-blue-50 text-[#003DA6] px-1.5 py-0.5 rounded font-bold uppercase shrink-0">
@@ -231,19 +234,15 @@ export default function SalesClient() {
               </div>
             </div>
 
-            {/* Row 2: Dropdown Filters */}
+            {/* Row 2: Dropdown filters */}
             <div className="flex flex-wrap items-center gap-4">
               <MultiSelect
                 label="All Channels"
                 value={channel}
                 onChange={setChannel}
-                options={[
-                  { value: 'online', label: 'Online' },
-                  { value: 'offline', label: 'Offline' },
-                ]}
+                options={[{ value: 'online', label: 'Online' }, { value: 'offline', label: 'Offline' }]}
                 width="w-[130px]"
               />
-
               <MultiSelect
                 label="All CMG"
                 value={cmg}
@@ -251,7 +250,6 @@ export default function SalesClient() {
                 options={options.cmg.map(v => ({ value: v, label: v }))}
                 width="w-[150px]"
               />
-
               <MultiSelect
                 label="All Agents"
                 value={agent}
@@ -259,7 +257,6 @@ export default function SalesClient() {
                 options={options.agents.map(v => ({ value: v, label: v }))}
                 width="w-[150px]"
               />
-
               <Select value={conversion} onValueChange={v => setConversion(v as Conversion)}>
                 <SelectTrigger className="h-7 text-xs w-[155px]"><SelectValue placeholder="All Customers" /></SelectTrigger>
                 <SelectContent>
@@ -328,49 +325,46 @@ export default function SalesClient() {
         />
       </KpiGrid>
 
-      {/* ── Trend + Channel Distribution ──────────────────────────────────── */}
+      {/* ── Sales Trend + Channel Distribution ────────────────────────────── */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
 
         {/* Sales Trend */}
-        <Card className="lg:col-span-2">
-          <CardHeader className="flex sm:flex-row flex-col justify-between sm:items-center items-start gap-3 pb-2">
-            <CardTitle className="text-sm font-medium">Sales Trend (Telesales Activity)</CardTitle>
-            {interval === 'custom' && durationDays > 0 ? (
-              <span className="text-[9px] bg-blue-50 text-[#003DA6] px-1.5 py-0.5 rounded font-bold uppercase animate-in fade-in duration-200">
-                {calculatedInterval} · {durationDays}d
-              </span>
-            ) : (
-              <span className="text-[9px] bg-blue-50 text-[#003DA6] px-1.5 py-0.5 rounded font-bold uppercase animate-in fade-in duration-200">
-                {calculatedInterval} View
-              </span>
-            )}
+        <Card className="lg:col-span-2 py-6 gap-4">
+          <CardHeader className="flex sm:flex-row flex-col justify-between sm:items-center items-start gap-3 px-6 pb-2">
+            <div className="flex items-center gap-2">
+              <CardTitle className="text-sm font-medium">Sales Trend (Telesales Activity)</CardTitle>
+              {isValidating && !isLoading && (
+                <span className="text-[10px] font-medium text-muted-foreground bg-muted px-2 py-0.5 rounded-full animate-pulse">
+                  Updating…
+                </span>
+              )}
+            </div>
+            <span className="text-[9px] bg-blue-50 text-[#003DA6] px-1.5 py-0.5 rounded font-bold uppercase">
+              {intervalBadge}
+            </span>
           </CardHeader>
-          <CardContent className="pt-2">
-            <ResponsiveContainer width="100%" height={280}>
+          <CardContent className="px-6 pt-2">
+            <ChartContainer config={salesChartConfig} className="h-[280px] w-full">
               <AreaChart data={chartData} margin={{ top: 10, right: 10, left: 10, bottom: 0 }}>
                 <defs>
-                  <linearGradient id="salesOnline" x1="0" y1="0" x2="0" y2="1">
+                  <linearGradient id="gradOnline" x1="0" y1="0" x2="0" y2="1">
                     <stop offset="5%"  stopColor="#003DA6" stopOpacity={0.8} />
                     <stop offset="95%" stopColor="#003DA6" stopOpacity={0}   />
                   </linearGradient>
-                  <linearGradient id="salesOffline" x1="0" y1="0" x2="0" y2="1">
+                  <linearGradient id="gradOffline" x1="0" y1="0" x2="0" y2="1">
                     <stop offset="5%"  stopColor="#EE2737" stopOpacity={0.8} />
                     <stop offset="95%" stopColor="#EE2737" stopOpacity={0}   />
                   </linearGradient>
                 </defs>
-                <CartesianGrid strokeDasharray="3 3" vertical={false} className="stroke-muted" />
-                <XAxis dataKey="name" tickLine={false} axisLine={false} tickMargin={8} className={CHART_AXIS_CLS} />
-                <YAxis tickLine={false} axisLine={false} tickMargin={8} className={CHART_AXIS_CLS}
-                  tickFormatter={v => fmtBaht(v)} width={65} />
-                <Tooltip
-                  contentStyle={CHART_TOOLTIP_STYLE}
-                  labelClassName="text-xs font-bold"
-                  formatter={(value: any, name: string) => [fmtBaht(Number(value)), name]}
-                />
-                <Area type="monotone" dataKey="Online"  stroke="#003DA6" fillOpacity={1} fill="url(#salesOnline)"  strokeWidth={2} />
-                <Area type="monotone" dataKey="Offline" stroke="#EE2737" fillOpacity={1} fill="url(#salesOffline)" strokeWidth={2} />
+                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="rgba(144,164,174,0.3)" />
+                <XAxis dataKey="name" tickLine={false} axisLine={false} tickMargin={8} fontSize={11} />
+                <YAxis tickLine={false} axisLine={false} tickMargin={8} fontSize={11}
+                  tickFormatter={v => fmtBaht(v)} width={70} />
+                <ChartTooltip cursor={false} content={props => <SalesTooltip {...props} />} />
+                <Area type="monotone" dataKey="Online"  stroke="#003DA6" fillOpacity={1} fill="url(#gradOnline)"  strokeWidth={2} />
+                <Area type="monotone" dataKey="Offline" stroke="#EE2737" fillOpacity={1} fill="url(#gradOffline)" strokeWidth={2} />
               </AreaChart>
-            </ResponsiveContainer>
+            </ChartContainer>
           </CardContent>
         </Card>
 

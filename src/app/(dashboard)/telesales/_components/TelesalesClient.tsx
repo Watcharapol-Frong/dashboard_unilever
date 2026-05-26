@@ -14,7 +14,6 @@ import { DataTable } from '@/components/ui/data-table'
 import { PageLoading, PageEmpty } from '@/components/dashboard/PageState'
 import { DateRangePicker } from '@/components/dashboard/DateRangePicker'
 import { useDashboardSWR } from '@/hooks/useDashboardSWR'
-import { CHART_AXIS_CLS, CHART_TOOLTIP_STYLE } from '@/lib/chart-utils'
 import { formatNumber, formatPct, colorRate } from '@/lib/formatters'
 import { columns } from '../columns'
 import { Calendar, Phone, PhoneCall, UserCheck, Users } from 'lucide-react'
@@ -93,14 +92,7 @@ function getStatusColor(status: string, index: number): string {
   return palette[index % palette.length]
 }
 
-interface TooltipPayloadItem {
-  value: string | number
-  name: string
-  color: string
-  payload: Record<string, string | number>
-}
-
-const CustomTooltip = ({ active, payload, label }: { active?: boolean; payload?: TooltipPayloadItem[]; label?: string }) => {
+const CustomTooltip = ({ active, payload, label }: { active?: boolean; payload?: any[]; label?: string }) => {
   if (active && payload && payload.length) {
     return (
       <div className="bg-background border border-border p-3 rounded-lg shadow-md space-y-1.5 text-xs">
@@ -182,7 +174,7 @@ export default function TelesalesClient() {
     return `/api/data/telesales?${p.toString()}`
   }, [effectiveStart, effectiveEnd, channel, cmg, agent])
 
-  const { data, isLoading } = useDashboardSWR<TelesalesData>(apiUrl)
+  const { data, isLoading, isValidating } = useDashboardSWR<TelesalesData>(apiUrl)
 
   const trendData = useMemo(() => {
     if (!data?.by_period) return []
@@ -267,7 +259,7 @@ export default function TelesalesClient() {
   }, [chartData])
 
   if (isLoading && !data) return <PageLoading />
-  if (!data || data.summary.total_calls === 0) {
+  if (!data || data.months.length === 0) {
     return <PageEmpty message="No telesales data available" hint="Please upload telesales data and build mart." />
   }
 
@@ -438,10 +430,28 @@ export default function TelesalesClient() {
                 <stop offset="95%" stopColor="#10b981" stopOpacity={0}/>
               </linearGradient>
             </defs>
-            <CartesianGrid strokeDasharray="3 3" vertical={false} className="stroke-muted" />
-            <XAxis dataKey="name" tickLine={false} axisLine={false} tickMargin={8} className={CHART_AXIS_CLS} />
-            <YAxis tickLine={false} axisLine={false} tickMargin={8} className={CHART_AXIS_CLS} />
-            <Tooltip contentStyle={CHART_TOOLTIP_STYLE} labelClassName="text-xs font-bold" />
+            <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="rgba(144,164,174,0.3)" />
+            <XAxis dataKey="name" tickLine={false} axisLine={false} tickMargin={8} fontSize={11} />
+            <YAxis tickLine={false} axisLine={false} tickMargin={8} fontSize={11} />
+            <Tooltip
+              content={({ active, payload, label }) => {
+                if (!active || !payload?.length) return null
+                return (
+                  <div className="rounded-lg border border-border/50 bg-background p-3 text-xs shadow-xl space-y-1.5 min-w-[10rem]">
+                    <div className="font-semibold text-muted-foreground text-[10px] uppercase tracking-wider">{label}</div>
+                    {payload.map(p => (
+                      <div key={p.dataKey} className="flex items-center justify-between gap-4">
+                        <div className="flex items-center gap-1.5 text-muted-foreground">
+                          <span className="h-2 w-2 rounded-full" style={{ backgroundColor: p.color }} />
+                          <span>{p.name}</span>
+                        </div>
+                        <span className="font-semibold tabular-nums text-foreground">{formatNumber(Number(p.value))}</span>
+                      </div>
+                    ))}
+                  </div>
+                )
+              }}
+            />
             <Area type="monotone" dataKey="Calls" stroke="#3b82f6" fillOpacity={1} fill="url(#colorCalls)" strokeWidth={2} />
             <Area type="monotone" dataKey="Conversion" stroke="#10b981" fillOpacity={1} fill="url(#colorConverted)" strokeWidth={2} />
           </AreaChart>
@@ -449,25 +459,25 @@ export default function TelesalesClient() {
 
         <ChartCard title="Call Statuses" height={chartHeight} className="lg:col-span-3">
           <BarChart data={chartData} height={chartHeight - 40} layout="vertical" margin={{ top: 5, right: 20, left: 20, bottom: 5 }}>
-            <CartesianGrid strokeDasharray="3 3" horizontal={false} className="stroke-muted" />
+            <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="rgba(144,164,174,0.3)" />
             <XAxis
               type="number"
               domain={[0, 100]}
               tickFormatter={(val) => `${Math.round(val)}%`}
               tickLine={false}
               axisLine={false}
-              className={CHART_AXIS_CLS}
+              fontSize={11}
             />
             <YAxis
               dataKey="tier"
               type="category"
               tickLine={false}
               axisLine={false}
-              className={CHART_AXIS_CLS}
+              fontSize={11}
               width={160}
               interval={0}
             />
-            <Tooltip content={<CustomTooltip />} />
+            <Tooltip content={props => <CustomTooltip {...props} />} />
             <Legend verticalAlign="bottom" height={36} wrapperStyle={{ fontSize: '12px', marginTop: '10px' }} />
             {uniqueStatuses.map((status, index) => (
               <Bar

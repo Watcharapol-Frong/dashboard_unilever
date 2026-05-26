@@ -10,7 +10,6 @@ import { DataTable } from '@/components/ui/data-table'
 import { PageLoading, PageEmpty } from '@/components/dashboard/PageState'
 import { useDashboardSWR } from '@/hooks/useDashboardSWR'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
-import { CHART_AXIS_CLS, CHART_TOOLTIP_STYLE } from '@/lib/chart-utils'
 import { formatTHB, formatPeriodLabel, colorAchievement, colorRoi } from '@/lib/formatters'
 import { PiggyBank, TrendingUp } from 'lucide-react'
 import { ColumnDef } from '@tanstack/react-table'
@@ -142,13 +141,33 @@ export default function IncentivesClient() {
 
       <ChartCard title="Monthly Incentives vs Program ROI" height={300}>
         <ComposedChart data={chartData} margin={{ top: 10, right: 10, left: 10, bottom: 0 }}>
-          <CartesianGrid strokeDasharray="3 3" vertical={false} className="stroke-muted" />
-          <XAxis dataKey="name" tickLine={false} axisLine={false} tickMargin={8} className={CHART_AXIS_CLS} />
-          <YAxis yAxisId="incentive" tickLine={false} axisLine={false} tickMargin={8} className={CHART_AXIS_CLS}
+          <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="rgba(144,164,174,0.3)" />
+          <XAxis dataKey="name" tickLine={false} axisLine={false} tickMargin={8} fontSize={11} />
+          <YAxis yAxisId="incentive" tickLine={false} axisLine={false} tickMargin={8} fontSize={11}
             tickFormatter={v => `฿${(v / 1000).toFixed(0)}k`} />
-          <YAxis yAxisId="roi" orientation="right" tickLine={false} axisLine={false} tickMargin={8} className={CHART_AXIS_CLS}
+          <YAxis yAxisId="roi" orientation="right" tickLine={false} axisLine={false} tickMargin={8} fontSize={11}
             tickFormatter={v => `${v}x`} />
-          <Tooltip contentStyle={CHART_TOOLTIP_STYLE} labelClassName="text-xs font-bold" />
+          <Tooltip
+            content={({ active, payload, label }) => {
+              if (!active || !payload?.length) return null
+              return (
+                <div className="rounded-lg border border-border/50 bg-background p-3 text-xs shadow-xl space-y-1.5 min-w-[12rem]">
+                  <div className="font-semibold text-muted-foreground text-[10px] uppercase tracking-wider">{label}</div>
+                  {payload.map(p => (
+                    <div key={p.dataKey} className="flex items-center justify-between gap-4">
+                      <div className="flex items-center gap-1.5 text-muted-foreground">
+                        <span className="h-2 w-2 rounded-full" style={{ backgroundColor: p.color }} />
+                        <span>{p.name}</span>
+                      </div>
+                      <span className="font-semibold tabular-nums text-foreground">
+                        {p.dataKey === 'ROI' ? `${Number(p.value).toFixed(2)}x` : formatTHB(Number(p.value))}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              )
+            }}
+          />
           <Bar yAxisId="incentive" dataKey="Incentive" name="Total Incentives Paid" fill="#003DA6" radius={[4, 4, 0, 0]} barSize={24} />
           <Line yAxisId="roi" type="monotone" dataKey="ROI" name="ROI (Multiplier)" stroke="#EE2737" strokeWidth={3} dot={{ r: 4 }} />
         </ComposedChart>
