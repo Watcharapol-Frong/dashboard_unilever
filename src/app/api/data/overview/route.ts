@@ -79,7 +79,7 @@ export async function GET() {
       ORDER BY c.month, c.dynamic_cmg
     `).catch((err: unknown) => {
       console.error('[overview] query error:', err)
-      return [] as any[]
+      throw err
     })
 
     const data = rows.map((r: any) => ({
