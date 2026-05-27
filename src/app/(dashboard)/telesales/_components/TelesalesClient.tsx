@@ -343,14 +343,12 @@ export default function TelesalesClient() {
                   to={interval === 'custom' ? customEnd : ''}
                   onFromChange={(start) => {
                     setCustomStart(start)
-                    setRangeFrom(null)
-                    setRangeTo(null)
+                    clearRange()
                     setInterval('custom')
                   }}
                   onToChange={(end) => {
                     setCustomEnd(end)
-                    setRangeFrom(null)
-                    setRangeTo(null)
+                    clearRange()
                     setInterval('custom')
                   }}
                 />
@@ -397,8 +395,7 @@ export default function TelesalesClient() {
                     setChannel([])
                     setCmg([])
                     setAgent([])
-                    setRangeFrom(null)
-                    setRangeTo(null)
+                    clearRange()
                     setInterval('monthly')
                     setCustomStart('2026-05-01')
                     setCustomEnd('2026-05-31')
@@ -412,8 +409,8 @@ export default function TelesalesClient() {
           </div>
 
           <p className="text-xs text-muted-foreground mt-3">
-            {activeRangeLabel
-              ? <>Showing: <span className="font-medium text-foreground">{activeRangeLabel}</span></>
+            {displayRangeLabel
+              ? <>Showing: <span className="font-medium text-foreground">{displayRangeLabel}</span></>
               : <>Showing: <span className="font-medium text-foreground">all available periods</span> — select month chips to filter by period</>
             }
           </p>
