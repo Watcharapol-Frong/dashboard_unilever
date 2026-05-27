@@ -105,8 +105,8 @@ export async function GET(request: Request) {
       `, params),
       queryOne<{ total_calls: string; reached: string }>(`
         SELECT
-          COUNT(*)::text AS total_calls,
-          COUNT(*) FILTER (
+          COUNT(DISTINCT mmid)::text AS total_calls,
+          COUNT(DISTINCT mmid) FILTER (
             WHERE call_status NOT LIKE 'ไม่รับสาย%'
               AND call_status IS DISTINCT FROM 'ปิดเครื่อง/ติดต่อไม่ได้'
           )::text AS reached

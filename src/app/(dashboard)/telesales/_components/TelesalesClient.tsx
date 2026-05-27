@@ -413,7 +413,7 @@ export default function TelesalesClient() {
           value={formatNumber(data.summary.total_leads)}
           subtitle="Total target leads in database"
           icon={Users}
-          tooltip="Total unique customers in the telesales lead pool — all MMIDs that have been called at least once, regardless of outcome."
+          tooltip="Total unique customers in the telesales lead pool — all MMIDs assigned for calling, regardless of call outcome."
         />
         <KpiCard
           title="Connected Rate"
@@ -421,7 +421,7 @@ export default function TelesalesClient() {
           subtitle={`Connected: ${formatNumber(data.summary.reached)} / Total: ${formatNumber(data.summary.total_calls)}`}
           valueClassName={colorRate(reachRate)}
           icon={PhoneCall}
-          tooltip="Reached ÷ Total Calls. 'Reached' excludes unreachable statuses: no answer, switched off, unavailable, and not-interested."
+          tooltip="Unique customers reached ÷ Unique customers called. 'Connected' = at least one call where the customer answered (excludes: no answer, switched off, unavailable)."
         />
         <KpiCard
           title="Conversion Rate"
@@ -429,14 +429,14 @@ export default function TelesalesClient() {
           subtitle={`Converted: ${formatNumber(data.summary.total_converted)} / Connected: ${formatNumber(data.summary.reached)}`}
           valueClassName={colorRate(conversionRate, [0.15, 0.08])}
           icon={UserCheck}
-          tooltip="Orders placed ÷ Reached customers. Measures how effectively connected customers are converted into buyers."
+          tooltip="Unique converted customers ÷ Unique connected customers. Both use distinct customer counts so the ratio is meaningful."
         />
         <KpiCard
           title="Orders (Conversion)"
           value={formatNumber(data.summary.total_converted)}
           subtitle={`New: ${formatNumber(data.summary.new_converted ?? 0)} · Repeat: ${formatNumber(data.summary.repeat_converted ?? 0)}`}
           icon={Phone}
-          tooltip="Total customers who converted (New + Repeat). Matches the Funnel chart totals. A customer counts once even if they placed multiple orders."
+          tooltip="Unique customers who converted (New + Repeat). A customer with both a new and a repeat order is counted in both breakdowns but only once in the total."
         />
       </KpiGrid>
 
