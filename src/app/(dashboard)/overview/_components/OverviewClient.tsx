@@ -47,6 +47,9 @@ function aggregate(rows: OverviewRow[], filterChannel = 'all'): Agg {
 
   // total_calls/reached are now CMG-specific — sum directly
   // total_incentive/total_agent_cost are month-level — deduplicate by month
+  // total_calls/reached are CMG-specific — sum directly
+  // total_incentive/total_agent_cost are month-level — deduplicate by month
+  // incentive_hoc_sales is CMG-level but already zero for ineligible CMGs — sum directly
   const seen = new Set<string>()
   let total_calls = 0, reached = 0, total_incentive = 0, total_agent_cost = 0
   for (const r of rows) {
@@ -58,8 +61,10 @@ function aggregate(rows: OverviewRow[], filterChannel = 'all'): Agg {
       total_agent_cost += r.total_agent_cost
     }
   }
-  const total_expense = total_incentive + total_agent_cost
-  const roi           = total_expense > 0 ? hoc_sales / total_expense : 0
+  const total_expense     = total_incentive + total_agent_cost
+  const incentive_hoc_sales = s('incentive_hoc_sales')
+  // ROI uses incentive-eligible sales basis (consistent with incentives page)
+  const roi               = total_expense > 0 ? incentive_hoc_sales / total_expense : 0
   const achievement   = sales_target  > 0 ? (hoc_sales / sales_target) * 100 : 0
   return {
     hoc_sales, new_customers, retention, ordered, hoc_orders, total_incentive,

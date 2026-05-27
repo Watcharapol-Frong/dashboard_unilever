@@ -58,14 +58,21 @@ export async function GET() {
         m.total_agent_cost::text                                                       AS total_agent_cost,
         m.total_expense::text                                                          AS total_expense,
         m.roi::text                                                                    AS roi,
-        (CASE WHEN SUM(c.sales_target) FILTER (WHERE c.dynamic_cmg IN ('FOOD RETAILER', 'HORECA')) > 0
-              THEN SUM(c.hoc_sales)    FILTER (WHERE c.dynamic_cmg IN ('FOOD RETAILER', 'HORECA'))
-                 / SUM(c.sales_target) FILTER (WHERE c.dynamic_cmg IN ('FOOD RETAILER', 'HORECA'))
+        (CASE WHEN SUM(c.sales_target) FILTER (
+                WHERE m.month < '2025-05-01' OR c.dynamic_cmg IN ('FOOD RETAILER', 'HORECA')
+              ) > 0
+              THEN SUM(c.hoc_sales)    FILTER (
+                WHERE m.month < '2025-05-01' OR c.dynamic_cmg IN ('FOOD RETAILER', 'HORECA')
+              ) / SUM(c.sales_target)  FILTER (
+                WHERE m.month < '2025-05-01' OR c.dynamic_cmg IN ('FOOD RETAILER', 'HORECA')
+              )
               ELSE 0 END)::text                                                        AS achievement_ratio,
-        SUM(c.hoc_sales) FILTER (WHERE c.dynamic_cmg IN ('FOOD RETAILER', 'HORECA'))::text
-                                                                                       AS incentive_hoc_sales,
-        SUM(c.sales_target) FILTER (WHERE c.dynamic_cmg IN ('FOOD RETAILER', 'HORECA'))::text
-                                                                                       AS sales_target,
+        SUM(c.hoc_sales)    FILTER (
+          WHERE m.month < '2025-05-01' OR c.dynamic_cmg IN ('FOOD RETAILER', 'HORECA')
+        )::text                                                                        AS incentive_hoc_sales,
+        SUM(c.sales_target) FILTER (
+          WHERE m.month < '2025-05-01' OR c.dynamic_cmg IN ('FOOD RETAILER', 'HORECA')
+        )::text                                                                        AS sales_target,
         m.incentive_per_head::text                                                     AS incentive_per_head
       FROM mart_performance_month m
       LEFT JOIN mart_performance_cmg c ON c.month = m.month

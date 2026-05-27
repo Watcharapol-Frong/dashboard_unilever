@@ -16,6 +16,7 @@ export type OverviewRow = {
   retention: number
   hoc_orders: number
   hoc_sales: number
+  incentive_hoc_sales: number
   sales_target: number
   achievement_ratio: number
   total_incentive: number

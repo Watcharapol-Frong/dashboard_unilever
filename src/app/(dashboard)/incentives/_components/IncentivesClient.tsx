@@ -104,17 +104,12 @@ const summaryColumns: ColumnDef<MonthlySummary>[] = [
   },
   {
     accessorKey: 'incentive_per_head',
-    header: 'Rate / Head',
+    header: 'Incentive / Head',
     cell: ({ row }) => (
-      <div className="text-right font-medium text-muted-foreground">
+      <div className="text-right font-medium">
         {row.original.incentive_per_head > 0 ? `${formatTHB(row.original.incentive_per_head)}/head` : '—'}
       </div>
     ),
-  },
-  {
-    accessorKey: 'total_incentive',
-    header: 'Total Incentives Paid',
-    cell: ({ row }) => <div className="text-right font-medium">{formatTHB(row.original.total_incentive)}</div>,
   },
   {
     accessorKey: 'roi',

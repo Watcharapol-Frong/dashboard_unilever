@@ -59,6 +59,10 @@ export async function GET() {
         c.retention,
         c.hoc_orders,
         c.hoc_sales,
+        -- incentive-eligible sales: before May 2025 all CMGs count; from May DISTRIBUTOR excluded
+        CASE WHEN c.month < '2025-05-01' OR c.dynamic_cmg IN ('FOOD RETAILER', 'HORECA')
+             THEN c.hoc_sales ELSE 0
+        END AS incentive_hoc_sales,
         c.sales_target,
         c.achievement_ratio,
         COALESCE(m.incentive_per_head, 0) AS incentive_per_head,
@@ -93,8 +97,9 @@ export async function GET() {
       new_customers:     Number(r.new_customers ?? 0),
       retention:         Number(r.retention ?? 0),
       hoc_orders:        Number(r.hoc_orders ?? 0),
-      hoc_sales:         Number(r.hoc_sales ?? 0),
-      sales_target:      Number(r.sales_target ?? 0),
+      hoc_sales:           Number(r.hoc_sales ?? 0),
+      incentive_hoc_sales: Number(r.incentive_hoc_sales ?? 0),
+      sales_target:        Number(r.sales_target ?? 0),
       achievement_ratio: Number(r.achievement_ratio ?? 0),
       incentive_per_head:Number(r.incentive_per_head ?? 0),
       total_incentive:   Number(r.total_incentive ?? 0),
