@@ -107,6 +107,7 @@ export async function GET(request: Request) {
         SELECT
           COUNT(DISTINCT mmid)::text AS total_calls,
           COUNT(DISTINCT mmid) FILTER (
+            -- Thai DB values: no-answer variants / phone off or unreachable
             WHERE call_status NOT LIKE 'ไม่รับสาย%'
               AND call_status IS DISTINCT FROM 'ปิดเครื่อง/ติดต่อไม่ได้'
           )::text AS reached
@@ -141,6 +142,7 @@ export async function GET(request: Request) {
           COALESCE(tc.agent, 'Unknown') AS agent,
           COUNT(*)::text AS total_calls,
           COUNT(*) FILTER (
+            -- Thai DB values: no-answer variants / phone off or unreachable
             WHERE tc.call_status NOT LIKE 'ไม่รับสาย%'
               AND tc.call_status IS DISTINCT FROM 'ปิดเครื่อง/ติดต่อไม่ได้'
           )::text AS reached,

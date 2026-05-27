@@ -17,6 +17,7 @@ export async function GET() {
           SELECT mmid,
             CASE
               WHEN COUNT(*) FILTER (
+                -- Thai DB values: no-answer variants / phone off or unreachable
                 WHERE call_status NOT LIKE 'ไม่รับสาย%'
                   AND call_status IS DISTINCT FROM 'ปิดเครื่อง/ติดต่อไม่ได้'
               ) > 0 THEN 'reached'

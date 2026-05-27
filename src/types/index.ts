@@ -49,7 +49,7 @@ export interface OverviewKpi {
   total_calls: number
   calls_per_day: number
   connection_rate: number
-  contacted: number           // = reached (รับสาย)
+  contacted: number           // = reached (call connected)
   not_reached: number
   // comparison (vs previous period)
   prev_new_customers: number

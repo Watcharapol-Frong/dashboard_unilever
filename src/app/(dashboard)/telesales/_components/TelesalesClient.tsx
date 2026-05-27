@@ -61,27 +61,51 @@ interface TelesalesData {
   }
 }
 
-// ── Status Colors mapping for Thai statuses ──────────────────────────────────
+// Maps Thai DB call_status values to English display labels for charts/tooltips.
+// Keys must match the exact strings stored in the telesales_calls.call_status column.
+const CALL_STATUS_LABELS: Record<string, string> = {
+  'สั่งซื้อสินค้าเรียบร้อย':                          'Order Placed',
+  'สั่งสินค้าอื่นๆ':                                 'Other Order',
+  'เสนอราคาแล้ว อยู่ระหว่างรอการยืนยันคำสั่งซื้อ':    'Quote Sent — Awaiting Confirmation',
+  'นัดหมายติดต่อกลับ':                               'Callback Scheduled',
+  'ไม่สะดวกคุย':                                    'Busy / Not Available',
+  'ไม่รับสาย 1':                                    'No Answer (1st)',
+  'ไม่รับสาย 2':                                    'No Answer (2nd)',
+  'ไม่รับสาย 3':                                    'No Answer (3rd)',
+  'ไม่รับสาย':                                      'No Answer',
+  'ไม่รับสาย/สายว่างแต่ไม่รับ':                       'No Answer / Ringing',
+  'ยังไม่ต้องการสินค้า':                              'Not Interested',
+  'ปิดเครื่อง/ติดต่อไม่ได้':                          'Phone Off / Unreachable',
+  'สายไม่ว่าง':                                     'Line Busy',
+  'เบอร์ผิด/ไม่มีสัญญาน':                            'Wrong Number / No Signal',
+  'สายว่างไม่มีคนรับ':                               'No Answer (Ring)',
+  'เบอร์บ้านไม่มีคนรับ':                             'Home Phone Unanswered',
+}
 
+function getStatusLabel(thaiStatus: string): string {
+  return CALL_STATUS_LABELS[thaiStatus] ?? thaiStatus
+}
+
+// Colors keyed by English label (after translation via CALL_STATUS_LABELS).
 const STATUS_COLORS: Record<string, string> = {
-  'สั่งซื้อสินค้าเรียบร้อย': '#10B981',                 // Green
-  'สั่งสินค้าอื่นๆ': '#84CC16',                       // Lime
-  'เสนอราคาแล้ว อยู่ระหว่างรอการยืนยันคำสั่งซื้อ': '#14B8A6', // Teal
-  'นัดหมายติดต่อกลับ': '#F59E0B',                   // Amber
-  'ไม่สะดวกคุย': '#3b82f6',                       // Blue
-  'ไม่รับสาย 1': '#a78bfa',                       // Purple light
-  'ไม่รับสาย 2': '#8b5cf6',                       // Purple medium
-  'ไม่รับสาย 3': '#6d28d9',                       // Purple dark
-  'ไม่รับสาย': '#6366f1',                         // Indigo
-  'ไม่รับสาย/สายว่างแต่ไม่รับ': '#6366f1',          // Indigo
-  'ยังไม่ต้องการสินค้า': '#94a3b8',                    // Slate
-  'ปิดเครื่อง/ติดต่อไม่ได้': '#ef4444',               // Red
-  'สายไม่ว่าง': '#ec4899',                         // Pink
-  'เบอร์ผิด/ไม่มีสัญญาน': '#f43f5e',                   // Rose
-  'สายว่างไม่มีคนรับ': '#475569',                    // Slate dark
-  'เบอร์บ้านไม่มีคนรับ': '#cbd5e1',                  // Slate lighter
-  'อื่นๆ': '#64748b',                             // Slate dark for "other"
-  'Unspecified': '#64748b',
+  'Order Placed':                          '#10B981', // green
+  'Other Order':                           '#84CC16', // lime
+  'Quote Sent — Awaiting Confirmation':    '#14B8A6', // teal
+  'Callback Scheduled':                    '#F59E0B', // amber
+  'Busy / Not Available':                  '#3b82f6', // blue
+  'No Answer (1st)':                       '#a78bfa', // purple light
+  'No Answer (2nd)':                       '#8b5cf6', // purple medium
+  'No Answer (3rd)':                       '#6d28d9', // purple dark
+  'No Answer':                             '#6366f1', // indigo
+  'No Answer / Ringing':                   '#6366f1', // indigo
+  'Not Interested':                        '#94a3b8', // slate
+  'Phone Off / Unreachable':               '#ef4444', // red
+  'Line Busy':                             '#ec4899', // pink
+  'Wrong Number / No Signal':              '#f43f5e', // rose
+  'No Answer (Ring)':                      '#475569', // slate dark
+  'Home Phone Unanswered':                 '#cbd5e1', // slate lighter
+  'Other':                                 '#64748b', // slate
+  'Unspecified':                           '#64748b', // slate
 }
 
 function getStatusColor(status: string, index: number): string {
@@ -192,28 +216,26 @@ export default function TelesalesClient() {
       return { data: [], statuses: [] }
     }
 
-    // 1. Determine top 4 call statuses by overall count (in Thai)
+    // 1. Determine top 4 call statuses by overall count, then translate to English labels
     const overallBreakdown = data.summary.call_status_breakdown
     const sortedStatuses = Object.entries(overallBreakdown)
       .sort((a, b) => b[1] - a[1])
       .map(([status]) => status)
 
-    const top4Statuses = sortedStatuses.slice(0, 4)
+    const top4Statuses = sortedStatuses.slice(0, 4) // Thai DB values for matching
     const hasOthers = sortedStatuses.length > 4
 
-    // Unique statuses to render as bars (exactly 5 if others exist)
-    const uniqueStatuses = [...top4Statuses]
-    if (hasOthers) {
-      uniqueStatuses.push('อื่นๆ')
-    }
+    // Build display labels (English) for the top 4 + optional "Other" bucket
+    const uniqueStatuses = top4Statuses.map(getStatusLabel)
+    if (hasOthers) uniqueStatuses.push('Other')
 
-    // 2. Group by tier
+    // 2. Group by tier, using English labels as chart data keys
     const tierMap: Record<string, Record<string, number>> = {}
     data.by_tier_status.forEach(item => {
       const tier = item.tier || 'Unspecified'
       const status = item.call_status || 'Unspecified'
       const isTop4 = top4Statuses.includes(status)
-      const mappedStatus = isTop4 ? status : 'อื่นๆ'
+      const mappedStatus = isTop4 ? getStatusLabel(status) : 'Other'
 
       if (!tierMap[tier]) {
         tierMap[tier] = {}

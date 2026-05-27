@@ -77,10 +77,11 @@ export async function GET(request: Request) {
           mmid,
           CASE
             WHEN COUNT(*) FILTER (
-              WHERE call_status NOT LIKE 'ไม่รับสาย%'
-                AND call_status IS DISTINCT FROM 'ปิดเครื่อง/ติดต่อไม่ได้'
-                AND call_status IS DISTINCT FROM 'ไม่สะดวกคุย'
-                AND call_status IS DISTINCT FROM 'ยังไม่ต้องการสินค้า'
+              -- Thai DB values: no-answer / unreachable / not interested statuses
+              WHERE call_status NOT LIKE 'ไม่รับสาย%'                        -- no answer variants
+                AND call_status IS DISTINCT FROM 'ปิดเครื่อง/ติดต่อไม่ได้'  -- phone off / unreachable
+                AND call_status IS DISTINCT FROM 'ไม่สะดวกคุย'              -- not convenient to talk
+                AND call_status IS DISTINCT FROM 'ยังไม่ต้องการสินค้า'       -- not interested
             ) > 0 THEN 'engaged'
             ELSE 'not_engaged'
           END AS engagement_status

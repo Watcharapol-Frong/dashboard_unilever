@@ -223,10 +223,11 @@ export async function buildMartPerformance(): Promise<number> {
         mc.primary_cmg AS dynamic_cmg,
         COUNT(DISTINCT tc.mmid) AS total_calls,
         COUNT(DISTINCT tc.mmid) FILTER (
-          WHERE tc.call_status NOT LIKE 'ไม่รับสาย%'
-            AND tc.call_status IS DISTINCT FROM 'ปิดเครื่อง/ติดต่อไม่ได้'
-            AND tc.call_status IS DISTINCT FROM 'ไม่สะดวกคุย'
-            AND tc.call_status IS DISTINCT FROM 'ยังไม่ต้องการสินค้า'
+          -- exclude no-answer and unreachable statuses (Thai DB values)
+          WHERE tc.call_status NOT LIKE 'ไม่รับสาย%'            -- no answer variants
+            AND tc.call_status IS DISTINCT FROM 'ปิดเครื่อง/ติดต่อไม่ได้' -- phone off / unreachable
+            AND tc.call_status IS DISTINCT FROM 'ไม่สะดวกคุย'           -- not convenient to talk
+            AND tc.call_status IS DISTINCT FROM 'ยังไม่ต้องการสินค้า'    -- not interested
         ) AS reached
       FROM telesales_calls tc
       JOIN mmid_cmg mc ON mc.mmid = tc.mmid
@@ -259,15 +260,16 @@ export async function buildMartPerformance(): Promise<number> {
         DATE_TRUNC('month', first_connected_date)::date AS month,
         COUNT(DISTINCT mmid) AS total_calls,
         COUNT(DISTINCT mmid) FILTER (
-          WHERE call_status NOT LIKE 'ไม่รับสาย%'
-            AND call_status IS DISTINCT FROM 'ปิดเครื่อง/ติดต่อไม่ได้'
+          -- exclude no-answer and unreachable statuses (Thai DB values)
+          WHERE call_status NOT LIKE 'ไม่รับสาย%'                        -- no answer variants
+            AND call_status IS DISTINCT FROM 'ปิดเครื่อง/ติดต่อไม่ได้'  -- phone off / unreachable
         ) AS reached
       FROM telesales_calls
       WHERE first_connected_date IS NOT NULL
       GROUP BY 1
     ),
     month_sales AS (
-      -- incentive คิดจาก FOOD RETAILER + HORECA เท่านั้น ไม่รวม DISTRIBUTOR / END USER
+      -- incentive applies to FOOD RETAILER + HORECA only; excludes DISTRIBUTOR / END USER
       SELECT month,
         SUM(hoc_sales) FILTER (WHERE dynamic_cmg IN ('FOOD RETAILER', 'HORECA')) AS incentive_hoc_sales,
         SUM(hoc_sales)                                                            AS total_hoc_sales

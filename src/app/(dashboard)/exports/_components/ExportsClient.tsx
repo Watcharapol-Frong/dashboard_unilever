@@ -162,7 +162,7 @@ export default function ExportsClient() {
         <div>
           <p className="text-sm font-medium">Desktop only</p>
           <p className="text-xs text-muted-foreground mt-1">
-            หน้า Exports ต้องใช้บน Desktop เท่านั้น
+            This page is only available on desktop.
           </p>
         </div>
       </div>
