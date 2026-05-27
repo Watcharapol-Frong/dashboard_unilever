@@ -47,6 +47,8 @@ interface TelesalesData {
     reached: number
     not_reached: number
     total_converted: number
+    new_converted: number
+    repeat_converted: number
     call_status_breakdown: Record<string, number>
   }
   by_agent: AgentPerformance[]
@@ -432,9 +434,9 @@ export default function TelesalesClient() {
         <KpiCard
           title="Orders (Conversion)"
           value={formatNumber(data.summary.total_converted)}
-          subtitle="Total successful orders placed"
+          subtitle={`New: ${formatNumber(data.summary.new_converted ?? 0)} · Repeat: ${formatNumber(data.summary.repeat_converted ?? 0)}`}
           icon={Phone}
-          tooltip="Total distinct orders placed by customers who were called — counted only for customers who successfully placed a HOC Unilever order."
+          tooltip="Total customers who converted (New + Repeat). Matches the Funnel chart totals. A customer counts once even if they placed multiple orders."
         />
       </KpiGrid>
 
