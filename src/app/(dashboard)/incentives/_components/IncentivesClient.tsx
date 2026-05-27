@@ -1,7 +1,7 @@
 'use client'
 
 import { useMemo, useState } from 'react'
-import { ComposedChart, Bar, Line, XAxis, YAxis, CartesianGrid, Tooltip } from 'recharts'
+import { ComposedChart, Bar, Line, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip } from 'recharts'
 import { Card, CardContent } from '@/components/ui/card'
 import { KpiCard } from '@/components/dashboard/KpiCard'
 import { KpiGrid } from '@/components/dashboard/KpiGrid'
@@ -11,8 +11,11 @@ import { PageLoading, PageEmpty } from '@/components/dashboard/PageState'
 import { useDashboardSWR } from '@/hooks/useDashboardSWR'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { formatTHB, formatPeriodLabel, colorAchievement, colorRoi } from '@/lib/formatters'
-import { PiggyBank, TrendingUp } from 'lucide-react'
+import { PiggyBank, TrendingUp, Info } from 'lucide-react'
 import { ColumnDef } from '@tanstack/react-table'
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
+
+const DISTRIBUTOR_EXCLUDED_FROM = '2025-05-01'
 
 interface IncentiveTier {
   tier: number
@@ -34,7 +37,7 @@ interface MonthlySummary {
   total_expense: number
   roi: number
   achievement_ratio: number
-  hoc_sales: number
+  incentive_hoc_sales: number
   sales_target: number
   incentive_per_head: number
 }
@@ -62,11 +65,37 @@ const summaryColumns: ColumnDef<MonthlySummary>[] = [
   {
     accessorKey: 'month',
     header: 'Month',
-    cell: ({ row }) => formatPeriodLabel(row.original.month, 'month'),
+    cell: ({ row }) => {
+      const isExcluded = row.original.month >= DISTRIBUTOR_EXCLUDED_FROM
+      return (
+        <div className="flex items-center gap-1.5">
+          <span>{formatPeriodLabel(row.original.month, 'month')}</span>
+          {isExcluded && (
+            <TooltipProvider>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Info className="h-3.5 w-3.5 text-amber-500 cursor-default shrink-0" />
+                </TooltipTrigger>
+                <TooltipContent side="right" className="max-w-[260px] text-xs">
+                  DISTRIBUTOR CMG is excluded from HOC Sales, Achievement %, Incentive, and ROI calculations from May 2025 onwards.
+                </TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
+          )}
+        </div>
+      )
+    },
+  },
+  {
+    accessorKey: 'incentive_hoc_sales',
+    header: 'HOC Sales',
+    cell: ({ row }) => (
+      <div className="text-right font-medium">{formatTHB(row.original.incentive_hoc_sales)}</div>
+    ),
   },
   {
     accessorKey: 'achievement_ratio',
-    header: 'Sales Achievement',
+    header: 'Achievement',
     cell: ({ row }) => (
       <span className={`font-semibold transition-colors ${colorAchievement(row.original.achievement_ratio)}`}>
         {row.original.achievement_ratio.toFixed(1)}%
@@ -116,9 +145,9 @@ export default function IncentivesClient() {
     return <PageEmpty message="No incentive data available" hint="Please upload agent headcounts, costs, targets & incentives data and rebuild mart." />
   }
 
-  const totalIncentive = data.monthly_summary.reduce((sum, m) => sum + m.total_incentive, 0)
-  const totalExpense   = data.monthly_summary.reduce((sum, m) => sum + m.total_expense,   0)
-  const totalSales     = data.monthly_summary.reduce((sum, m) => sum + m.hoc_sales,       0)
+  const totalIncentive = data.monthly_summary.reduce((sum, m) => sum + m.total_incentive,      0)
+  const totalExpense   = data.monthly_summary.reduce((sum, m) => sum + m.total_expense,         0)
+  const totalSales     = data.monthly_summary.reduce((sum, m) => sum + m.incentive_hoc_sales,   0)
   const grandRoi       = totalExpense > 0 ? totalSales / totalExpense : 0
 
   return (
@@ -149,7 +178,7 @@ export default function IncentivesClient() {
             tickFormatter={v => `฿${(v / 1000).toFixed(0)}k`} />
           <YAxis yAxisId="roi" orientation="right" tickLine={false} axisLine={false} tickMargin={8} fontSize={11}
             tickFormatter={v => `${v}x`} />
-          <Tooltip
+          <RechartsTooltip
             content={({ active, payload, label }) => {
               if (!active || !payload?.length) return null
               return (

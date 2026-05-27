@@ -301,7 +301,9 @@ export async function buildMartPerformance(): Promise<number> {
       SELECT
         ms.month,
         ROUND(
-          ms.total_hoc_sales / NULLIF(
+          -- ROI numerator uses incentive-eligible sales (FOOD RETAILER + HORECA only)
+          -- to be consistent with the achievement % calculation
+          ms.incentive_hoc_sales / NULLIF(
             COALESCE(ah.agent_count, 0)      * COALESCE(mi.incentive_per_head, 0)
             + COALESCE(ah.supervisor_count, 0) * COALESCE(co.cost_per_supervisor, 0)
             + COALESCE(ah.agent_count, 0)      * COALESCE(co.cost_per_agent, 0)
