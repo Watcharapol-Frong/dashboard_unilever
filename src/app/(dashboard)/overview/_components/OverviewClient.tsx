@@ -244,6 +244,7 @@ export default function OverviewClient() {
           value={fmtBaht(kpi.hoc_sales)}
           subtitle={`Target ${fmtBaht(kpi.sales_target)}`}
           icon={TrendingUp}
+          tooltip="Revenue from HOC Unilever products ordered within the attribution window (converted customers only). Excludes not-converted orders."
         />
         <KpiCard
           title="Achievement"
@@ -251,25 +252,30 @@ export default function OverviewClient() {
           subtitle={kpi.achievement >= 100 ? 'Target reached ✓' : 'Below target'}
           valueClassName={colorAchievement(kpi.achievement)}
           icon={Target}
+          tooltip="HOC Sales as a percentage of the monthly sales target. Calculated per CMG and summed across the selected period."
         />
         <KpiCard
           title="New Customers"
           value={kpi.new_customers.toLocaleString()}
           subtitle="Telesales new buyers"
           icon={UserPlus}
+          tooltip="Unique customers placing their first HOC order within the attribution window. Excludes first-order-not-converted."
         />
         <KpiCard
           title="Repeat Customers"
           value={kpi.retention.toLocaleString()}
           subtitle="Telesales repeat buyers"
           icon={Users}
+          tooltip="Unique customers who reordered HOC products within the attribution window. Excludes retention-not-converted."
         />
         <KpiCard
           title="Total Calls"
           value={kpi.total_calls.toLocaleString()}
           subtitle={`Reached ${kpi.reached.toLocaleString()}`}
           icon={PhoneCall}
-          tooltip={filterCmg.length > 0 ? "Counts calls to customers with at least one order in the selected CMG. Customers with no orders cannot be assigned a CMG." : undefined}
+          tooltip={filterCmg.length > 0
+            ? "Counts calls to customers with at least one order in the selected CMG. Customers with no orders cannot be assigned a CMG."
+            : "Total unique customers called by the telesales team. 'Reached' excludes unreachable statuses (no answer, switched off, unavailable)."}
         />
         <KpiCard
           title="Program ROI"
@@ -277,7 +283,7 @@ export default function OverviewClient() {
           subtitle="Sales / Expense multiplier"
           valueClassName={colorRoi(roiKpi.roi)}
           icon={Calculator}
-          tooltip="Calculated from total monthly sales and expenses. Not affected by CMG filter — agent costs and incentives are shared across all CMGs."
+          tooltip="HOC Sales ÷ Total Program Expense (incentives + agent costs). Always month-level — not affected by CMG filter because costs are shared across all CMGs."
         />
       </KpiGrid>
 

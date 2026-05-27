@@ -129,6 +129,7 @@ export default function IncentivesClient() {
           value={formatTHB(totalIncentive)}
           subtitle="Agent performance bonus"
           icon={PiggyBank}
+          tooltip="Total incentive payout to agents — calculated as agent headcount × incentive rate per head. Rate is determined by the monthly achievement tier (FOOD RETAILER + HORECA sales vs target)."
         />
         <KpiCard
           title="Overall Program ROI"
@@ -136,6 +137,7 @@ export default function IncentivesClient() {
           subtitle="Unilever HOC sales / Expense"
           valueClassName={colorRoi(grandRoi)}
           icon={TrendingUp}
+          tooltip="HOC Sales ÷ Total Program Expense across all displayed months. Total Expense = incentives + agent salaries + supervisor salaries. A value of 2.0x means every ฿1 spent returns ฿2 in HOC sales."
         />
       </KpiGrid>
 

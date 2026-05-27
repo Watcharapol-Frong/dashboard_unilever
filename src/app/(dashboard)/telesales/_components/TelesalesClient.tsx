@@ -394,6 +394,7 @@ export default function TelesalesClient() {
           value={formatNumber(data.summary.total_leads)}
           subtitle="Total target leads in database"
           icon={Users}
+          tooltip="Total unique customers in the telesales lead pool — all MMIDs that have been called at least once, regardless of outcome."
         />
         <KpiCard
           title="Connected Rate"
@@ -401,6 +402,7 @@ export default function TelesalesClient() {
           subtitle={`Connected: ${formatNumber(data.summary.reached)} / Total: ${formatNumber(data.summary.total_calls)}`}
           valueClassName={colorRate(reachRate)}
           icon={PhoneCall}
+          tooltip="Reached ÷ Total Calls. 'Reached' excludes unreachable statuses: no answer, switched off, unavailable, and not-interested."
         />
         <KpiCard
           title="Conversion Rate"
@@ -408,12 +410,14 @@ export default function TelesalesClient() {
           subtitle={`Converted: ${formatNumber(data.summary.total_converted)} / Connected: ${formatNumber(data.summary.reached)}`}
           valueClassName={colorRate(conversionRate, [0.15, 0.08])}
           icon={UserCheck}
+          tooltip="Orders placed ÷ Reached customers. Measures how effectively connected customers are converted into buyers."
         />
         <KpiCard
           title="Orders (Conversion)"
           value={formatNumber(data.summary.total_converted)}
           subtitle="Total successful orders placed"
           icon={Phone}
+          tooltip="Total distinct orders placed by customers who were called — counted only for customers who successfully placed a HOC Unilever order."
         />
       </KpiGrid>
 

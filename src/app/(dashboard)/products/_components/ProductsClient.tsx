@@ -471,13 +471,17 @@ export default function ProductsClient() {
       {/* ── KPI Cards ─────────────────────────────────────────────────────── */}
       <KpiGrid cols={4}>
         <KpiCard title="Total Telesales Revenue" value={fmtBaht(data.total_sales)}
-          subtitle={`${formatNumber(data.total_orders)} orders total`} icon={TrendingUp} />
+          subtitle={`${formatNumber(data.total_orders)} orders total`} icon={TrendingUp}
+          tooltip="Total HOC Unilever revenue across all products for the selected filters. Includes both converted and not-converted orders." />
         <KpiCard title="Avg Order Value" value={fmtBaht(data.avg_order_value)}
-          subtitle="Per telesales order" icon={ShoppingCart} />
+          subtitle="Per telesales order" icon={ShoppingCart}
+          tooltip="Total Revenue ÷ Total Orders. Reflects average basket value per transaction for the selected period." />
         <KpiCard title="Total Qty Sold" value={formatNumber(data.total_qty)}
-          subtitle="Units across all SKUs" icon={BarChart2} />
+          subtitle="Units across all SKUs" icon={BarChart2}
+          tooltip="Total unit quantity sold across all HOC Unilever SKUs in the selected period. Useful for comparing product velocity." />
         <KpiCard title="Active SKUs" value={formatNumber(data.total_skus)}
-          subtitle="Distinct products with sales" icon={Package} />
+          subtitle="Distinct products with sales" icon={Package}
+          tooltip="Number of distinct product SKUs that had at least one sale in the selected period and filters." />
       </KpiGrid>
 
       {/* ── Brand Revenue Trend ───────────────────────────────────────────── */}
