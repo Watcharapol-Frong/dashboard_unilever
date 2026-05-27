@@ -8,7 +8,6 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
 import { Skeleton } from '@/components/ui/skeleton'
 import { cn } from '@/lib/utils'
-import { DateRangePicker } from '@/components/dashboard/DateRangePicker'
 import { useDashboardSWR } from '@/hooks/useDashboardSWR'
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -22,7 +21,7 @@ type TrendRow = {
   retention_not_converted: number
 }
 
-type Interval = 'monthly' | 'weekly' | 'custom'
+type Interval = 'monthly' | 'weekly' | 'daily'
 type Conversion = 'all' | 'converted' | 'not_converted'
 
 // ── Chart Config ──────────────────────────────────────────────────────────────
@@ -119,7 +118,7 @@ const LEGEND_TIPS: Record<string, { label: string; tip: string }> = {
 const INTERVAL_TIPS: Record<string, string> = {
   monthly: 'Group data by calendar month',
   weekly:  'Group data by ISO week (Mon–Sun)',
-  custom:  'Select a custom date range — overrides the Overview date filter',
+  daily:   'Show daily data — follows the date range selected in the main filter above',
 }
 
 const CONVERSION_TIPS: Record<Conversion, string> = {
@@ -152,41 +151,22 @@ export function CustomerTrendChart({
   endDate,
 }: CustomerTrendChartProps) {
   const [interval, setInterval] = useState<Interval>('monthly')
-  const [customStart, setCustomStart] = useState('2026-02-01')
-  const [customEnd, setCustomEnd]     = useState('2026-05-31')
-  const [conversion, setConversion]   = useState<Conversion>('all')
-
-  const durationDays = useMemo(() => {
-    if (interval !== 'custom' || !customStart || !customEnd) return 0
-    return Math.ceil(
-      Math.abs(new Date(customEnd).getTime() - new Date(customStart).getTime()) / 86_400_000
-    )
-  }, [interval, customStart, customEnd])
-
-  const calculatedInterval = useMemo<'daily' | 'weekly' | 'monthly'>(() => {
-    if (interval !== 'custom') return interval
-    return durationDays <= 32 ? 'daily' : 'weekly'
-  }, [interval, durationDays])
+  const [conversion, setConversion] = useState<Conversion>('all')
 
   const apiUrl = useMemo(() => {
-    const params = new URLSearchParams({ interval: calculatedInterval })
-    if (interval === 'custom') {
-      if (customStart) params.set('startDate', customStart)
-      if (customEnd)   params.set('endDate',   customEnd)
-    } else {
-      if (startDate) params.set('startDate', startDate)
-      if (endDate)   params.set('endDate',   endDate)
-    }
+    const params = new URLSearchParams({ interval })
+    if (startDate) params.set('startDate', startDate)
+    if (endDate)   params.set('endDate',   endDate)
     if (filterCmg.length > 0)    params.set('cmg',     filterCmg.join(','))
     if (filterChannel !== 'all') params.set('channel', filterChannel)
     return `/api/data/telesales/customer-trend?${params.toString()}`
-  }, [calculatedInterval, interval, customStart, customEnd, filterCmg, filterChannel, startDate, endDate])
+  }, [interval, filterCmg, filterChannel, startDate, endDate])
 
   const { data = [], isLoading, isValidating } = useDashboardSWR<TrendRow[]>(apiUrl)
 
   const visibleSeries = ALL_SERIES[conversion]
   const topSeries     = visibleSeries[visibleSeries.length - 1]
-  const barSize       = BAR_SIZE[calculatedInterval] ?? BAR_SIZE.monthly
+  const barSize       = BAR_SIZE[interval] ?? BAR_SIZE.monthly
 
   return (
     <Card className="w-full py-6 gap-8 shadow-xs border">
@@ -236,7 +216,7 @@ export function CustomerTrendChart({
           {/* Interval tabs */}
           <TooltipProvider delayDuration={300}>
             <div className="flex items-center bg-gray-100/80 p-0.5 rounded-lg border border-gray-200">
-              {(['monthly', 'weekly', 'custom'] as const).map(v => (
+              {(['monthly', 'weekly', 'daily'] as const).map(v => (
                 <Tooltip key={v}>
                   <TooltipTrigger asChild>
                     <button
@@ -257,21 +237,11 @@ export function CustomerTrendChart({
             </div>
           </TooltipProvider>
 
-          {/* Custom date picker */}
-          {interval === 'custom' && (
-            <div className="flex items-center gap-2 animate-in fade-in slide-in-from-left-2 duration-200">
-              <DateRangePicker
-                from={customStart}
-                to={customEnd}
-                onFromChange={setCustomStart}
-                onToChange={setCustomEnd}
-              />
-              {durationDays > 0 && (
-                <span className="text-[9px] bg-blue-50 text-[#003DA6] px-1.5 py-0.5 rounded font-bold uppercase">
-                  {calculatedInterval} · {durationDays}d
-                </span>
-              )}
-            </div>
+          {/* Daily hint — show when no date range is selected */}
+          {interval === 'daily' && !startDate && (
+            <span className="text-[10px] text-muted-foreground bg-amber-50 border border-amber-200 px-2 py-0.5 rounded-full">
+              Select a month range above for focused daily view
+            </span>
           )}
 
           {/* Legend */}
