@@ -265,9 +265,9 @@ export default function TelesalesClient() {
     return <PageEmpty message="No telesales data available" hint="Please upload telesales data and build mart." />
   }
 
-  const totalConverted = (data.summary.new_converted ?? 0) + (data.summary.repeat_converted ?? 0)
+  const totalConvertedDisplay = (data.summary.new_converted ?? 0) + (data.summary.repeat_converted ?? 0)
   const reachRate = data.summary.total_calls > 0 ? data.summary.reached / data.summary.total_calls : 0
-  const conversionRate = data.summary.reached > 0 ? totalConverted / data.summary.reached : 0
+  const conversionRate = data.summary.reached > 0 ? data.summary.total_converted / data.summary.reached : 0
 
   const hasFilter = channel.length > 0 || cmg.length > 0 || agent.length > 0
   const hasRange = !!(rangeFrom || (interval === 'custom' && (customStart !== '2026-05-01' || customEnd !== '2026-05-31')))
@@ -427,14 +427,14 @@ export default function TelesalesClient() {
         <KpiCard
           title="Conversion Rate"
           value={formatPct(conversionRate)}
-          subtitle={`Converted: ${formatNumber(totalConverted)} / Connected: ${formatNumber(data.summary.reached)}`}
+          subtitle={`Converted: ${formatNumber(totalConvertedDisplay)} / Connected: ${formatNumber(data.summary.reached)}`}
           valueClassName={colorRate(conversionRate, [0.15, 0.08])}
           icon={UserCheck}
-          tooltip="(New + Repeat conversions) ÷ Unique connected customers."
+          tooltip="Unique converted customers ÷ Unique connected customers. Uses distinct customer count (not New + Repeat sum) so the rate stays ≤ 100%."
         />
         <KpiCard
           title="Orders (Conversion)"
-          value={formatNumber(totalConverted)}
+          value={formatNumber(totalConvertedDisplay)}
           subtitle={`New: ${formatNumber(data.summary.new_converted ?? 0)} · Repeat: ${formatNumber(data.summary.repeat_converted ?? 0)}`}
           icon={Phone}
           tooltip="Total conversions = New customers + Repeat customers. Counted separately so a customer with both a new and a repeat order contributes to each."
