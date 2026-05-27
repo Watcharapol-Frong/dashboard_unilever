@@ -29,6 +29,7 @@ interface SalesKpi {
   cmp_total_sales: number | null; cmp_total_orders: number | null
   cmp_new_customers: number | null; cmp_avg_order_value: number | null
   cmp_retention_customers: number | null; comparison_label: string | null
+  current_period_label: string | null
 }
 
 interface SalesData {
@@ -157,6 +158,9 @@ export default function SalesClient() {
   const offlinePct = kpi.total_sales > 0 ? (kpi.offline_sales / kpi.total_sales) * 100 : 0
   const hasFilter  = channel.length > 0 || cmg.length > 0 || agent.length > 0 || conversion !== 'all'
   const hasRange   = !!(rangeFrom || (interval === 'custom'))
+
+  // Label for the period currently shown on KPI cards
+  const kpiPeriodLabel = kpi.current_period_label ?? null
 
   const activeRangeLabel = (() => {
     if (!rangeFrom) return 'All available periods'
@@ -294,38 +298,38 @@ export default function SalesClient() {
         <KpiCard
           title="Total Sales (Telesales)"
           value={fmtBaht(kpi.total_sales)}
-          subtitle={`${fmt(kpi.total_qty)} units sold`}
+          subtitle={kpiPeriodLabel ? `${kpiPeriodLabel} · ${fmt(kpi.total_qty)} units` : `${fmt(kpi.total_qty)} units sold`}
           icon={TrendingUp}
           comparison={kpi.cmp_total_sales ?? undefined}
           comparisonLabel={kpi.comparison_label ?? undefined}
-          tooltip="All HOC Unilever revenue for called customers — includes converted AND not-converted orders. This will be higher than Overview's HOC Sales (converted only). Use 'Converted Only' filter to align with Overview."
+          tooltip="HOC Unilever revenue for the displayed period — includes converted AND not-converted orders. Higher than Overview's HOC Sales which counts converted only. Use 'Converted Only' filter to align."
         />
         <KpiCard
           title="Avg Order Value"
           value={fmtBaht(kpi.avg_order_value)}
-          subtitle={`${kpi.total_orders.toLocaleString()} orders total`}
+          subtitle={kpiPeriodLabel ? `${kpiPeriodLabel} · ${kpi.total_orders.toLocaleString()} orders` : `${kpi.total_orders.toLocaleString()} orders`}
           icon={CreditCard}
           comparison={kpi.cmp_avg_order_value ?? undefined}
           comparisonLabel={kpi.comparison_label ?? undefined}
-          tooltip="Total Sales ÷ Total Orders. Both numerator and denominator include not-converted orders — switch to 'Converted Only' for attribution-window figures."
+          tooltip="Total Sales ÷ Total Orders for the displayed period. Includes not-converted orders — switch to 'Converted Only' for attribution-window figures."
         />
         <KpiCard
           title="New Customers"
           value={kpi.new_customers.toLocaleString()}
-          subtitle="First-time telesales buyers"
+          subtitle={kpiPeriodLabel ? `${kpiPeriodLabel} · first-time buyers` : 'First-time telesales buyers'}
           icon={UserPlus}
           comparison={kpi.cmp_new_customers ?? undefined}
           comparisonLabel={kpi.comparison_label ?? undefined}
-          tooltip="All unique first-time HOC buyers — includes both converted (within attribution window) and first-order-not-converted."
+          tooltip="Unique first-time HOC buyers for the displayed period — includes both converted (within attribution window) and first-order-not-converted."
         />
         <KpiCard
           title="Retention Customers"
           value={kpi.retention_customers.toLocaleString()}
-          subtitle="Repeat telesales buyers"
+          subtitle={kpiPeriodLabel ? `${kpiPeriodLabel} · repeat buyers` : 'Repeat telesales buyers'}
           icon={Users}
           comparison={kpi.cmp_retention_customers ?? undefined}
           comparisonLabel={kpi.comparison_label ?? undefined}
-          tooltip="All unique repeat HOC buyers — includes both converted (within attribution window) and retention-not-converted."
+          tooltip="Unique repeat HOC buyers for the displayed period — includes both converted (within attribution window) and retention-not-converted."
         />
       </KpiGrid>
 

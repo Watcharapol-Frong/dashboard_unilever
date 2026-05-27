@@ -60,19 +60,25 @@ async function fetchKpis(where: string, params: any[]) {
   `, params)
 }
 
-// Returns last 2 complete periods (most-recent first) for auto comparison
+// Returns last 2 complete periods (most-recent first) — full KPI fields for each
 async function fetchLastTwoPeriods(interval: Interval, where: string, params: any[]) {
   const grp = periodExpr(interval)
+  const lbl = labelExpr(interval)
   return query<{
-    period: string; total_sales: string; total_orders: string
-    new_customers: string; retention_customers: string
+    period: string; period_label: string
+    total_sales: string; online_sales: string; offline_sales: string
+    total_orders: string; new_customers: string; retention_customers: string; total_qty: string
   }>(`
     SELECT
       ${grp} AS period,
-      SUM(sales_in_vat)::text                                                         AS total_sales,
-      COUNT(DISTINCT order_number)::text                                              AS total_orders,
+      ${lbl} AS period_label,
+      COALESCE(SUM(sales_in_vat), 0)::text                                                       AS total_sales,
+      COALESCE(SUM(CASE WHEN channel='online'  THEN sales_in_vat ELSE 0 END), 0)::text           AS online_sales,
+      COALESCE(SUM(CASE WHEN channel='offline' THEN sales_in_vat ELSE 0 END), 0)::text           AS offline_sales,
+      COUNT(DISTINCT order_number)::text                                                          AS total_orders,
       COUNT(DISTINCT mmid) FILTER (WHERE customer_type IN ('new_customer','first_order_not_converted'))::text AS new_customers,
-      COUNT(DISTINCT mmid) FILTER (WHERE customer_type IN ('retention','retention_not_converted'))::text       AS retention_customers
+      COUNT(DISTINCT mmid) FILTER (WHERE customer_type IN ('retention','retention_not_converted'))::text       AS retention_customers,
+      COALESCE(SUM(sales_qty), 0)::text                                                          AS total_qty
     FROM sales_hoc_orders
     ${where}
     GROUP BY ${grp}
@@ -98,12 +104,12 @@ export async function GET(request: Request) {
 
     const hasDateRange = !!(startDate && endDate)
 
-    // Filters without date (for trend in monthly/weekly and for options)
+    // Filters without date (for trend and for no-range KPI)
     const noDate = buildWhere(null, null, channel, cmg, agent, conversion)
-    // Filters with date (for custom mode KPI & trend)
+    // Filters with date (for date-range KPI & trend)
     const curr = buildWhere(startDate, endDate, channel, cmg, agent, conversion)
 
-    // Trend uses full date range only in custom mode
+    // Trend uses full date range when provided
     const trendFilter = hasDateRange ? curr : noDate
     const grpBy = periodExpr(interval)
     const lbl   = labelExpr(interval)
@@ -127,11 +133,11 @@ export async function GET(request: Request) {
       comparisonLabel = interval === 'weekly' ? 'vs previous week' : 'vs previous month'
     }
 
-    const [currKpi, prevOrPeriods, periodsRaw, ordersRaw, optsRaw, monthsRaw] = await Promise.all([
-      // Current KPI: date-filtered for custom, all-time for monthly/weekly
-      fetchKpis(curr.where, curr.params),
+    const [currKpiOrNull, prevOrPeriods, periodsRaw, ordersRaw, optsRaw, monthsRaw] = await Promise.all([
+      // Current KPI: date-filtered when range provided; null when no range (will use r0 instead)
+      hasDateRange ? fetchKpis(curr.where, curr.params) : Promise.resolve(null),
 
-      // Comparison: explicit prev period (custom) OR last 2 periods (monthly/weekly)
+      // Comparison: explicit prev period (date range) OR last 2 periods (no range)
       hasDateRange && prevWhere
         ? fetchKpis(prevWhere.where, prevWhere.params)
         : fetchLastTwoPeriods(interval, noDate.where, noDate.params),
@@ -178,19 +184,43 @@ export async function GET(request: Request) {
       `),
     ])
 
-    // Parse current KPI
-    const c = {
-      total_sales:          Number(currKpi?.total_sales          ?? 0),
-      online_sales:         Number(currKpi?.online_sales         ?? 0),
-      offline_sales:        Number(currKpi?.offline_sales        ?? 0),
-      total_orders:         Number(currKpi?.total_orders         ?? 0),
-      new_customers:        Number(currKpi?.new_customers        ?? 0),
-      retention_customers:  Number(currKpi?.retention_customers  ?? 0),
-      total_qty:            Number(currKpi?.total_qty            ?? 0),
+    // ── Parse current KPI ───────────────────────────────────────────────────────
+    // hasDateRange  → use fetchKpis result (date-scoped)
+    // !hasDateRange → use r0 (latest complete period) for consistency: KPI value & % badge same period
+    type KpiRow = { total_sales: number; online_sales: number; offline_sales: number; total_orders: number; new_customers: number; retention_customers: number; total_qty: number }
+
+    let c: KpiRow
+    let currentPeriodLabel: string | null = null
+
+    if (hasDateRange) {
+      const kp = currKpiOrNull as Awaited<ReturnType<typeof fetchKpis>>
+      c = {
+        total_sales:         Number(kp?.total_sales         ?? 0),
+        online_sales:        Number(kp?.online_sales        ?? 0),
+        offline_sales:       Number(kp?.offline_sales       ?? 0),
+        total_orders:        Number(kp?.total_orders        ?? 0),
+        new_customers:       Number(kp?.new_customers       ?? 0),
+        retention_customers: Number(kp?.retention_customers ?? 0),
+        total_qty:           Number(kp?.total_qty           ?? 0),
+      }
+    } else {
+      const rows = prevOrPeriods as Awaited<ReturnType<typeof fetchLastTwoPeriods>>
+      const r0 = Array.isArray(rows) && rows.length > 0 ? rows[0] : null
+      c = {
+        total_sales:         Number(r0?.total_sales         ?? 0),
+        online_sales:        Number(r0?.online_sales        ?? 0),
+        offline_sales:       Number(r0?.offline_sales       ?? 0),
+        total_orders:        Number(r0?.total_orders        ?? 0),
+        new_customers:       Number(r0?.new_customers       ?? 0),
+        retention_customers: Number(r0?.retention_customers ?? 0),
+        total_qty:           Number(r0?.total_qty           ?? 0),
+      }
+      currentPeriodLabel = r0?.period_label ?? null
     }
+
     const avgOV = c.total_orders > 0 ? c.total_sales / c.total_orders : 0
 
-    // Parse comparison
+    // ── Parse comparison ────────────────────────────────────────────────────────
     let cmpSales: number | null = null
     let cmpOrders: number | null = null
     let cmpNew: number | null = null
@@ -214,16 +244,17 @@ export async function GET(request: Request) {
     } else {
       const rows = prevOrPeriods as Awaited<ReturnType<typeof fetchLastTwoPeriods>>
       if (Array.isArray(rows) && rows.length >= 2) {
-        const [r0, r1] = rows
-        const s0 = Number(r0.total_sales ?? 0),  s1 = Number(r1.total_sales ?? 0)
-        const o0 = Number(r0.total_orders ?? 0),  o1 = Number(r1.total_orders ?? 0)
-        const n0 = Number(r0.new_customers ?? 0), n1 = Number(r1.new_customers ?? 0)
-        const rt0 = Number(r0.retention_customers ?? 0), rt1 = Number(r1.retention_customers ?? 0)
-        cmpSales     = cmpRatio(s0, s1)
-        cmpOrders    = cmpRatio(o0, o1)
-        cmpNew       = cmpRatio(n0, n1)
-        cmpRetention = cmpRatio(rt0, rt1)
-        cmpAov       = cmpRatio(o0 > 0 ? s0/o0 : 0, o1 > 0 ? s1/o1 : 0)
+        const r1   = rows[1]
+        const ps   = Number(r1.total_sales         ?? 0)
+        const po   = Number(r1.total_orders        ?? 0)
+        const pn   = Number(r1.new_customers       ?? 0)
+        const pr   = Number(r1.retention_customers ?? 0)
+        const paov = po > 0 ? ps / po : 0
+        cmpSales     = cmpRatio(c.total_sales,        ps)
+        cmpOrders    = cmpRatio(c.total_orders,       po)
+        cmpNew       = cmpRatio(c.new_customers,      pn)
+        cmpRetention = cmpRatio(c.retention_customers, pr)
+        cmpAov       = cmpRatio(avgOV,                paov)
       }
     }
 
@@ -233,12 +264,13 @@ export async function GET(request: Request) {
         kpi: {
           ...c,
           avg_order_value: avgOV,
-          cmp_total_sales:        cmpSales,
-          cmp_total_orders:       cmpOrders,
-          cmp_new_customers:      cmpNew,
+          cmp_total_sales:         cmpSales,
+          cmp_total_orders:        cmpOrders,
+          cmp_new_customers:       cmpNew,
           cmp_retention_customers: cmpRetention,
-          cmp_avg_order_value:    cmpAov,
-          comparison_label:       comparisonLabel,
+          cmp_avg_order_value:     cmpAov,
+          comparison_label:        comparisonLabel,
+          current_period_label:    currentPeriodLabel,
         },
         by_period: periodsRaw.map(r => ({
           period:       r.period,
