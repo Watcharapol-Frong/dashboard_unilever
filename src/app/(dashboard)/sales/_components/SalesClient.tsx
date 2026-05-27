@@ -298,7 +298,7 @@ export default function SalesClient() {
           icon={TrendingUp}
           comparison={kpi.cmp_total_sales ?? undefined}
           comparisonLabel={kpi.comparison_label ?? undefined}
-          tooltip="All HOC Unilever revenue by customers who were called — includes both converted (within attribution window) and not-converted orders. Use 'Converted Only' filter to see attributed sales only."
+          tooltip="All HOC Unilever revenue for called customers — includes converted AND not-converted orders. This will be higher than Overview's HOC Sales (converted only). Use 'Converted Only' filter to align with Overview."
         />
         <KpiCard
           title="Avg Order Value"
@@ -307,7 +307,7 @@ export default function SalesClient() {
           icon={CreditCard}
           comparison={kpi.cmp_avg_order_value ?? undefined}
           comparisonLabel={kpi.comparison_label ?? undefined}
-          tooltip="Total Sales ÷ Total Orders for the selected period and filters. Reflects average basket size per transaction."
+          tooltip="Total Sales ÷ Total Orders. Both numerator and denominator include not-converted orders — switch to 'Converted Only' for attribution-window figures."
         />
         <KpiCard
           title="New Customers"
