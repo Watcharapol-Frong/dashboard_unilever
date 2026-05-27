@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { withAuth } from '@/lib/auth'
 import { queryOne } from '@/lib/db'
+import { setCacheHeader } from '@/lib/query'
 
 export const dynamic = 'force-dynamic'
 
@@ -29,15 +30,20 @@ export async function GET(request: Request) {
       params.push(agent)
       conditions.push(`agent = ANY($${params.length})`)
     }
+    let channelParamIdx: number | null = null
+    let cmgParamIdx: number | null = null
+
     if (channel.length > 0 || cmg.length > 0) {
       const subConditions: string[] = []
       if (channel.length > 0) {
         params.push(channel)
-        subConditions.push(`channel = ANY($${params.length})`)
+        channelParamIdx = params.length
+        subConditions.push(`channel = ANY($${channelParamIdx})`)
       }
       if (cmg.length > 0) {
         params.push(cmg)
-        subConditions.push(`dynamic_cmg = ANY($${params.length})`)
+        cmgParamIdx = params.length
+        subConditions.push(`dynamic_cmg = ANY($${cmgParamIdx})`)
       }
       conditions.push(`mmid IN (
         SELECT DISTINCT mmid FROM sales_hoc_orders
@@ -49,8 +55,8 @@ export async function GET(request: Request) {
 
     // mart_telesales_orders channel/cmg filter
     const orderExtraConditions: string[] = []
-    if (channel.length > 0) orderExtraConditions.push(`channel = ANY($${params.indexOf(channel) + 1})`)
-    if (cmg.length > 0)     orderExtraConditions.push(`dynamic_cmg = ANY($${params.indexOf(cmg) + 1})`)
+    if (channelParamIdx !== null) orderExtraConditions.push(`channel = ANY($${channelParamIdx})`)
+    if (cmgParamIdx !== null)     orderExtraConditions.push(`dynamic_cmg = ANY($${cmgParamIdx})`)
     const orderExtra = orderExtraConditions.length ? 'AND ' + orderExtraConditions.join(' AND ') : ''
 
     const row = await queryOne<{
@@ -234,7 +240,7 @@ export async function GET(request: Request) {
     }
 
     const res = NextResponse.json({ ok: true, data: { nodes, links, summary } })
-    res.headers.set('Cache-Control', 'public, s-maxage=300, stale-while-revalidate=600')
+    setCacheHeader(res, 'MEDIUM')
     return res
   })
 }

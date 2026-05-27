@@ -14,15 +14,12 @@ import { DataTable } from '@/components/ui/data-table'
 import { PageLoading, PageEmpty } from '@/components/dashboard/PageState'
 import { DateRangePicker } from '@/components/dashboard/DateRangePicker'
 import { useDashboardSWR } from '@/hooks/useDashboardSWR'
+import { useMonthRange, lastDayOfMonth } from '@/hooks/useMonthRange'
+import { MonthChipGroup } from '@/components/dashboard/MonthChipGroup'
 import { formatNumber, formatPct, colorRate } from '@/lib/formatters'
 import { columns } from '../columns'
 import { Calendar, Phone, PhoneCall, UserCheck, Users } from 'lucide-react'
 import { TelesalesFunnelChart } from './TelesalesFunnelChart'
-
-function lastDayOfMonth(isoDate: string) {
-  const [y, m] = isoDate.split('-').map(Number)
-  return new Date(y, m, 0).toISOString().split('T')[0]
-}
 
 interface AgentPerformance {
   agent: string
@@ -151,9 +148,10 @@ const CustomTooltip = ({ active, payload, label }: { active?: boolean; payload?:
 
 export default function TelesalesClient() {
   // Range chip state
-  const [rangeFrom,   setRangeFrom]   = useState<string | null>(null)
-  const [rangeTo,     setRangeTo]     = useState<string | null>(null)
-  const [hoverMonth,  setHoverMonth]  = useState<string | null>(null)
+  const {
+    rangeFrom, rangeTo, hoverMonth, setHoverMonth,
+    handleChipClick: baseHandleChipClick, clearRange,
+  } = useMonthRange()
 
   // Trend interval state
   const [interval,    setInterval]    = useState<'custom' | 'monthly'>('monthly')
@@ -168,15 +166,7 @@ export default function TelesalesClient() {
   // Chip click handler
   const handleChipClick = (m: string) => {
     if (interval === 'custom') setInterval('monthly')
-    if (!rangeFrom || (rangeFrom && rangeTo)) {
-      setRangeFrom(m); setRangeTo(null)
-    } else if (m === rangeFrom) {
-      setRangeFrom(null); setRangeTo(null)
-    } else if (m < rangeFrom) {
-      setRangeFrom(m); setRangeTo(rangeFrom)
-    } else {
-      setRangeTo(m)
-    }
+    baseHandleChipClick(m)
   }
 
   const durationDays = useMemo(() => {
@@ -294,7 +284,7 @@ export default function TelesalesClient() {
   const hasFilter = channel.length > 0 || cmg.length > 0 || agent.length > 0
   const hasRange = !!(rangeFrom || (interval === 'custom' && (customStart !== '2026-05-01' || customEnd !== '2026-05-31')))
 
-  const activeRangeLabel = (() => {
+  const displayRangeLabel = (() => {
     if (rangeFrom) {
       const fromLabel = new Date(rangeFrom).toLocaleDateString('en-GB', { month: 'short', year: 'numeric' })
       if (!rangeTo) return fromLabel

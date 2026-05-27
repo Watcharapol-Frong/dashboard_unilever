@@ -16,6 +16,8 @@ import { DataTable } from '@/components/ui/data-table'
 import { PageLoading, PageEmpty } from '@/components/dashboard/PageState'
 import { DateRangePicker } from '@/components/dashboard/DateRangePicker'
 import { useDashboardSWR } from '@/hooks/useDashboardSWR'
+import { useMonthRange, lastDayOfMonth } from '@/hooks/useMonthRange'
+import { MonthChipGroup } from '@/components/dashboard/MonthChipGroup'
 import { fmtBaht, fmt } from '@/lib/formatters'
 import { columns } from '../columns'
 import { TrendingUp, UserPlus, Users, CreditCard, Calendar } from 'lucide-react'
@@ -84,19 +86,13 @@ function SalesTooltip({ active, payload, label }: { active?: boolean; payload?: 
   )
 }
 
-// ── Helpers ───────────────────────────────────────────────────────────────────
-
-function lastDayOfMonth(isoDate: string) {
-  const [y, m] = isoDate.split('-').map(Number)
-  return new Date(y, m, 0).toISOString().split('T')[0]
-}
-
 // ── Component ─────────────────────────────────────────────────────────────────
 
 export default function SalesClient() {
-  const [rangeFrom,   setRangeFrom]   = useState<string | null>(null)
-  const [rangeTo,     setRangeTo]     = useState<string | null>(null)
-  const [hoverMonth,  setHoverMonth]  = useState<string | null>(null)
+  const {
+    rangeFrom, rangeTo, hoverMonth, setHoverMonth,
+    handleChipClick: baseHandleChipClick, clearRange, activeRangeLabel,
+  } = useMonthRange()
   const [interval,    setInterval]    = useState<Interval>('custom')
   const [customStart, setCustomStart] = useState('2026-05-01')
   const [customEnd,   setCustomEnd]   = useState('2026-05-31')
@@ -107,15 +103,7 @@ export default function SalesClient() {
 
   const handleChipClick = (m: string) => {
     if (interval === 'custom') setInterval('monthly')
-    if (!rangeFrom || (rangeFrom && rangeTo)) {
-      setRangeFrom(m); setRangeTo(null)
-    } else if (m === rangeFrom) {
-      setRangeFrom(null); setRangeTo(null)
-    } else if (m < rangeFrom) {
-      setRangeFrom(m); setRangeTo(rangeFrom)
-    } else {
-      setRangeTo(m)
-    }
+    baseHandleChipClick(m)
   }
 
   const durationDays = useMemo(() => {
@@ -173,14 +161,6 @@ export default function SalesClient() {
     return `(current − previous) ÷ previous`
   })()
 
-  const activeRangeLabel = (() => {
-    if (!rangeFrom) return 'All available periods'
-    const fromLabel = new Date(rangeFrom).toLocaleDateString('en-GB', { month: 'short', year: 'numeric' })
-    if (!rangeTo) return `Month: ${fromLabel}`
-    const toLabel = new Date(rangeTo).toLocaleDateString('en-GB', { month: 'short', year: 'numeric' })
-    return `${fromLabel} – ${toLabel}`
-  })()
-
   const chartData = by_period.map(p => ({
     name:    p.period_label,
     Online:  p.online,
@@ -207,39 +187,22 @@ export default function SalesClient() {
 
             {/* Row 1: Date chips + date picker */}
             <div className="flex flex-wrap items-center gap-4">
-              <div className="flex items-center gap-1.5 flex-wrap">
-                {months.map(m => {
-                  const effectiveTo = rangeTo ?? (rangeFrom ? hoverMonth : null)
-                  const active   = m === rangeFrom || m === rangeTo
-                  const inRange  = !!(rangeFrom && effectiveTo && m > rangeFrom && m < effectiveTo)
-                  const preview  = !!(!rangeTo && rangeFrom && hoverMonth && m > rangeFrom && m <= hoverMonth)
-                  return (
-                    <button
-                      key={m}
-                      onClick={() => handleChipClick(m)}
-                      onMouseEnter={() => setHoverMonth(m)}
-                      onMouseLeave={() => setHoverMonth(null)}
-                      className={[
-                        'px-3.5 py-1.5 rounded-full text-xs font-semibold transition-all select-none border',
-                        active
-                          ? 'bg-[#003DA6] text-white border-[#003DA6] shadow-sm'
-                          : inRange || preview
-                          ? 'bg-[#003DA6]/10 text-[#003DA6] border-[#003DA6]/20'
-                          : 'bg-background text-muted-foreground border-gray-200 hover:bg-gray-50 hover:text-foreground',
-                      ].join(' ')}
-                    >
-                      {new Date(m).toLocaleDateString('en-GB', { month: 'short', year: '2-digit' })}
-                    </button>
-                  )
-                })}
-              </div>
+              <MonthChipGroup
+                months={months}
+                rangeFrom={rangeFrom}
+                rangeTo={rangeTo}
+                hoverMonth={hoverMonth}
+                onChipClick={handleChipClick}
+                onMouseEnter={setHoverMonth}
+                onMouseLeave={() => setHoverMonth(null)}
+              />
 
               <div className="flex items-center gap-2">
                 <DateRangePicker
                   from={interval === 'custom' ? customStart : ''}
                   to={interval === 'custom' ? customEnd : ''}
-                  onFromChange={start => { setCustomStart(start); setRangeFrom(null); setRangeTo(null); setInterval('custom') }}
-                  onToChange={end   => { setCustomEnd(end);   setRangeFrom(null); setRangeTo(null); setInterval('custom') }}
+                  onFromChange={start => { setCustomStart(start); clearRange(); setInterval('custom') }}
+                  onToChange={end   => { setCustomEnd(end);   clearRange(); setInterval('custom') }}
                 />
                 {interval === 'custom' && durationDays > 0 && (
                   <span className="text-[9px] bg-blue-50 text-[#003DA6] px-1.5 py-0.5 rounded font-bold uppercase shrink-0">
@@ -285,7 +248,7 @@ export default function SalesClient() {
                 <button
                   onClick={() => {
                     setChannel([]); setCmg([]); setAgent([]); setConversion('all')
-                    setRangeFrom(null); setRangeTo(null); setInterval('custom')
+                    clearRange(); setInterval('custom')
                     setCustomStart('2026-05-01'); setCustomEnd('2026-05-31')
                   }}
                   className="text-xs text-[#003DA6] hover:underline font-semibold"

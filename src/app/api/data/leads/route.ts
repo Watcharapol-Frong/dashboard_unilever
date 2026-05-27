@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { withAdmin } from '@/lib/auth'
 import { query } from '@/lib/db'
+import { setCacheHeader } from '@/lib/query'
 
 export const dynamic = 'force-dynamic'
 
@@ -111,7 +112,7 @@ export async function GET(req: NextRequest) {
     }))
 
     const res = NextResponse.json({ ok: true, data, total, page, limit })
-    res.headers.set('Cache-Control', 'public, s-maxage=60, stale-while-revalidate=120')
+    setCacheHeader(res, 'SHORT')
     return res
   })
 }

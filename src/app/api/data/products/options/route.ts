@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { withAuth } from '@/lib/auth'
 import { query } from '@/lib/db'
+import { setCacheHeader } from '@/lib/query'
 
 export const dynamic = 'force-dynamic'
 
@@ -39,7 +40,7 @@ export async function GET() {
         months:        monthsRaw.map(r => r.month),
       },
     })
-    res.headers.set('Cache-Control', 'public, s-maxage=3600, stale-while-revalidate=7200')
+    setCacheHeader(res, 'LONG')
     return res
   })
 }

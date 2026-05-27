@@ -9,8 +9,10 @@ import { KpiGrid } from '@/components/dashboard/KpiGrid'
 import { FilterSelect } from '@/components/dashboard/FilterSelect'
 import { MultiSelect } from '@/components/dashboard/MultiSelect'
 import { PageLoading, PageEmpty } from '@/components/dashboard/PageState'
+import { MonthChipGroup } from '@/components/dashboard/MonthChipGroup'
 
 import { useDashboardSWR } from '@/hooks/useDashboardSWR'
+import { useMonthRange } from '@/hooks/useMonthRange'
 import { fmtBaht, colorAchievement, colorRoi } from '@/lib/formatters'
 import { type OverviewRow } from './columns'
 import {
@@ -72,23 +74,12 @@ export default function OverviewClient() {
   const months     = useMemo(() => [...new Set(rows.map(r => r.month))].sort(), [rows])
   const cmgOptions = useMemo(() => [...new Set(rows.map(r => r.dynamic_cmg))].sort(), [rows])
 
-  const [rangeFrom,  setRangeFrom]  = useState<string | null>(null)
-  const [rangeTo,    setRangeTo]    = useState<string | null>(null)
-  const [hoverMonth, setHoverMonth] = useState<string | null>(null)
+  const {
+    rangeFrom, rangeTo, hoverMonth, setHoverMonth,
+    handleChipClick, clearRange, activeRangeLabel,
+  } = useMonthRange()
   const [filterCmg,  setFilterCmg]  = useState<string[]>([])
   const [filterChannel, setFilterChannel] = useState('all')
-
-  const handleChipClick = (m: string) => {
-    if (!rangeFrom || (rangeFrom && rangeTo)) {
-      setRangeFrom(m); setRangeTo(null)
-    } else if (m === rangeFrom) {
-      setRangeFrom(null); setRangeTo(null)
-    } else if (m < rangeFrom) {
-      setRangeFrom(m); setRangeTo(rangeFrom)
-    } else {
-      setRangeTo(m)
-    }
-  }
 
   const filtered = useMemo(() => {
     const effectiveTo = rangeTo ?? (rangeFrom ? hoverMonth : null)
@@ -158,14 +149,6 @@ export default function OverviewClient() {
     <PageEmpty message="No data available" hint="Please run Build Mart first" />
   )
 
-  const activeRangeLabel = (() => {
-    if (!rangeFrom) return 'All available periods'
-    const fromLabel = new Date(rangeFrom).toLocaleDateString('en-GB', { month: 'short', year: 'numeric' })
-    if (!rangeTo) return `Month: ${fromLabel}`
-    const toLabel = new Date(rangeTo).toLocaleDateString('en-GB', { month: 'short', year: 'numeric' })
-    return `${fromLabel} – ${toLabel}`
-  })()
-
   return (
     <div className="space-y-6">
 
@@ -179,30 +162,15 @@ export default function OverviewClient() {
         </CardHeader>
         <CardContent>
           <div className="flex flex-wrap items-center gap-4">
-            <div className="flex items-center gap-1.5 flex-wrap">
-              {months.map(m => {
-                const effectiveTo = rangeTo ?? (rangeFrom ? hoverMonth : null)
-                const active  = m === rangeFrom || m === rangeTo
-                const inRange = !!(rangeFrom && effectiveTo && m > rangeFrom && m < effectiveTo)
-                const preview = !!(!rangeTo && rangeFrom && hoverMonth && m > rangeFrom && m <= hoverMonth)
-                return (
-                  <button
-                    key={m}
-                    onClick={() => handleChipClick(m)}
-                    onMouseEnter={() => setHoverMonth(m)}
-                    onMouseLeave={() => setHoverMonth(null)}
-                    className={[
-                      'px-3.5 py-1.5 rounded-full text-xs font-semibold transition-all select-none border',
-                      active   ? 'bg-[#003DA6] text-white border-[#003DA6] shadow-sm'
-                      : inRange || preview ? 'bg-[#003DA6]/10 text-[#003DA6] border-[#003DA6]/20'
-                      : 'bg-background text-muted-foreground border-gray-200 hover:bg-gray-50 hover:text-foreground',
-                    ].join(' ')}
-                  >
-                    {new Date(m).toLocaleDateString('en-GB', { month: 'short', year: '2-digit' })}
-                  </button>
-                )
-              })}
-            </div>
+            <MonthChipGroup
+              months={months}
+              rangeFrom={rangeFrom}
+              rangeTo={rangeTo}
+              hoverMonth={hoverMonth}
+              onChipClick={handleChipClick}
+              onMouseEnter={setHoverMonth}
+              onMouseLeave={() => setHoverMonth(null)}
+            />
 
             <div className="w-px h-6 bg-border hidden lg:block" />
 
@@ -227,7 +195,7 @@ export default function OverviewClient() {
 
             {(rangeFrom || filterCmg.length > 0 || filterChannel !== 'all') && (
               <button
-                onClick={() => { setRangeFrom(null); setRangeTo(null); setFilterCmg([]); setFilterChannel('all') }}
+                onClick={() => { clearRange(); setFilterCmg([]); setFilterChannel('all') }}
                 className="text-xs text-[#003DA6] hover:underline font-semibold"
               >
                 Reset Filters
