@@ -16,7 +16,6 @@ import { ChevronLeft, ChevronRight } from 'lucide-react'
 
 interface Summary {
   kpi: { total: number; contacted: number; converted: number; orders: number }
-  filtered: boolean
   filters: { tiers: string[]; cmgs: string[]; agents: string[] }
 }
 
@@ -68,19 +67,11 @@ export default function LeadsClient() {
 
   useEffect(() => { setPage(1) }, [filterTier, filterContact, filterConv, filterCmg, filterAgent])
 
-  const summaryUrl = useMemo(() => buildUrl('/api/data/leads/summary', {
-    tier:    filterTier,
-    contact: filterContact,
-    conv:    filterConv,
-    cmg:     filterCmg,
-    agent:   filterAgent,
-  }), [filterTier, filterContact, filterConv, filterCmg, filterAgent])
-
   const { data: summary, isLoading: summaryLoading, error: summaryError } =
-    useSWR<Summary>(summaryUrl, fetcher, {
+    useSWR<Summary>('/api/data/leads/summary', fetcher, {
       revalidateOnFocus: false,
       revalidateOnReconnect: false,
-      keepPreviousData: true,
+      dedupingInterval: 300_000,
     })
 
   const pageUrl = useMemo(() => buildUrl('/api/data/leads', {
@@ -132,12 +123,14 @@ export default function LeadsClient() {
           value={kpi.total.toLocaleString()}
           subtitle="Assigned telesales leads"
           icon={Users}
+          tooltip="จำนวน MMID ทั้งหมดในรายชื่อ Leads ที่ถูก assign ให้ทีม Telesales"
         />
         <KpiCard
           title="Contacted"
           value={kpi.contacted.toLocaleString()}
           subtitle={fmtPct(kpi.contacted, kpi.total)}
           icon={PhoneCall}
+          tooltip="จำนวน MMID ที่ถูกโทรหาแล้ว ครอบคลุมทั้ง Reached (คุยได้) และ Called Not Reached (โทรหาแต่ไม่รับ/ปิดเครื่อง)"
         />
         <KpiCard
           title="Conversion"
@@ -145,6 +138,7 @@ export default function LeadsClient() {
           subtitle={fmtPct(kpi.converted, kpi.total)}
           valueClassName="text-blue-600"
           icon={Award}
+          tooltip="จำนวน MMID ที่มีคำสั่งซื้อ HOC อย่างน้อย 1 รายการ (customer_type: new_customer หรือ retention) หลังจาก Lead ถูกสร้าง"
         />
         <KpiCard
           title="Orders"
@@ -152,6 +146,7 @@ export default function LeadsClient() {
           subtitle={kpi.converted > 0 ? `avg ${(kpi.orders / kpi.converted).toFixed(1)}x / person` : undefined}
           valueClassName="text-green-600"
           icon={ShoppingBag}
+          tooltip="จำนวนคำสั่งซื้อ HOC รวมทั้งหมดที่เกิดจาก MMID ใน Conversion เท่านั้น (ไม่รวม MMID ที่ยังไม่ converted)"
         />
       </KpiGrid>
 
