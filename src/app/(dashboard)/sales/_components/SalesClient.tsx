@@ -29,7 +29,7 @@ interface SalesKpi {
   cmp_total_sales: number | null; cmp_total_orders: number | null
   cmp_new_customers: number | null; cmp_avg_order_value: number | null
   cmp_retention_customers: number | null; comparison_label: string | null
-  current_period_label: string | null
+  current_period_label: string | null; previous_period_label: string | null
 }
 
 interface SalesData {
@@ -162,6 +162,17 @@ export default function SalesClient() {
   // Label for the period currently shown on KPI cards
   const kpiPeriodLabel = kpi.current_period_label ?? null
 
+  // Tooltip text for the % comparison badge
+  const cmpTooltip = (() => {
+    if (kpiPeriodLabel && kpi.previous_period_label) {
+      return `Comparing ${kpiPeriodLabel} vs ${kpi.previous_period_label}\n(current − previous) ÷ previous`
+    }
+    if (kpi.comparison_label === 'vs preceding period') {
+      return `Comparing selected period vs the preceding period of equal length\n(current − previous) ÷ previous`
+    }
+    return `(current − previous) ÷ previous`
+  })()
+
   const activeRangeLabel = (() => {
     if (!rangeFrom) return 'All available periods'
     const fromLabel = new Date(rangeFrom).toLocaleDateString('en-GB', { month: 'short', year: 'numeric' })
@@ -285,11 +296,18 @@ export default function SalesClient() {
             </div>
           </div>
 
-          {rangeFrom && (
-            <p className="text-xs text-muted-foreground mt-3">
-              Selected: <span className="font-medium text-foreground">{activeRangeLabel}</span>
-            </p>
-          )}
+          <div className="flex flex-wrap items-center justify-between gap-2 mt-3">
+            {rangeFrom ? (
+              <p className="text-xs text-muted-foreground">
+                Selected: <span className="font-medium text-foreground">{activeRangeLabel}</span>
+              </p>
+            ) : kpiPeriodLabel ? (
+              <p className="text-xs text-muted-foreground">
+                Showing: <span className="font-medium text-foreground">{kpiPeriodLabel}</span>
+                <span className="ml-1">(latest available) — select month chips to change period</span>
+              </p>
+            ) : null}
+          </div>
         </CardContent>
       </Card>
 
@@ -302,6 +320,7 @@ export default function SalesClient() {
           icon={TrendingUp}
           comparison={kpi.cmp_total_sales ?? undefined}
           comparisonLabel={kpi.comparison_label ?? undefined}
+          comparisonTooltip={cmpTooltip}
           tooltip="HOC Unilever revenue for the displayed period — includes converted AND not-converted orders. Higher than Overview's HOC Sales which counts converted only. Use 'Converted Only' filter to align."
         />
         <KpiCard
@@ -311,6 +330,7 @@ export default function SalesClient() {
           icon={CreditCard}
           comparison={kpi.cmp_avg_order_value ?? undefined}
           comparisonLabel={kpi.comparison_label ?? undefined}
+          comparisonTooltip={cmpTooltip}
           tooltip="Total Sales ÷ Total Orders for the displayed period. Includes not-converted orders — switch to 'Converted Only' for attribution-window figures."
         />
         <KpiCard
@@ -320,6 +340,7 @@ export default function SalesClient() {
           icon={UserPlus}
           comparison={kpi.cmp_new_customers ?? undefined}
           comparisonLabel={kpi.comparison_label ?? undefined}
+          comparisonTooltip={cmpTooltip}
           tooltip="Unique first-time HOC buyers for the displayed period — includes both converted (within attribution window) and first-order-not-converted."
         />
         <KpiCard
@@ -329,6 +350,7 @@ export default function SalesClient() {
           icon={Users}
           comparison={kpi.cmp_retention_customers ?? undefined}
           comparisonLabel={kpi.comparison_label ?? undefined}
+          comparisonTooltip={cmpTooltip}
           tooltip="Unique repeat HOC buyers for the displayed period — includes both converted (within attribution window) and retention-not-converted."
         />
       </KpiGrid>

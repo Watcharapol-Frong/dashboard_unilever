@@ -191,6 +191,7 @@ export async function GET(request: Request) {
 
     let c: KpiRow
     let currentPeriodLabel: string | null = null
+    let previousPeriodLabel: string | null = null
 
     if (hasDateRange) {
       const kp = currKpiOrNull as Awaited<ReturnType<typeof fetchKpis>>
@@ -216,6 +217,7 @@ export async function GET(request: Request) {
         total_qty:           Number(r0?.total_qty           ?? 0),
       }
       currentPeriodLabel = r0?.period_label ?? null
+      previousPeriodLabel = rows.length >= 2 ? (rows[1].period_label ?? null) : null
     }
 
     const avgOV = c.total_orders > 0 ? c.total_sales / c.total_orders : 0
@@ -271,6 +273,7 @@ export async function GET(request: Request) {
           cmp_avg_order_value:     cmpAov,
           comparison_label:        comparisonLabel,
           current_period_label:    currentPeriodLabel,
+          previous_period_label:   previousPeriodLabel,
         },
         by_period: periodsRaw.map(r => ({
           period:       r.period,
