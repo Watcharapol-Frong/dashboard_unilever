@@ -298,6 +298,7 @@ export default function SalesClient() {
           icon={TrendingUp}
           comparison={kpi.cmp_total_sales ?? undefined}
           comparisonLabel={kpi.comparison_label ?? undefined}
+          tooltip="All HOC Unilever revenue by customers who were called — includes both converted (within attribution window) and not-converted orders. Use 'Converted Only' filter to see attributed sales only."
         />
         <KpiCard
           title="Avg Order Value"
@@ -306,6 +307,7 @@ export default function SalesClient() {
           icon={CreditCard}
           comparison={kpi.cmp_avg_order_value ?? undefined}
           comparisonLabel={kpi.comparison_label ?? undefined}
+          tooltip="Total Sales ÷ Total Orders for the selected period and filters. Reflects average basket size per transaction."
         />
         <KpiCard
           title="New Customers"
@@ -314,6 +316,7 @@ export default function SalesClient() {
           icon={UserPlus}
           comparison={kpi.cmp_new_customers ?? undefined}
           comparisonLabel={kpi.comparison_label ?? undefined}
+          tooltip="Unique customers placing their first HOC order within the attribution window (converted). Does not include first-order-not-converted."
         />
         <KpiCard
           title="Retention Customers"
@@ -322,6 +325,7 @@ export default function SalesClient() {
           icon={Users}
           comparison={kpi.cmp_retention_customers ?? undefined}
           comparisonLabel={kpi.comparison_label ?? undefined}
+          tooltip="Unique repeat buyers who reordered within the attribution window (converted). Does not include retention-not-converted."
         />
       </KpiGrid>
 
