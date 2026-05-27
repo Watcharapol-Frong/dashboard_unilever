@@ -1,10 +1,11 @@
 'use client'
 
-import { useEffect, useMemo, useState } from 'react'
+import { useMemo, useState } from 'react'
 import { useDashboardSWR } from '@/hooks/useDashboardSWR'
+import { useBuild } from '@/context/BuildContext'
 import {
-  LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend,
-  ResponsiveContainer,
+  LineChart, Line, XAxis, YAxis, CartesianGrid, Legend,
+  ResponsiveContainer, Tooltip,
 } from 'recharts'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
@@ -13,9 +14,7 @@ import { KpiCard } from '@/components/dashboard/KpiCard'
 import { KpiGrid } from '@/components/dashboard/KpiGrid'
 import { DataTable } from '@/components/ui/data-table'
 import { PageLoading, PageEmpty } from '@/components/dashboard/PageState'
-import { useBuild } from '@/context/BuildContext'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
-import { CHART_AXIS_CLS, CHART_TOOLTIP_STYLE } from '@/lib/chart-utils'
 import { formatTHB, formatNumber, formatPct, fmtBaht } from '@/lib/formatters'
 import { columns as baseProductColumns } from '../columns'
 import { Package, ShoppingCart, TrendingUp, BarChart2, Calendar, UserPlus, Users } from 'lucide-react'
@@ -297,35 +296,13 @@ export default function ProductsClient() {
       p.set('startDate', rangeFrom)
       p.set('endDate',   lastDayOfMonth(rangeTo ?? rangeFrom))
     }
+    // Include buildVersion so mart rebuild triggers a fresh fetch
+    if (buildVersion) p.set('_v', String(buildVersion))
     const qs = p.toString()
     return `/api/data/products${qs ? `?${qs}` : ''}`
-  }, [filterBrands, filterClass, filterSeniorBuyer, filterBuyer, filterSubclass, rangeFrom, rangeTo])
+  }, [filterBrands, filterClass, filterSeniorBuyer, filterBuyer, filterSubclass, rangeFrom, rangeTo, buildVersion])
 
-  // useEffect fetch — re-runs whenever apiUrl changes; keeps previous data on error
-  const [data,      setData]      = useState<ProductData | null>(null)
-  const [isLoading, setIsLoading] = useState(true)
-  const [fetchErr,  setFetchErr]  = useState<string | null>(null)
-
-  useEffect(() => {
-    let cancelled = false
-    setIsLoading(true)
-    setFetchErr(null)
-    fetch(apiUrl)
-      .then(r => r.json())
-      .then((j: { ok: boolean; data?: ProductData; error?: string }) => {
-        if (!cancelled) {
-          if (j.ok && j.data) setData(j.data)
-          else setFetchErr(j.error ?? 'Unknown error')
-        }
-      })
-      .catch((err: Error) => {
-        if (!cancelled) setFetchErr(err.message)
-      })
-      .finally(() => {
-        if (!cancelled) setIsLoading(false)
-      })
-    return () => { cancelled = true }
-  }, [apiUrl, buildVersion])
+  const { data, isLoading, isValidating, error } = useDashboardSWR<ProductData>(apiUrl)
 
   const hasFilter = filterBrands.length > 0 || filterClass.length > 0 ||
     filterSeniorBuyer.length > 0 || filterBuyer.length > 0 || filterSubclass.length > 0
@@ -354,13 +331,13 @@ export default function ProductsClient() {
   }, [filteredProducts, filterSegment])
 
   if (isLoading && !data) return <PageLoading />
-  if (!data) {
+  if (!data || data.months.length === 0) {
     return <PageEmpty message="No product sales data available" hint="Please build mart first." />
   }
 
   const top5      = data.top5_brands
   const trendData = data.by_brand_trend
-  const months    = opts.months
+  const months    = opts.months.length > 0 ? opts.months : data.months
 
   const activeRangeLabel = (() => {
     if (!rangeFrom) return 'All available periods'
@@ -378,7 +355,10 @@ export default function ProductsClient() {
         <CardHeader className="pb-3">
           <div className="flex items-center gap-2">
             <Calendar className="h-4 w-4 text-[#003DA6]" />
-            <CardTitle className="text-sm font-medium">Filter & Range Selection</CardTitle>
+            <CardTitle className="text-sm font-medium flex items-center gap-2">
+            Filter & Range Selection
+            {isValidating && !isLoading && <span className="text-xs font-normal text-muted-foreground animate-pulse">Updating…</span>}
+          </CardTitle>
           </div>
         </CardHeader>
         <CardContent>
@@ -462,8 +442,8 @@ export default function ProductsClient() {
               Selected range: <span className="font-semibold text-foreground">{activeRangeLabel}</span>
             </p>
           )}
-          {fetchErr && (
-            <p className="text-xs text-red-500 mt-2">Failed to load filtered data: {fetchErr}</p>
+          {error && (
+            <p className="text-xs text-red-500 mt-2">Failed to load data: {String(error)}</p>
           )}
         </CardContent>
       </Card>
@@ -496,13 +476,27 @@ export default function ProductsClient() {
           <ResponsiveContainer width="100%" height={300}>
             <LineChart data={trendData} margin={{ top: 10, right: 10, left: 10, bottom: 0 }}>
               <CartesianGrid strokeDasharray="3 3" vertical={false} className="stroke-muted" />
-              <XAxis dataKey="month_label" tickLine={false} axisLine={false} tickMargin={8} className={CHART_AXIS_CLS} />
-              <YAxis tickLine={false} axisLine={false} tickMargin={8} className={CHART_AXIS_CLS}
+              <XAxis dataKey="month_label" tickLine={false} axisLine={false} tickMargin={8} fontSize={11} />
+              <YAxis tickLine={false} axisLine={false} tickMargin={8} fontSize={11}
                 tickFormatter={v => `฿${(v / 1000).toFixed(0)}k`} width={60} />
               <Tooltip
-                contentStyle={CHART_TOOLTIP_STYLE}
-                labelClassName="text-xs font-bold"
-                formatter={(value: any, name: string) => [formatTHB(Number(value)), name]}
+                content={({ active, payload, label }) => {
+                  if (!active || !payload?.length) return null
+                  return (
+                    <div className="rounded-lg border border-border/50 bg-background p-3 text-xs shadow-xl space-y-1.5 min-w-[12rem]">
+                      <div className="font-semibold text-muted-foreground text-[10px] uppercase tracking-wider">{label}</div>
+                      {payload.map((p: any) => (
+                        <div key={p.dataKey} className="flex items-center justify-between gap-4">
+                          <div className="flex items-center gap-1.5 text-muted-foreground">
+                            <span className="h-2 w-2 rounded-full" style={{ backgroundColor: p.color }} />
+                            <span>{p.name}</span>
+                          </div>
+                          <span className="font-semibold tabular-nums text-foreground">{formatTHB(Number(p.value))}</span>
+                        </div>
+                      ))}
+                    </div>
+                  )
+                }}
               />
               <Legend wrapperStyle={{ fontSize: '11px', paddingTop: '8px' }} />
               {top5.filter(b => b !== 'Other').map((brand, i) => (
