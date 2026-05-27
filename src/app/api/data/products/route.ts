@@ -42,7 +42,7 @@ export async function GET(request: Request) {
       brands, className, seniorBuyer, buyer, subclass, startDate, endDate,
     )
 
-    const [kpiRow, productRows, brandRows, brandTrendRows] = await Promise.all([
+    const [kpiRow, productRows, brandRows, monthsRaw, brandTrendRows] = await Promise.all([
       // ── KPI totals ───────────────────────────────────────────────────────
       queryOne<{
         total_sales: string
@@ -117,6 +117,11 @@ export async function GET(request: Request) {
         GROUP BY COALESCE(m.brands, 'Unknown')
         ORDER BY SUM(m.sales_in_vat) DESC
       `, filterParams),
+
+      // ── Available months (unfiltered, for range chips) ──────────────────
+      query<{ month: string }>(`
+        SELECT DISTINCT month::text AS month FROM sales_hoc_orders ORDER BY month
+      `),
 
       // ── Brand revenue trend — top 3 brands × month + Other ─────────────
       query<{
@@ -226,6 +231,7 @@ export async function GET(request: Request) {
         total_skus:      totalSkus,
         total_orders:    totalOrders,
         avg_order_value: totalOrders > 0 ? totalSales / totalOrders : 0,
+        months: monthsRaw.map(r => r.month),
       },
     })
     res.headers.set('Cache-Control', 'public, s-maxage=300, stale-while-revalidate=600')

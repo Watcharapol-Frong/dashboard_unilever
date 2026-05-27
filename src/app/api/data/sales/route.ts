@@ -70,7 +70,7 @@ async function fetchLastTwoPeriods(interval: Interval, where: string, params: an
     total_orders: string; new_customers: string; retention_customers: string; total_qty: string
   }>(`
     SELECT
-      ${grp} AS period,
+      (${grp})::text AS period,
       ${lbl} AS period_label,
       COALESCE(SUM(sales_in_vat), 0)::text                                                       AS total_sales,
       COALESCE(SUM(CASE WHEN channel='online'  THEN sales_in_vat ELSE 0 END), 0)::text           AS online_sales,
