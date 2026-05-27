@@ -2,7 +2,7 @@
 
 import { ColumnDef } from "@tanstack/react-table"
 import { Badge } from "@/components/ui/badge"
-import { FILE_TYPE_CONFIGS, UploadFileType } from "@/lib/upload/config"
+import { FILE_TYPE_CONFIGS, UploadFileType } from "@/lib/upload-config"
 import { cn } from "@/lib/utils"
 import { DataTableColumnHeader } from "@/components/ui/data-table-column-header"
 

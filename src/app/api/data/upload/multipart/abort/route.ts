@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server'
 import { AbortMultipartUploadCommand } from '@aws-sdk/client-s3'
-import { r2, R2_BUCKET } from '@/lib/storage/r2'
+import { r2, R2_BUCKET } from '@/lib/r2'
 
 const KEY_RE = /^tmp\/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\.csv$/i
 

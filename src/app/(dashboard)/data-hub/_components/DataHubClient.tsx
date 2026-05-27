@@ -30,8 +30,8 @@ import {
   Activity
 } from 'lucide-react'
 import { Skeleton } from '@/components/ui/skeleton'
-import { FILE_TYPE_CONFIGS, validateHeaders } from '@/lib/upload/config'
-import type { UploadFileType } from '@/lib/upload/config'
+import { FILE_TYPE_CONFIGS, validateHeaders } from '@/lib/upload-config'
+import type { UploadFileType } from '@/lib/upload-config'
 import { cn } from '@/lib/utils'
 import { formatTHB, formatNumber } from '@/lib/formatters'
 import { useUploadQueue, MAX_CONCURRENT } from '@/context/UploadQueueContext'

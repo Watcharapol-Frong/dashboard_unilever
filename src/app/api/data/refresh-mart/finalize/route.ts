@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server'
 import { withAdmin } from '@/lib/auth'
-import { buildMartPerformance } from '@/lib/services/mart-service'
+import { buildMartPerformance } from '@/lib/mart'
 
 export const dynamic = 'force-dynamic'
 

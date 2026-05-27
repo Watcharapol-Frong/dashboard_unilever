@@ -1,7 +1,7 @@
 'use client'
 import { createContext, useContext, useState, useCallback, useRef, useEffect } from 'react'
 import { mutate as swrMutate } from 'swr'
-import type { UploadFileType } from '@/lib/upload/config'
+import type { UploadFileType } from '@/lib/upload-config'
 
 export const MAX_CONCURRENT = 5
 
