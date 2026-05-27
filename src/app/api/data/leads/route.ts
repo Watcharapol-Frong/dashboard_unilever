@@ -26,8 +26,8 @@ export async function GET(req: NextRequest) {
     if (tier.length > 0)    { params.push(tier);    conditions.push(`l.lead_customers = ANY($${params.length})`) }
     if (contact.length > 0) { params.push(contact); conditions.push(`COALESCE(cs.contact_status,'not_called') = ANY($${params.length})`) }
     if (conv.length > 0)    { params.push(conv);    conditions.push(`CASE WHEN os.is_converted THEN 'converted' WHEN os.mmid IS NOT NULL THEN 'not_converted' ELSE 'no_hoc_order' END = ANY($${params.length})`) }
-    if (cmg.length > 0)     { params.push(cmg);     conditions.push(`os.dynamic_cmg = ANY($${params.length})`) }
-    if (agent.length > 0)   { params.push(agent);   conditions.push(`cs.agent = ANY($${params.length})`) }
+    if (cmg.length > 0)     { params.push(cmg);     conditions.push(`l.mmid IN (SELECT mmid FROM sales_hoc_orders WHERE dynamic_cmg = ANY($${params.length}))`) }
+    if (agent.length > 0)   { params.push(agent);   conditions.push(`l.mmid IN (SELECT mmid FROM telesales_calls WHERE agent = ANY($${params.length}) AND first_connected_date IS NOT NULL)`) }
     if (search)  { params.push(`%${search}%`); conditions.push(`(l.mmid ILIKE $${params.length} OR COALESCE(l.cust_name,'') ILIKE $${params.length})`) }
 
     const whereClause = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : ''

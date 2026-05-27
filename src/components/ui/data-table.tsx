@@ -37,6 +37,8 @@ interface DataTableProps<TData, TValue> {
   onSearchChange?: (v: string) => void
   searchPlaceholder?: string
   toolbarLeft?: React.ReactNode
+  /** When true, disables internal client-side pagination (use when parent handles server-side pagination) */
+  manualPagination?: boolean
 }
 
 export function DataTable<TData, TValue>({
@@ -47,6 +49,7 @@ export function DataTable<TData, TValue>({
   onSearchChange,
   searchPlaceholder,
   toolbarLeft,
+  manualPagination,
 }: DataTableProps<TData, TValue>) {
   const [rowSelection, setRowSelection] = React.useState({})
   const [columnVisibility, setColumnVisibility] =
@@ -64,6 +67,9 @@ export function DataTable<TData, TValue>({
       columnVisibility,
       rowSelection,
       columnFilters,
+    },
+    initialState: {
+      pagination: { pageSize: manualPagination ? 10_000 : 10 },
     },
     enableRowSelection: true,
     onRowSelectionChange: setRowSelection,
@@ -154,7 +160,7 @@ export function DataTable<TData, TValue>({
           </TableBody>
         </Table>
       </div>
-      <DataTablePagination table={table} />
+      {!manualPagination && <DataTablePagination table={table} />}
     </div>
   )
 }

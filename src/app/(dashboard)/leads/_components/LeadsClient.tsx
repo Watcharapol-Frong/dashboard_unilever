@@ -16,6 +16,7 @@ import { ChevronLeft, ChevronRight } from 'lucide-react'
 
 interface Summary {
   kpi: { total: number; contacted: number; converted: number; orders: number }
+  filtered: boolean
   filters: { tiers: string[]; cmgs: string[]; agents: string[] }
 }
 
@@ -67,11 +68,19 @@ export default function LeadsClient() {
 
   useEffect(() => { setPage(1) }, [filterTier, filterContact, filterConv, filterCmg, filterAgent])
 
+  const summaryUrl = useMemo(() => buildUrl('/api/data/leads/summary', {
+    tier:    filterTier,
+    contact: filterContact,
+    conv:    filterConv,
+    cmg:     filterCmg,
+    agent:   filterAgent,
+  }), [filterTier, filterContact, filterConv, filterCmg, filterAgent])
+
   const { data: summary, isLoading: summaryLoading, error: summaryError } =
-    useSWR<Summary>('/api/data/leads/summary', fetcher, {
+    useSWR<Summary>(summaryUrl, fetcher, {
       revalidateOnFocus: false,
       revalidateOnReconnect: false,
-      dedupingInterval: 300_000,
+      keepPreviousData: true,
     })
 
   const pageUrl = useMemo(() => buildUrl('/api/data/leads', {
@@ -206,6 +215,10 @@ export default function LeadsClient() {
           key={pageUrl}
           columns={leadsColumns}
           data={rows}
+          searchValue={search}
+          onSearchChange={(v) => { setSearch(v); setPage(1) }}
+          searchPlaceholder="Search MMID or name..."
+          manualPagination
         />
       </div>
 
