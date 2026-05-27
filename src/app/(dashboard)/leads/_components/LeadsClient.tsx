@@ -123,14 +123,14 @@ export default function LeadsClient() {
           value={kpi.total.toLocaleString()}
           subtitle="Assigned telesales leads"
           icon={Users}
-          tooltip="จำนวน MMID ทั้งหมดในรายชื่อ Leads ที่ถูก assign ให้ทีม Telesales"
+          tooltip="Total number of MMIDs assigned to the telesales team as leads."
         />
         <KpiCard
           title="Contacted"
           value={kpi.contacted.toLocaleString()}
           subtitle={fmtPct(kpi.contacted, kpi.total)}
           icon={PhoneCall}
-          tooltip="จำนวน MMID ที่ถูกโทรหาแล้ว ครอบคลุมทั้ง Reached (คุยได้) และ Called Not Reached (โทรหาแต่ไม่รับ/ปิดเครื่อง)"
+          tooltip="MMIDs that have been called at least once — includes both Reached and Called Not Reached."
         />
         <KpiCard
           title="Conversion"
@@ -138,7 +138,7 @@ export default function LeadsClient() {
           subtitle={fmtPct(kpi.converted, kpi.total)}
           valueClassName="text-blue-600"
           icon={Award}
-          tooltip="จำนวน MMID ที่มีคำสั่งซื้อ HOC อย่างน้อย 1 รายการ (customer_type: new_customer หรือ retention) หลังจาก Lead ถูกสร้าง"
+          tooltip="Unique MMIDs with at least one HOC order (new_customer or retention)."
         />
         <KpiCard
           title="Orders"
@@ -146,7 +146,7 @@ export default function LeadsClient() {
           subtitle={kpi.converted > 0 ? `avg ${(kpi.orders / kpi.converted).toFixed(1)}x / person` : undefined}
           valueClassName="text-green-600"
           icon={ShoppingBag}
-          tooltip="จำนวนคำสั่งซื้อ HOC รวมทั้งหมดที่เกิดจาก MMID ใน Conversion เท่านั้น (ไม่รวม MMID ที่ยังไม่ converted)"
+          tooltip="Total HOC orders placed by converted MMIDs only. Non-converted leads are excluded."
         />
       </KpiGrid>
 
