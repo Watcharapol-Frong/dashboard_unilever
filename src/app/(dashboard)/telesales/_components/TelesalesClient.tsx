@@ -267,7 +267,7 @@ export default function TelesalesClient() {
 
   const totalConvertedDisplay = (data.summary.new_converted ?? 0) + (data.summary.repeat_converted ?? 0)
   const reachRate = data.summary.total_calls > 0 ? data.summary.reached / data.summary.total_calls : 0
-  const conversionRate = data.summary.reached > 0 ? data.summary.total_converted / data.summary.reached : 0
+  const conversionRate = data.summary.total_calls > 0 ? data.summary.total_converted / data.summary.total_calls : 0
 
   const hasFilter = channel.length > 0 || cmg.length > 0 || agent.length > 0
   const hasRange = !!(rangeFrom || (interval === 'custom' && (customStart !== '2026-05-01' || customEnd !== '2026-05-31')))
@@ -427,10 +427,10 @@ export default function TelesalesClient() {
         <KpiCard
           title="Conversion Rate"
           value={formatPct(conversionRate)}
-          subtitle={`Converted: ${formatNumber(totalConvertedDisplay)} / Connected: ${formatNumber(data.summary.reached)}`}
+          subtitle={`Converted: ${formatNumber(data.summary.total_converted)} / Total: ${formatNumber(data.summary.total_calls)}`}
           valueClassName={colorRate(conversionRate, [0.15, 0.08])}
           icon={UserCheck}
-          tooltip="Unique converted customers ÷ Unique connected customers. Uses distinct customer count (not New + Repeat sum) so the rate stays ≤ 100%."
+          tooltip="Unique converted customers ÷ Unique customers called (Total). Includes customers who ordered without answering, so the denominator is the full target scope — not just those who picked up."
         />
         <KpiCard
           title="Orders (Conversion)"
