@@ -114,6 +114,7 @@ export interface RecentOrder {
   sales_in_vat: number
   dynamic_cmg: string | null
   channel: string
+  agent: string | null
 }
 
 export interface ProductKpi {

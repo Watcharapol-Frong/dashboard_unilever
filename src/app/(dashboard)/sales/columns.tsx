@@ -34,6 +34,11 @@ export const columns: ColumnDef<RecentOrder>[] = [
     cell: ({ row }) => row.original.dynamic_cmg ?? "-",
   },
   {
+    accessorKey: "agent",
+    header: "Agent",
+    cell: ({ row }) => row.original.agent ?? "-",
+  },
+  {
     accessorKey: "sales_qty",
     header: ({ column }) => (
       <DataTableColumnHeader column={column} title="Qty" className="justify-end" />

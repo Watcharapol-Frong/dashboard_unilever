@@ -16,6 +16,8 @@ function buildFilters(
   const params: any[] = []
   const bare: string[]     = ['first_connected_date IS NOT NULL']
   const prefixed: string[] = ['tc.first_connected_date IS NOT NULL']
+  // order_date is intentionally NOT date-filtered — customer_type already encodes
+  // the attribution window, so a retention order outside the call period still counts
   const orderConds: string[] = [`customer_type IN ('new_customer', 'retention')`]
 
   const push = (v: any) => { params.push(v); return params.length }
@@ -24,13 +26,13 @@ function buildFilters(
     const i = push(startDate)
     bare.push(`first_connected_date >= $${i}::date`)
     prefixed.push(`tc.first_connected_date >= $${i}::date`)
-    orderConds.push(`order_date >= $${i}::date`)
+    // NOT added to orderConds — do not restrict by order_date
   }
   if (endDate) {
     const i = push(endDate)
     bare.push(`first_connected_date <= $${i}::date`)
     prefixed.push(`tc.first_connected_date <= $${i}::date`)
-    orderConds.push(`order_date <= $${i}::date`)
+    // NOT added to orderConds
   }
   if (agent.length > 0) {
     const i = push(agent)
@@ -81,17 +83,30 @@ export async function GET(request: Request) {
       queryOne<{ total_leads: string }>(`
         SELECT COUNT(DISTINCT mmid)::text AS total_leads FROM leads
       `),
-      queryOne<{ total_converted: string }>(`
+      queryOne<{ total_converted: string; new_converted: string; repeat_converted: string }>(`
         ${agentConvCTE}
-        SELECT COUNT(DISTINCT tc.mmid)::text AS total_converted
+        SELECT
+          COUNT(DISTINCT tc.mmid)::text AS total_converted,
+          COUNT(DISTINCT tc.mmid) FILTER (
+            WHERE EXISTS (
+              SELECT 1 FROM sales_hoc_orders o
+              WHERE o.mmid = tc.mmid AND o.customer_type = 'new_customer'
+            )
+          )::text AS new_converted,
+          COUNT(DISTINCT tc.mmid) FILTER (
+            WHERE EXISTS (
+              SELECT 1 FROM sales_hoc_orders o
+              WHERE o.mmid = tc.mmid AND o.customer_type = 'retention'
+            )
+          )::text AS repeat_converted
         FROM telesales_calls tc
         JOIN agent_conversions ac ON ac.mmid = tc.mmid
         ${whereTc}
       `, params),
       queryOne<{ total_calls: string; reached: string }>(`
         SELECT
-          COUNT(*)::text AS total_calls,
-          COUNT(*) FILTER (
+          COUNT(DISTINCT mmid)::text AS total_calls,
+          COUNT(DISTINCT mmid) FILTER (
             WHERE call_status NOT LIKE 'ไม่รับสาย%'
               AND call_status IS DISTINCT FROM 'ปิดเครื่อง/ติดต่อไม่ได้'
           )::text AS reached
@@ -102,6 +117,8 @@ export async function GET(request: Request) {
 
     const totalLeads     = Number(leadsRow?.total_leads ?? 0)
     const totalConverted = Number(totalConvertedRow?.total_converted ?? 0)
+    const newConverted   = Number(totalConvertedRow?.new_converted   ?? 0)
+    const repeatConverted = Number(totalConvertedRow?.repeat_converted ?? 0)
     const totalCalls     = Number(summaryRow?.total_calls ?? 0)
     const reached        = Number(summaryRow?.reached ?? 0)
 
@@ -199,6 +216,8 @@ export async function GET(request: Request) {
           reached,
           not_reached: totalCalls - reached,
           total_converted: totalConverted,
+          new_converted: newConverted,
+          repeat_converted: repeatConverted,
           call_status_breakdown,
         },
         by_agent,

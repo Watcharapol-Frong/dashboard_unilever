@@ -34,10 +34,10 @@ export async function GET() {
           GROUP BY mmid
         )
         SELECT
-          COUNT(*)                                                                     AS total,
-          COUNT(*) FILTER (WHERE COALESCE(cs.contact_status,'not_called') != 'not_called') AS contacted,
-          COUNT(*) FILTER (WHERE os.is_converted)                                    AS converted,
-          COALESCE(SUM(COALESCE(os.hoc_orders, 0)), 0)                              AS total_orders
+          COUNT(*)                                                                          AS total,
+          COUNT(*) FILTER (WHERE cs.contact_status IS NOT NULL)                           AS contacted,
+          COUNT(*) FILTER (WHERE os.is_converted)                                         AS converted,
+          COALESCE(SUM(os.hoc_orders) FILTER (WHERE os.is_converted), 0)                 AS total_orders
         FROM leads l
         LEFT JOIN cs ON cs.mmid = l.mmid
         LEFT JOIN os ON os.mmid = l.mmid
