@@ -437,11 +437,12 @@ export default function ProductsClient() {
             )}
           </div>
 
-          {rangeFrom && (
-            <p className="text-xs text-muted-foreground mt-3">
-              Selected range: <span className="font-semibold text-foreground">{activeRangeLabel}</span>
-            </p>
-          )}
+          <p className="text-xs text-muted-foreground mt-3">
+            {rangeFrom
+              ? <>Showing: <span className="font-medium text-foreground">{activeRangeLabel}</span></>
+              : <>Showing: <span className="font-medium text-foreground">all available periods</span> — select month chips to filter by period</>
+            }
+          </p>
           {error && (
             <p className="text-xs text-red-500 mt-2">Failed to load data: {String(error)}</p>
           )}

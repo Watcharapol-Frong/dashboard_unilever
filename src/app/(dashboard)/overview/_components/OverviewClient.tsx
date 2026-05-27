@@ -234,6 +234,13 @@ export default function OverviewClient() {
               </button>
             )}
           </div>
+
+          <p className="text-xs text-muted-foreground mt-3">
+            {rangeFrom
+              ? <>Showing: <span className="font-medium text-foreground">{activeRangeLabel}</span></>
+              : <>Showing: <span className="font-medium text-foreground">all available periods</span> — select month chips to filter by period</>
+            }
+          </p>
         </CardContent>
       </Card>
 

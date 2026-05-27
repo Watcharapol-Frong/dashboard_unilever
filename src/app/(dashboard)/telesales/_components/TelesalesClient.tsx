@@ -269,6 +269,16 @@ export default function TelesalesClient() {
   const hasFilter = channel.length > 0 || cmg.length > 0 || agent.length > 0
   const hasRange = !!(rangeFrom || (interval === 'custom' && (customStart !== '2026-05-01' || customEnd !== '2026-05-31')))
 
+  const activeRangeLabel = (() => {
+    if (rangeFrom) {
+      const fromLabel = new Date(rangeFrom).toLocaleDateString('en-GB', { month: 'short', year: 'numeric' })
+      if (!rangeTo) return fromLabel
+      return `${fromLabel} – ${new Date(rangeTo).toLocaleDateString('en-GB', { month: 'short', year: 'numeric' })}`
+    }
+    if (interval === 'custom') return `${customStart} – ${customEnd}`
+    return null
+  })()
+
   return (
     <div className="space-y-6">
       {/* ── Filter & Range Selection ──────────────────────────────────────── */}
@@ -385,6 +395,13 @@ export default function TelesalesClient() {
               )}
             </div>
           </div>
+
+          <p className="text-xs text-muted-foreground mt-3">
+            {activeRangeLabel
+              ? <>Showing: <span className="font-medium text-foreground">{activeRangeLabel}</span></>
+              : <>Showing: <span className="font-medium text-foreground">all available periods</span> — select month chips to filter by period</>
+            }
+          </p>
         </CardContent>
       </Card>
 
