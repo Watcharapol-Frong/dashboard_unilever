@@ -316,7 +316,7 @@ export default function SalesClient() {
           icon={UserPlus}
           comparison={kpi.cmp_new_customers ?? undefined}
           comparisonLabel={kpi.comparison_label ?? undefined}
-          tooltip="Unique customers placing their first HOC order within the attribution window (converted). Does not include first-order-not-converted."
+          tooltip="All unique first-time HOC buyers — includes both converted (within attribution window) and first-order-not-converted."
         />
         <KpiCard
           title="Retention Customers"
@@ -325,7 +325,7 @@ export default function SalesClient() {
           icon={Users}
           comparison={kpi.cmp_retention_customers ?? undefined}
           comparisonLabel={kpi.comparison_label ?? undefined}
-          tooltip="Unique repeat buyers who reordered within the attribution window (converted). Does not include retention-not-converted."
+          tooltip="All unique repeat HOC buyers — includes both converted (within attribution window) and retention-not-converted."
         />
       </KpiGrid>
 
