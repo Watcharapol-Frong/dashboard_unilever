@@ -1,229 +1,690 @@
-# Overview Dashboard — Design Specification
+# Dashboard Unilever — System Design Specification
 
-## Purpose
-Provide a single-page operational summary of the HOC Unilever telesales program.
-Primary audience: campaign managers and supervisors who need a quick read on
-monthly sales performance, customer acquisition, and cost efficiency.
+## Tech Stack
+
+| Layer | Technology |
+|-------|-----------|
+| Framework | Next.js 14 (App Router, TypeScript) |
+| Database | PostgreSQL (via `pg` pool, `DATABASE_URL` env) |
+| Auth | Clerk — `withAdmin()` / `withAuth()` wrappers in `src/lib/auth.ts` |
+| Data fetching | SWR (client) — stale-while-revalidate pattern |
+| UI components | shadcn/ui + Tailwind CSS |
+| Charts | Recharts v2 |
+| Tables | TanStack Table v8 |
+
+### Auth Guards
+
+| Guard | Access | Usage |
+|-------|--------|-------|
+| `withAuth()` | Any logged-in user | Most read endpoints |
+| `withAdmin()` | `publicMetadata.role === 'admin'` only | Leads, Data Hub, Exports |
 
 ---
 
-## Data Source
+## Database Tables
 
-| Item | Value |
-|------|-------|
-| Primary table | `mart_performance` (Gold mart, built on demand) |
-| API endpoint | `GET /api/data/overview` |
-| Row granularity | 1 row per `(month, lead_customers, dynamic_cmg)` |
-| Caching | Vercel Edge — `s-maxage=300, stale-while-revalidate=600` (5-min CDN cache) |
-| Client cache | SWR `dedupingInterval: 300 000 ms` — no re-fetch on tab switch |
-| Refresh trigger | Manual — user clicks **Build Mart** in Data Hub |
+### Raw / Transactional
 
-### mart_performance — full field reference
+| Table | Contents |
+|-------|---------|
+| `leads` | MMID master list assigned to telesales — `mmid`, `cust_name`, `lead_customers` |
+| `telesales_calls` | Call log — `mmid`, `agent`, `call_status`, `first_connected_date` |
+| `sales_hoc_orders` | HOC Unilever orders — `mmid`, `order_number`, `order_date`, `sales_in_vat`, `customer_type`, `dynamic_cmg`, `prod_num` |
+| `products` | SKU master — `prod_num`, `product_name_th`, `product_name_en`, `brands`, `class_name`, `subclass`, `senior_buyer_name`, `buyer_name` |
+| `targets` | Monthly sales targets per CMG — `month`, `dynamic_cmg`, `sales_target` |
+| `costs` | Monthly cost per agent/supervisor — `month`, `cost_per_agent`, `cost_per_supervisor` |
+| `incentives` | Incentive tier rules — achievement threshold (`tier`) → `incentive_per_head` |
+| `agent_headcount` | Monthly headcount — `month`, `agent_count`, `supervisor_count` |
 
-| Field | Type | Source / Calculation |
-|-------|------|----------------------|
-| `month` | DATE | `DATE_TRUNC('month', order_date)` from `mart_telesales_orders` |
-| `lead_customers` | TEXT | from `telesales_calls.lead_customers` |
-| `dynamic_cmg` | TEXT | from `sales_hoc_all.dynamic_cmg` |
-| `total_calls` | INT | `COUNT(*)` from `telesales_calls` for the month × lead tier |
-| `reached` | INT | `COUNT(*) FILTER (WHERE call_status = 'รับสาย')` |
-| `ordered` | INT | `COUNT(DISTINCT mmid)` where `customer_type IN ('new_customer','retention')` |
-| `new_customers` | INT | `COUNT(DISTINCT mmid)` where `customer_type = 'new_customer'` |
-| `retention` | INT | `COUNT(DISTINCT mmid)` where `customer_type = 'retention'` |
-| `hoc_orders` | INT | `COUNT(DISTINCT order_number)` where `customer_type IN ('new_customer','retention')` |
-| `hoc_sales` | NUMERIC | `SUM(sales_in_vat)` from `mart_telesales_orders` — telesales-attributed HOC orders only |
-| `actual_sales` | NUMERIC | `SUM(sales_in_vat)` from `sales_hoc_all` — ALL HOC Unilever sales for the CMG/month (not telesales-only) |
-| `sales_target` | NUMERIC | from `targets` table (uploaded CSV) per `(month, dynamic_cmg)` |
-| `achievement_ratio` | NUMERIC | `actual_sales / sales_target` — decimal e.g. `0.85` = 85% |
-| `incentive_per_head` | NUMERIC | from `incentives` table — looked up by `LATERAL JOIN` where `tier <= achievement_ratio` |
-| `total_incentive` | NUMERIC | `ordered × incentive_per_head` |
-| `cost_per_agent` | NUMERIC | from `costs` table per month |
-| `cost_per_supervisor` | NUMERIC | from `costs` table per month |
-| `supervisor_count` | INT | from `agent_headcount` table per month |
-| `agent_count` | INT | from `agent_headcount` table per month |
-| `total_agent_cost` | NUMERIC | `(supervisor_count × cost_per_supervisor) + (agent_count × cost_per_agent)` |
-| `total_expense` | NUMERIC | `total_incentive + total_agent_cost` |
-| `roi` | NUMERIC | `ROUND(actual_sales / NULLIF(total_expense, 0), 2)` — multiplier e.g. `23.55` = 23.55× |
+### Materialized / Mart
 
-### HOC Unilever definition
-`sales_hoc_all` is a UNION ALL view of `online_sales` and `offline_sales`,
-INNER JOINed with `products WHERE product_name_en IS NOT NULL`.
-Only SKUs mapped as HOC Unilever products are included.
+| Table | Contents | Rebuilt by |
+|-------|---------|-----------|
+| `mart_telesales_orders` | Attributed order fact — one row per order with `customer_type`, `attribution_days` | Build Mart |
+| `mart_performance` | Aggregated KPIs per `(month, lead_customers, dynamic_cmg)` | Build Mart |
 
-### Attribution window (customer_type logic)
+### Attribution Logic (`customer_type`)
+
 ```
-new_customer              order_date within attribution_days of first_connected_date + is first-ever order
-retention                 order_date within attribution_days + not first-ever order
+new_customer              order_date within attribution_days of first_connected_date  AND first-ever order
+retention                 order_date within attribution_days of first_connected_date  AND repeat order
 first_order_not_converted first-ever order but outside attribution window
 retention_not_converted   repeat order but outside attribution window
 ```
-Default `attribution_days = 14`. Only `new_customer` and `retention` rows
-are counted in `hoc_sales`, `ordered`, `new_customers`, `retention`.
 
-### Aggregation rules (cross-join duplication)
-`mart_performance` is built from a cross join of `dynamic_cmg × lead_customers` per month.
-Some fields are duplicated across that join and must be de-duplicated before summing:
+Default `attribution_days = 14`. Only `new_customer` and `retention` rows count toward KPIs.
+
+### HOC Unilever Definition
+
+`sales_hoc_orders` is built from `online_sales UNION ALL offline_sales`, INNER JOINed with `products WHERE product_name_en IS NOT NULL`. Only SKUs mapped as HOC Unilever products are included.
+
+---
+
+## mart_performance — Field Reference
+
+| Field | Type | Calculation |
+|-------|------|-------------|
+| `month` | DATE | `DATE_TRUNC('month', order_date)` |
+| `lead_customers` | TEXT | from `telesales_calls.lead_customers` |
+| `dynamic_cmg` | TEXT | from `sales_hoc_orders.dynamic_cmg` |
+| `total_calls` | INT | `COUNT(*)` from `telesales_calls` for month × lead tier |
+| `reached` | INT | calls with non-rejected `call_status` |
+| `ordered` | INT | `COUNT(DISTINCT mmid)` where `customer_type IN ('new_customer','retention')` |
+| `new_customers` | INT | `COUNT(DISTINCT mmid)` where `customer_type = 'new_customer'` |
+| `retention` | INT | `COUNT(DISTINCT mmid)` where `customer_type = 'retention'` |
+| `hoc_orders` | INT | `COUNT(DISTINCT order_number)` for HOC attributed orders |
+| `hoc_sales` | NUMERIC | `SUM(sales_in_vat)` — telesales-attributed HOC orders only |
+| `actual_sales` | NUMERIC | `SUM(sales_in_vat)` from `sales_hoc_all` — ALL HOC sales for CMG/month |
+| `sales_target` | NUMERIC | from `targets` per `(month, dynamic_cmg)` |
+| `achievement_ratio` | NUMERIC | `actual_sales / sales_target` — e.g. `0.85` = 85% |
+| `incentive_per_head` | NUMERIC | from `incentives` via `LATERAL JOIN WHERE tier <= achievement_ratio` |
+| `total_incentive` | NUMERIC | `ordered × incentive_per_head` |
+| `cost_per_agent` | NUMERIC | from `costs` per month |
+| `cost_per_supervisor` | NUMERIC | from `costs` per month |
+| `supervisor_count` | INT | from `agent_headcount` per month |
+| `agent_count` | INT | from `agent_headcount` per month |
+| `total_agent_cost` | NUMERIC | `(supervisor_count × cost_per_supervisor) + (agent_count × cost_per_agent)` |
+| `total_expense` | NUMERIC | `total_incentive + total_agent_cost` |
+| `roi` | NUMERIC | `ROUND(actual_sales / NULLIF(total_expense, 0), 2)` |
+
+### Cross-Join De-duplication Rules
+
+`mart_performance` cross-joins `dynamic_cmg × lead_customers` per month. When summing over multiple rows, de-duplicate before aggregating:
 
 | Fields | Granularity in DB | Correct aggregation |
 |--------|-------------------|---------------------|
 | `hoc_sales`, `new_customers`, `retention`, `ordered`, `hoc_orders`, `total_incentive` | Unique per `(month, dynamic_cmg, lead_customers)` | `SUM` directly |
-| `actual_sales`, `sales_target`, `achievement_ratio` | Per `(month, dynamic_cmg)` — repeated for each `lead_customers` | De-dup by `(month, dynamic_cmg)` then `SUM` |
-| `total_calls`, `reached` | Per `(month, lead_customers)` — repeated for each `dynamic_cmg` | De-dup by `(month, lead_customers)` then `SUM` |
-| `total_agent_cost`, `cost_per_agent`, `supervisor_count` etc. | Per `(month)` — repeated for every row | De-dup by `month` then `SUM` |
+| `actual_sales`, `sales_target`, `achievement_ratio` | Per `(month, dynamic_cmg)` — repeated per lead tier | De-dup by `(month, dynamic_cmg)` then `SUM` |
+| `total_calls`, `reached` | Per `(month, lead_customers)` — repeated per CMG | De-dup by `(month, lead_customers)` then `SUM` |
+| `total_agent_cost`, headcount fields | Per `month` — repeated every row | De-dup by `month` then `SUM` |
 
-`ROI` and `achievement %` are always **recomputed** from the de-duplicated sums,
-never averaged from individual row values.
+`ROI` and `achievement %` must always be **recomputed** from de-duplicated sums, never averaged from row values.
 
 ---
 
-## Section 1 — Filters
+## API Endpoints
 
-Position: top of page, horizontal row of Select dropdowns.
-All filtering is **client-side** (no additional API calls).
+### GET `/api/data/overview`
+
+| Item | Value |
+|------|-------|
+| Auth | `withAuth` |
+| DB tables | `mart_performance` |
+| Query params | none |
+| Cache | `s-maxage=300, stale-while-revalidate=600` |
+
+Returns one row per `(month, lead_customers, dynamic_cmg)` with all `mart_performance` fields plus `month_label` (`TO_CHAR(month, 'FMMonth')`). Client aggregates and filters entirely in-memory.
+
+---
+
+### GET `/api/data/leads/summary`
+
+| Item | Value |
+|------|-------|
+| Auth | `withAdmin` |
+| DB tables | `leads`, `telesales_calls`, `sales_hoc_orders` |
+| Query params | none — always global totals |
+| Cache | `s-maxage=300, stale-while-revalidate=600` |
+
+**KPI definitions:**
+
+| Field | SQL |
+|-------|-----|
+| `total` | `COUNT(*)` from `leads` |
+| `contacted` | `COUNT(*) FILTER (WHERE cs.contact_status IS NOT NULL)` — mmid appears in `telesales_calls` with `first_connected_date IS NOT NULL` |
+| `converted` | `COUNT(*) FILTER (WHERE os.is_converted)` — mmid has ≥ 1 HOC order |
+| `total_orders` | `SUM(os.hoc_orders) FILTER (WHERE os.is_converted)` — orders from converted MMIDs only |
+
+Also returns dropdown options: `filters.tiers`, `filters.cmgs`, `filters.agents`.
+
+**Contact status classification (cs CTE):**
+
+```sql
+CASE
+  WHEN COUNT(*) FILTER (
+    WHERE call_status NOT LIKE 'ไม่รับสาย%'
+      AND call_status IS DISTINCT FROM 'ปิดเครื่อง/ติดต่อไม่ได้'
+  ) > 0 THEN 'reached'
+  ELSE 'called_not_reached'
+END
+FROM telesales_calls
+WHERE first_connected_date IS NOT NULL
+```
+
+---
+
+### GET `/api/data/leads`
+
+| Item | Value |
+|------|-------|
+| Auth | `withAdmin` |
+| DB tables | `leads`, `telesales_calls`, `sales_hoc_orders` |
+| Cache | `s-maxage=60, stale-while-revalidate=120` |
+
+**Query params:**
+
+| Param | Type | Filter condition |
+|-------|------|-----------------|
+| `page` | int (default 1) | pagination |
+| `limit` | int (default 500, max 500) | pagination |
+| `search` | string | `l.mmid ILIKE` OR `l.cust_name ILIKE` |
+| `tier` | CSV | `l.lead_customers = ANY($n)` |
+| `contact` | CSV | `COALESCE(cs.contact_status,'not_called') = ANY($n)` |
+| `conv` | CSV | CASE expression on `os.is_converted` / `os.mmid` |
+| `cmg` | CSV | subquery: `l.mmid IN (SELECT mmid FROM sales_hoc_orders WHERE dynamic_cmg = ANY($n))` |
+| `agent` | CSV | subquery: `l.mmid IN (SELECT mmid FROM telesales_calls WHERE agent = ANY($n) AND first_connected_date IS NOT NULL)` |
+
+Returns `{ data: Lead[], total, page, limit }`.
+
+**Why subqueries for cmg/agent:** Using `MAX(dynamic_cmg)` / `MAX(agent)` per mmid in CTEs would miss mmids with multiple values. Subqueries match any occurrence.
+
+---
+
+### GET `/api/data/products`
+
+| Item | Value |
+|------|-------|
+| Auth | `withAuth` |
+| DB tables | `sales_hoc_orders` (alias `m`), `products` (alias `p`) |
+| Cache | `s-maxage=300, stale-while-revalidate=600` |
+
+**Query params:**
+
+| Param | Filter condition |
+|-------|-----------------|
+| `startDate` / `endDate` | `m.order_date >= $n::date` / `m.order_date <= $n::date` |
+| `brands` | `m.brands = ANY($n)` |
+| `class_name` | `m.class_name = ANY($n)` |
+| `subclass` | `m.subclass = ANY($n)` |
+| `senior_buyer` | subquery: `m.prod_num IN (SELECT prod_num FROM products WHERE senior_buyer_name = ANY($n))` |
+| `buyer` | subquery: `m.prod_num IN (SELECT prod_num FROM products WHERE buyer_name = ANY($n))` |
+
+**Why subqueries for senior_buyer/buyer:** These fields exist only in `products` table. Some queries (brand summary, brand trend) don't JOIN to `products p`, so direct `p.field` references would fail.
+
+Returns: `by_product[]`, `by_brand[]`, `by_brand_trend[]`, `top5_brands[]`, plus aggregate KPIs (`total_sales`, `total_qty`, `total_skus`, `total_orders`, `avg_order_value`).
+
+---
+
+### GET `/api/data/products/options`
+
+| Item | Value |
+|------|-------|
+| Auth | `withAuth` |
+| DB tables | `products`, `sales_hoc_orders` |
+| Cache | `s-maxage=3600, stale-while-revalidate=7200` (1-hour — stable master data) |
+
+Returns all dropdown option lists: `brands`, `class_names`, `senior_buyers`, `buyers`, `subclasses`, `months`.
+
+---
+
+### GET `/api/data/sales`
+
+| Item | Value |
+|------|-------|
+| Auth | `withAuth` |
+| DB tables | `sales_hoc_orders` |
+| Cache | `s-maxage=300, stale-while-revalidate=600` |
+
+**Query params:** `interval` (daily/weekly/monthly), `startDate`, `endDate`, `channel` (CSV), `cmg` (CSV), `agent` (CSV), `conversion` (all/converted/not_converted).
+
+Returns: `kpi` (with comparison deltas vs prior period), `by_period[]` (trend), `recent_orders[]`, `options` (CMG/agent lists), `months[]`.
+
+---
+
+### GET `/api/data/telesales`
+
+| Item | Value |
+|------|-------|
+| Auth | `withAuth` |
+| DB tables | `leads`, `telesales_calls`, `sales_hoc_orders`, `mart_telesales_orders` |
+| Cache | `s-maxage=300, stale-while-revalidate=600` |
+
+**Query params:** `startDate`, `endDate`, `channel` (CSV), `cmg` (CSV), `agent` (CSV).
+
+Returns: `summary` (aggregate KPIs), `by_agent[]` (leaderboard), `by_period[]` (daily trend), `by_tier_status[]` (call status breakdown by tier), `options`, `months[]`.
+
+---
+
+### GET `/api/data/incentives`
+
+| Item | Value |
+|------|-------|
+| Auth | `withAuth` |
+| DB tables | `incentives`, `costs`, `agent_headcount`, `mart_performance` |
+| Cache | `s-maxage=300, stale-while-revalidate=600` |
+
+No query params. Returns: `incentive_tiers[]`, `headcount_costs[]`, `monthly_summary[]`.
+
+---
+
+### GET `/api/data/dashboard`
+
+| Item | Value |
+|------|-------|
+| Auth | `withAuth` |
+| DB tables | All source tables + `upload_batches` |
+| Cache | no-store (real-time status) |
+
+Returns: `status` object (row counts, date ranges, last upload per table), `history[]` (upload batch log).
+
+---
+
+### GET `/api/data/mart-status`
+
+| Item | Value |
+|------|-------|
+| Auth | `withAuth` |
+| DB tables | `mart_telesales_orders`, `mart_performance` |
+| Cache | `s-maxage=300, stale-while-revalidate=600` |
+
+Returns row counts, date ranges, and `last_refreshed` timestamps for both mart tables.
+
+---
+
+### POST `/api/data/pivot`
+
+| Item | Value |
+|------|-------|
+| Auth | `withAuth` |
+| DB tables | `sales_hoc_orders`, `products` |
+| Cache | none (POST, dynamic) |
+
+Body: `{ granularity, columns[], filters{}, format }`. Returns JSON preview or streams CSV/XLSX file for download.
+
+---
+
+## Shared UI Patterns
+
+### KpiCard
+
+`src/components/dashboard/KpiCard.tsx`
+
+Props: `title`, `value`, `subtitle`, `icon`, `tooltip`, `valueClassName`, `comparison` (ratio), `comparisonLabel`, `comparisonTooltip`, `extras[]`.
+
+- `tooltip` renders an `<Info>` icon that shows a `<TooltipContent>` on hover.
+- `comparison` renders a color-coded `%` badge (green ≥ 0, red < 0).
+
+### DataTable
+
+`src/components/ui/data-table.tsx` — TanStack Table v8 wrapper.
+
+Props include `manualPagination?: boolean`. When `true`:
+- Internal `pageSize` is set to 10,000 (show all rows).
+- `DataTablePagination` is hidden (parent owns pagination UI).
+
+Used on Leads page where server-side pagination controls apply.
+
+### MultiSelect
+
+`src/components/dashboard/MultiSelect.tsx` — dropdown checkbox list. Emits `string[]` via `onChange`.
+
+### FilterBar
+
+`src/components/dashboard/FilterBar.tsx` — horizontal filter row with a **Clear** button shown when `hasFilter` is true.
+
+---
+
+## Page Designs
+
+---
+
+### Overview `/overview`
+
+**Auth:** any logged-in user  
+**Data source:** `GET /api/data/overview` → client-side aggregation  
+**Filtering:** 100% client-side (no re-fetch on filter change)
+
+#### Filters
 
 | Filter | Options | Applied to |
 |--------|---------|------------|
-| From month | Distinct months from data, sorted ASC | `row.month >= value` |
-| To month | Distinct months from data, sorted ASC | `row.month <= value` |
-| Lead Customers | `"All"` + distinct `lead_customers` values from data | exact match |
-| Dynamic CMG | `"All"` + distinct `dynamic_cmg` values from data | exact match |
+| From month | Distinct months ASC | `row.month >= value` |
+| To month | Distinct months ASC | `row.month <= value` |
+| Lead Customers | All + distinct values | exact match |
+| Dynamic CMG | All + distinct values | exact match |
 
-A **Clear filters** link appears when any filter is active.
+Filters affect both KPI cards and all charts.
 
----
+#### KPI Cards (6)
 
-## Section 2 — KPI Cards
+| # | Title | Value | Subtitle | Color |
+|---|-------|-------|---------|-------|
+| 1 | HOC Sales | `SUM(hoc_sales)` | `Target ฿X` | — |
+| 2 | Achievement | `hoc_sales / sales_target × 100`% | Target met / Below target | ≥100% green, ≥80% yellow, <80% red |
+| 3 | New Customers | `SUM(new_customers)` | "HOC new customers" | — |
+| 4 | Retention | `SUM(retention)` | "HOC repeat customers" | — |
+| 5 | Total Calls | `SUM(total_calls)` deduped by (month, lead) | `Reached X` | — |
+| 6 | ROI | `SUM(actual_sales) / (SUM(total_incentive) + SUM(total_agent_cost))` | "Sales HOC / Total expense" | ≥10× green, ≥5× yellow, <5× red |
 
-Position: below filters.
-Layout: 4-column grid (responsive: 2-col on mobile, 3-col on tablet).
-All values are computed from the **filtered + de-duplicated** dataset.
+All values computed from filtered + de-duplicated dataset.
 
-| # | Card title | Primary value | Sub-text | Color rule |
-|---|-----------|---------------|----------|------------|
-| 1 | **HOC Sales** | `SUM(hoc_sales)` formatted as ฿M/K | `"Target ฿X"` — `SUM(sales_target)` deduped by (month, cmg) | none |
-| 2 | **Achievement** | `SUM(hoc_sales) / SUM(sales_target) × 100` % (1 dp) | `"Target met ✓"` or `"Below target"` | green ≥ 100%, yellow ≥ 80%, red < 80% |
-| 3 | **New Customers** | `SUM(new_customers)` | `"HOC new customers"` | none |
-| 4 | **Retention** | `SUM(retention)` | `"HOC repeat customers"` | none |
-| 5 | **Total Calls** | `SUM(total_calls)` deduped by (month, lead) | `"Reached X"` — reached count | none |
-| 6 | **ROI** | `SUM(actual_sales) / (SUM(total_incentive) + SUM(total_agent_cost))` (2 dp) + `"x"` | `"Sales HOC / Total expense"` | green ≥ 10×, yellow ≥ 5×, red < 5× |
+#### Charts
 
----
+**Chart A — HOC Sales vs Target (full width)**
+- Type: `ComposedChart` (Recharts)
+- Bars: HOC Sales (blue `#3b82f6`), Target (gray `#e2e8f0`)
+- Line: Achievement % (amber `#f59e0b`, right Y-axis, 0–150%)
 
-## Section 3 — Charts
+**Chart B — New vs Retention (half width, left)**
+- Type: `BarChart` stacked
+- Bar 1 bottom: New Customers (green `#22c55e`)
+- Bar 2 top: Retention (blue `#3b82f6`, `stackId="a"`)
 
-All charts share the **same SWR-fetched dataset** — no separate API calls.
-X-axis label uses `month_label` (English month name, e.g. "May") computed via
-`TO_CHAR(month, 'FMMonth')` in the API query.
+**Chart C — ROI Trend (half width, right)**
+- Type: `LineChart`
+- Line: ROI × (purple `#8b5cf6`), dot radius 4
+- Formula per month: `SUM(actual_sales, deduped by cmg) / (SUM(total_incentive) + SUM(total_agent_cost, deduped by month))`
 
----
+#### Detail Table
 
-### Chart A — HOC Sales vs Target (Monthly)
-
-- **Chart type:** `ComposedChart` — two Bars + one Line (Recharts v2)
-- **Purpose:** Show monthly HOC telesales revenue against target and the achievement trend
-- **X axis:** `month_label` (one tick per month)
-- **Y axis left:** Sales in THB — formatted with `฿M` / `฿K` suffix
-- **Y axis right:** Achievement % (0–150%)
-- **Series:**
-  - Bar 1 — **HOC Sales** (`hoc_sales`) — blue `#3b82f6`
-  - Bar 2 — **Target** (`sales_target`) — light gray `#e2e8f0`
-  - Line — **Achievement %** (`hoc_sales / sales_target × 100`) — amber `#f59e0b`, right Y axis
-- **Tooltip:** all three values on hover
-- **Data computation:** `byMonth` array — `aggregate()` called per month group from filtered rows
-
----
-
-### Chart B — New vs Retention Customers (Monthly)
-
-- **Chart type:** `BarChart` — stacked bars (Recharts v2)
-- **Purpose:** Visualize customer acquisition vs repeat-purchase split month by month
-- **X axis:** `month_label`
-- **Y axis:** Customer count
-- **Series:**
-  - Bar 1 (bottom) — **New Customers** (`new_customers`) — green `#22c55e`
-  - Bar 2 (top) — **Retention** (`retention`) — blue `#3b82f6`, `stackId="a"`
-- **Tooltip:** both counts on hover
-- **Layout:** half-width card (left column), placed below Chart A
-
----
-
-### Chart C — ROI (Monthly)
-
-- **Chart type:** `LineChart` (Recharts v2)
-- **Purpose:** Track cost efficiency trend — how many THB of HOC sales generated per 1 THB spent
-- **X axis:** `month_label`
-- **Y axis:** ROI multiplier, formatted as `Xx`
-- **Series:**
-  - Line — **ROI** — purple `#8b5cf6`, dot radius 4
-- **Formula per month:** `SUM(actual_sales, deduped by cmg) / (SUM(total_incentive) + SUM(total_agent_cost, deduped by month))`
-- **Tooltip:** `{value}x`
-- **Layout:** half-width card (right column), placed beside Chart B
-
----
-
-## Section 4 — Detail Table
-
-Position: bottom of page, full width.
-Data: raw `filtered` rows — one row per `(month, lead_customers, dynamic_cmg)`.
-Sort: `month ASC` (default, from API ORDER BY).
+One row per `(month, lead_customers, dynamic_cmg)` from filtered data.
 
 | Column | Field | Format |
 |--------|-------|--------|
-| Month | `month_label` | text — e.g. "May" |
-| Lead | `lead_customers` | text, muted color |
-| CMG | `dynamic_cmg` | text, muted color |
-| HOC Sales | `hoc_sales` | ฿ with M/K suffix |
-| Target | `sales_target` | ฿ with M/K suffix, muted |
-| Achievement | `achievement_ratio × 100` | Badge — green/yellow/red |
-| New | `new_customers` | integer |
-| Retention | `retention` | integer |
-| ROI | `roi` (per-row value from DB) | `{n}x`, `—` if 0 |
-
-> **Note:** Achievement badge uses the **per-row** `achievement_ratio` from `mart_performance`
-> (which is `actual_sales / sales_target` per CMG), not the client-recomputed aggregate.
+| Month | `month_label` | text |
+| Lead | `lead_customers` | muted |
+| CMG | `dynamic_cmg` | muted |
+| HOC Sales | `hoc_sales` | ฿M/K |
+| Target | `sales_target` | ฿M/K, muted |
+| Achievement | `achievement_ratio × 100` | Badge green/yellow/red |
+| New | `new_customers` | int |
+| Retention | `retention` | int |
+| ROI | `roi` | `Nx` or `—` |
 
 ---
 
-## Layout
+### Leads `/leads`
 
-```
-┌──────────────────────────────────────────────────────────┐
-│  [From month ▼]  [To month ▼]  [Lead ▼]  [CMG ▼]  clear │
-├──────────────────────────────────────────────────────────┤
-│  HOC Sales   │ Achievement │ New Customers │  Retention  │
-│  Total Calls │    ROI      │               │             │
-├──────────────────────────────────────────────────────────┤
-│                                                          │
-│   Chart A — HOC Sales vs Target  (full width)            │
-│   ComposedChart: Bar(HOC) + Bar(Target) + Line(Achiev%)  │
-│                                                          │
-├────────────────────────────┬─────────────────────────────┤
-│  Chart B — New vs Retention│  Chart C — ROI              │
-│  Stacked Bar               │  Line                       │
-├──────────────────────────────────────────────────────────┤
-│  Detail Table                                            │
-│  Month │ Lead │ CMG │ HOC Sales │ Target │ % │ New │ ROI │
-└──────────────────────────────────────────────────────────┘
-```
+**Auth:** Admin only (API: `withAdmin`)  
+**Data sources:**
+- `GET /api/data/leads/summary` — global KPIs + filter options (cached 5 min)
+- `GET /api/data/leads` — paginated, filtered table data (cached 1 min)
+
+#### KPI Cards (4) — global, not affected by filters
+
+| # | Title | Definition | Tooltip |
+|---|-------|-----------|---------|
+| 1 | Total Leads | `COUNT(*)` from `leads` | "Total MMIDs assigned to the telesales team as leads." |
+| 2 | Contacted | MMIDs with `first_connected_date IS NOT NULL` in `telesales_calls` (reached + called_not_reached) | "MMIDs that have been called at least once — includes both Reached and Called Not Reached." |
+| 3 | Conversion | Unique MMIDs with `is_converted = true` (≥1 HOC order) | "Unique MMIDs with at least one HOC order (new_customer or retention)." |
+| 4 | Orders | `SUM(hoc_orders)` for converted MMIDs only | "Total HOC orders placed by converted MMIDs only. Non-converted leads are excluded." |
+
+#### Filters — table only, KPI cards remain global
+
+| Filter | Values | Param |
+|--------|--------|-------|
+| Tier | from `leads.lead_customers` | `tier` |
+| Contact | Reached / Not Reached / Not Called | `contact` |
+| Conversion | Converted / Not Converted / No Order | `conv` |
+| CMG | from `sales_hoc_orders.dynamic_cmg` | `cmg` |
+| Agent | from `telesales_calls.agent` | `agent` |
+| Search | MMID or customer name (server-side ILIKE) | `search` |
+
+#### Table Columns
+
+| Column | Field | Notes |
+|--------|-------|-------|
+| MMID | `mmid` | mono font |
+| Customer Name | `cust_name` | — |
+| Tier | `lead_customers` | — |
+| CMG | `dynamic_cmg` | from HOC orders |
+| Agent | `agent` | MAX agent per mmid in CTE |
+| Contact | `contact_status` | Badge: Reached (green) / Not Reached (yellow) / Not Called (slate) |
+| Conversion | `conversion_status` | Badge: Converted (blue) / Not Converted (orange) / No Order (slate) |
+| Orders | `hoc_orders` | int, `—` if 0 |
+| HOC Sales | `hoc_sales` | ฿ formatted |
+
+#### Pagination
+
+Server-side. Default 500 rows/page, max 500. Footer: `{total} results · page X of Y` with Prev/Next buttons. DataTable uses `manualPagination=true` to suppress client-side pagination.
 
 ---
 
-## File Locations
+### Sales `/sales`
+
+**Auth:** any logged-in user  
+**Data source:** `GET /api/data/sales`
+
+#### KPI Cards (4)
+
+| # | Title | Formula | Notes |
+|---|-------|---------|-------|
+| 1 | Total Sales | `SUM(sales_in_vat)` | Includes all customer types by default |
+| 2 | Avg Order Value | `total_sales / total_orders` | — |
+| 3 | New Customers | `COUNT(DISTINCT mmid)` where `customer_type = 'new_customer'` | — |
+| 4 | Retention | `COUNT(DISTINCT mmid)` where `customer_type = 'retention'` | — |
+
+All cards show a comparison delta (`%`) vs prior period when a date range is set.
+
+#### Filters — affect KPI + charts
+
+| Filter | Values |
+|--------|--------|
+| Date range | Month chips OR custom `DateRangePicker`; custom range sets `interval=daily` |
+| Channel | Online / Offline (MultiSelect) |
+| CMG | Dynamic CMG (MultiSelect) |
+| Agent | Agent name (MultiSelect) |
+| Conversion | All / Converted Only / Not Converted |
+
+#### Charts
+
+**Sales Trend (AreaChart)**
+- Interval: daily (custom range), weekly (multi-month), monthly (single month)
+- Series: Online (blue) + Offline (red) stacked areas
+- Tooltip: breakdown per channel
+
+**Channel Distribution (stacked bar)**
+- Shows online % vs offline % with absolute amounts
+
+#### Table
+
+Recent telesales orders — client-side search on MMID. Not paginated (fixed recent window).
+
+---
+
+### Products `/products`
+
+**Auth:** any logged-in user  
+**Data sources:**
+- `GET /api/data/products` — all data (cached 5 min)
+- `GET /api/data/products/options` — filter dropdown options (cached 1 hour)
+
+#### KPI Cards (4)
+
+| # | Title | Value |
+|---|-------|-------|
+| 1 | Total Telesales Revenue | `SUM(sales_in_vat)` filtered |
+| 2 | Avg Order Value | `total_sales / total_orders` |
+| 3 | Total Qty Sold | `SUM(quantity)` |
+| 4 | Active SKUs | `COUNT(DISTINCT prod_num)` with sales |
+
+Affected by all filters.
+
+#### Filters — affect KPI + charts + all tables
+
+| Filter | Condition |
+|--------|-----------|
+| Date range | Month chips (`startDate` / `endDate`) |
+| Brand | `m.brands = ANY($n)` |
+| Class | `m.class_name = ANY($n)` |
+| Subclass | `m.subclass = ANY($n)` |
+| Senior Buyer | subquery on `products.senior_buyer_name` |
+| Buyer | subquery on `products.buyer_name` |
+
+Subquery pattern used for Senior Buyer / Buyer to avoid JOIN dependency in brand-only queries.
+
+#### Charts
+
+**Revenue Trend by Brand (LineChart)**
+- Top 5 brands by sales + "Other" (dashed gray)
+- X: Month label, Y: Revenue (฿)
+
+#### Tables (Tabs)
+
+**Tab 1: Top SKUs**
+- Columns: Prod #, Brand, Name (TH), Qty, Sales, New Customers, Retention, % of Total, is_hoc badge
+- Client-side search
+
+**Tab 2: New vs Retention**
+- Columns: Prod #, Brand, Name (TH), New, Retention, New %, Segment
+- Segment classification: New Customer Driver (new ≥ 70%), Retention Driver (retention ≥ 70%), Mixed (30–70%)
+- Segment dropdown filter
+
+**Tab 3: By Brand**
+- Columns: Brand, SKUs, Qty, Revenue, Online (฿ + %), Offline (฿ + %), Channel Mix bar, % of Total
+
+---
+
+### Telesales `/telesales`
+
+**Auth:** any logged-in user  
+**Data source:** `GET /api/data/telesales`
+
+#### KPI Cards (4)
+
+| # | Title | Formula | Color |
+|---|-------|---------|-------|
+| 1 | Total Leads | All MMIDs in DB | — |
+| 2 | Connected Rate | `reached / total_calls` | ≥30% green, ≥15% yellow, <15% red |
+| 3 | Conversion Rate | `total_converted / total_calls` | ≥8% green, ≥4% yellow, <4% red |
+| 4 | Orders | `new_converted + repeat_converted` | subtitle: `New: X · Repeat: Y` |
+
+Affected by all filters.
+
+#### Filters — affect KPI + all charts
+
+| Filter |
+|--------|
+| Date range (month chips + custom DateRangePicker) |
+| Channel (MultiSelect) |
+| CMG (MultiSelect) |
+| Agent (MultiSelect) |
+
+#### Charts
+
+**Daily Calling Trend (AreaChart, 3-col)**
+- Series: Calls (blue) + Conversion count (green) stacked areas
+
+**Call Status by Tier (horizontal BarChart, 3-col)**
+- Y-axis: Tier name, X-axis: % (0–100%)
+- Stacked bars: top 4 call statuses + "Other"
+
+**Conversion Funnel**
+- Custom waterfall: All Leads → Contacted → Engaged → Converted
+- Shows counts and drop-off % at each stage
+
+#### Table: Agent Leaderboard
+
+| Column |
+|--------|
+| Agent, Total Calls, Reached, Not Reached, Reach Rate, Conversion Rate, Calls/Day |
+
+Sortable, no pagination.
+
+---
+
+### Incentives `/incentives`
+
+**Auth:** any logged-in user  
+**Data source:** `GET /api/data/incentives` (no filters)
+
+#### KPI Cards (2)
+
+| # | Title | Formula |
+|---|-------|---------|
+| 1 | Total Incentives Paid | `SUM(total_incentive)` all months |
+| 2 | Overall Program ROI | `SUM(hoc_sales) / (SUM(total_incentive) + SUM(total_agent_cost))` |
+
+#### Chart
+
+**Monthly Incentives vs ROI (ComposedChart)**
+- Bar: Incentive amount (blue, left Y)
+- Line: ROI × (red, right Y)
+
+#### Tables (Tabs)
+
+**Tab 1: Monthly Incentive Summary**
+- Columns: Month, Achievement %, Incentive/Head, Total Incentives, ROI
+
+**Tab 2: Incentive Tier Configuration**
+- Columns: Achievement Tier (%), Incentive Per Head (฿)
+- Read-only — shows uploaded tier rules
+
+---
+
+### Data Hub `/data-hub`
+
+**Auth:** Admin only (server-side redirect for non-admin)
+
+#### Sections
+
+**Upload Raw CSV**
+- File type selector: Online Sales / Offline Sales / Leads / Products / Telesales / Targets / Costs / Incentives / Agent Headcount
+- Drag-and-drop or file picker; batch up to 4 concurrent
+- Header validation, first-row preview
+- Shows target table and storage location
+
+**Upload Jobs Progress**
+- Live queue: filename, size, status (queued/uploading/done/failed), progress %, error detail
+
+**Overview Tab**
+- 4 status cards (Online Sales, Offline Sales, Telesales, Targets & SKUs): row count, sales, date range, last upload, ready/empty badge
+
+**Data Status Tab**
+- 8 sources with row counts, ranges, last upload timestamps
+
+**History Tab**
+- Upload batch log: Date, File Type, Filename, Uploaded By, Rows, Errors, Status badge
+- Searchable by filename
+
+**Build Mart Tab**
+- Current mart row counts + last refresh time
+- Attribution window selector: 14 / 30 / 90 / Custom days
+- **Build Tables** button — rebuilds `mart_telesales_orders` and `mart_performance`
+- Live progress timer, success/fail banner with row counts
+
+---
+
+### Exports `/exports`
+
+**Auth:** Admin only (server-side redirect)
+
+#### Sections
+
+**Granularity selector:** Month / Week / Day / Order Line
+
+**Filters:** Date range, CMG, Channel, Customer Type
+
+**Columns Panel (left)**
+- Key columns always included
+- Checkboxes for optional breakdowns and metrics
+
+**Preview Panel (right)**
+- Live table (up to 500 rows aggregated, 100k raw)
+- Export: CSV (500k max) or XLSX (100k raw / 500k aggregated) — streams as file attachment
+
+---
+
+## File Reference
 
 | File | Role |
 |------|------|
-| `src/app/api/data/overview/route.ts` | GET endpoint — queries `mart_performance`, sets Cache-Control header |
-| `src/app/(dashboard)/overview/_components/OverviewClient.tsx` | All UI — SWR fetch, filters, `aggregate()`, KPI cards, charts, table |
-| `src/app/(dashboard)/overview/page.tsx` | Server component shell — imports OverviewClient |
-
----
-
-## Planned Pages (not yet implemented)
-
-| Route | Intended purpose |
-|-------|-----------------|
-| `/sales` | Sales breakdown by product, brand, channel |
-| `/leads` | Lead list with call status and conversion status |
-| `/products` | Product catalog performance (HOC SKUs) |
-| `/telesales` | Agent-level performance and call metrics |
-| `/incentives` | Incentive tier configuration and payout summary |
+| `src/lib/auth.ts` | `withAuth` / `withAdmin` wrappers |
+| `src/lib/db/index.ts` | PostgreSQL pool — `query`, `queryOne`, `queryCount` |
+| `src/lib/formatters.ts` | `fmtBaht`, `fmtPct`, number helpers |
+| `src/components/dashboard/KpiCard.tsx` | KPI card with tooltip, comparison badge |
+| `src/components/dashboard/KpiGrid.tsx` | Responsive KPI grid layout |
+| `src/components/dashboard/FilterBar.tsx` | Filter row with Clear button |
+| `src/components/dashboard/MultiSelect.tsx` | Multi-checkbox dropdown |
+| `src/components/ui/data-table.tsx` | TanStack Table wrapper — supports `manualPagination` |
+| `src/app/api/data/overview/route.ts` | Overview data endpoint |
+| `src/app/api/data/leads/route.ts` | Leads paginated table endpoint |
+| `src/app/api/data/leads/summary/route.ts` | Leads global KPIs + filter options |
+| `src/app/api/data/products/route.ts` | Products data + KPIs |
+| `src/app/api/data/products/options/route.ts` | Products filter dropdown options |
+| `src/app/api/data/sales/route.ts` | Sales data + comparison KPIs |
+| `src/app/api/data/telesales/route.ts` | Telesales performance data |
+| `src/app/api/data/incentives/route.ts` | Incentive payout data |
+| `src/app/api/data/dashboard/route.ts` | Data Hub status + history |
+| `src/app/api/data/mart-status/route.ts` | Mart table status |
+| `src/app/api/data/pivot/route.ts` | Exports pivot query + file stream |
