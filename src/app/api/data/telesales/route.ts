@@ -194,12 +194,11 @@ export async function GET(request: Request) {
           callWhere = `${where} AND (mmid ILIKE $${n} OR call_status ILIKE $${n})`
         }
         return query<{
-          mmid: string; lead_customers: string | null; agent: string | null
+          mmid: string; mobile: string | null; lead_customers: string | null; agent: string | null
           call_status: string | null; first_connected_date: string | null
-          reason_group: string | null
         }>(`
-          SELECT mmid, lead_customers, agent, call_status,
-                 first_connected_date::text, reason_group
+          SELECT mmid, mobile, lead_customers, agent, call_status,
+                 first_connected_date::text
           FROM telesales_calls
           ${callWhere}
           ORDER BY first_connected_date DESC NULLS LAST, mmid

@@ -17,38 +17,17 @@ import { Calendar } from 'lucide-react'
 
 interface CallRecord {
   mmid: string
+  mobile: string | null
   lead_customers: string | null
   agent: string | null
   call_status: string | null
   first_connected_date: string | null
-  reason_group: string | null
 }
 
 interface TelesalesData {
   calls: CallRecord[]
   months: string[]
   options: { cmg: string[]; agents: string[] }
-}
-
-// ── Status label map (Thai DB → English display) ──────────────────────────────
-
-const CALL_STATUS_LABELS: Record<string, string> = {
-  'สั่งซื้อสินค้าเรียบร้อย':                         'Order Placed',
-  'สั่งสินค้าอื่นๆ':                                'Other Order',
-  'เสนอราคาแล้ว อยู่ระหว่างรอการยืนยันคำสั่งซื้อ':   'Quote Sent — Awaiting Confirmation',
-  'นัดหมายติดต่อกลับ':                              'Callback Scheduled',
-  'ไม่สะดวกคุย':                                   'Busy / Not Available',
-  'ไม่รับสาย 1':                                   'No Answer (1st)',
-  'ไม่รับสาย 2':                                   'No Answer (2nd)',
-  'ไม่รับสาย 3':                                   'No Answer (3rd)',
-  'ไม่รับสาย':                                     'No Answer',
-  'ไม่รับสาย/สายว่างแต่ไม่รับ':                      'No Answer / Ringing',
-  'ยังไม่ต้องการสินค้า':                             'Not Interested',
-  'ปิดเครื่อง/ติดต่อไม่ได้':                         'Phone Off / Unreachable',
-  'สายไม่ว่าง':                                    'Line Busy',
-  'เบอร์ผิด/ไม่มีสัญญาน':                           'Wrong Number / No Signal',
-  'สายว่างไม่มีคนรับ':                              'No Answer (Ring)',
-  'เบอร์บ้านไม่มีคนรับ':                            'Home Phone Unanswered',
 }
 
 // ── Column definitions ────────────────────────────────────────────────────────
@@ -67,6 +46,11 @@ const callLogColumns: ColumnDef<CallRecord>[] = [
     cell: ({ row }) => <span className="font-mono text-xs">{row.original.mmid}</span>,
   },
   {
+    accessorKey: 'mobile',
+    header: 'Mobile',
+    cell: ({ row }) => row.original.mobile ?? <span className="text-muted-foreground">—</span>,
+  },
+  {
     accessorKey: 'lead_customers',
     header: 'Tier',
     cell: ({ row }) => row.original.lead_customers ?? <span className="text-muted-foreground">—</span>,
@@ -82,7 +66,6 @@ const callLogColumns: ColumnDef<CallRecord>[] = [
     cell: ({ row }) => {
       const raw = row.original.call_status
       if (!raw) return <span className="text-muted-foreground">—</span>
-      const label = CALL_STATUS_LABELS[raw] ?? raw
       const isOrder    = raw === 'สั่งซื้อสินค้าเรียบร้อย' || raw === 'สั่งสินค้าอื่นๆ'
       const isNoAnswer = raw.startsWith('ไม่รับสาย') || raw === 'ปิดเครื่อง/ติดต่อไม่ได้'
       return (
@@ -90,15 +73,10 @@ const callLogColumns: ColumnDef<CallRecord>[] = [
           variant={isOrder ? 'default' : isNoAnswer ? 'secondary' : 'outline'}
           className="text-xs whitespace-nowrap"
         >
-          {label}
+          {raw}
         </Badge>
       )
     },
-  },
-  {
-    accessorKey: 'reason_group',
-    header: 'Reason',
-    cell: ({ row }) => row.original.reason_group ?? <span className="text-muted-foreground">—</span>,
   },
 ]
 
