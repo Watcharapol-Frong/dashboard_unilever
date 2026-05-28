@@ -30,6 +30,7 @@ interface Freshness {
   ok: boolean
   max_date: string | null
   last_refreshed: string | null
+  attribution_days: number | null
 }
 
 const fetcher = (url: string) => fetch(url).then(r => r.json())
@@ -84,6 +85,12 @@ export function TopBar({ title }: { title?: string }) {
             <>
               <span className="opacity-40">·</span>
               <span>updated {formatRelative(freshness.last_refreshed)}</span>
+            </>
+          )}
+          {freshness.attribution_days && (
+            <>
+              <span className="opacity-40">·</span>
+              <span>{freshness.attribution_days}-day attribution</span>
             </>
           )}
         </div>

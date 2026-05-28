@@ -154,7 +154,7 @@ export async function buildMartMain(attributionDays = 14): Promise<number> {
   return rowCount
 }
 
-export async function buildMartPerformance(): Promise<number> {
+export async function buildMartPerformance(attributionDays = 14): Promise<number> {
   // Drop old single table if it exists (migration cleanup)
   await query(`DROP TABLE IF EXISTS mart_performance`)
   await query(`DROP TABLE IF EXISTS mart_performance_cmg`)
@@ -194,6 +194,7 @@ export async function buildMartPerformance(): Promise<number> {
       total_agent_cost    NUMERIC,
       total_expense       NUMERIC,
       roi                 NUMERIC,
+      attribution_days    INTEGER,
       refreshed_at        TIMESTAMPTZ DEFAULT NOW(),
       PRIMARY KEY (month)
     )
@@ -323,7 +324,7 @@ export async function buildMartPerformance(): Promise<number> {
       incentive_per_head, total_incentive,
       cost_per_agent, cost_per_supervisor,
       supervisor_count, agent_count,
-      total_agent_cost, total_expense, roi
+      total_agent_cost, total_expense, roi, attribution_days
     )
     SELECT
       tc.month,
@@ -340,7 +341,8 @@ export async function buildMartPerformance(): Promise<number> {
       COALESCE(ah.agent_count, 0)      * COALESCE(mi.incentive_per_head, 0)
         + COALESCE(ah.supervisor_count, 0) * COALESCE(co.cost_per_supervisor, 0)
         + COALESCE(ah.agent_count, 0)      * COALESCE(co.cost_per_agent, 0)     AS total_expense,
-      mr.roi
+      mr.roi,
+      ${attributionDays}
     FROM tier_calls tc
     LEFT JOIN month_incentive mi ON mi.month = tc.month
     LEFT JOIN costs           co ON co.month = tc.month
@@ -355,6 +357,6 @@ export async function buildMartPerformance(): Promise<number> {
 
 export async function refreshAllMarts(attributionDays = 14): Promise<{ mart_main: number; performance: number }> {
   const mart_main   = await buildMartMain(attributionDays)
-  const performance = await buildMartPerformance()
+  const performance = await buildMartPerformance(attributionDays)
   return { mart_main, performance }
 }
