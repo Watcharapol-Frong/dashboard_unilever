@@ -115,6 +115,7 @@ export async function GET(request: Request) {
     const cmg        = (searchParams.get('cmg')     || '').split(',').filter(Boolean)
     const agent      = (searchParams.get('agent')   || '').split(',').filter(Boolean)
     const conversion = searchParams.get('conversion') || 'all'
+    const orderSearch = searchParams.get('search')?.trim() || ''
 
     const hasDateRange = !!(startDate && endDate)
 
@@ -178,20 +179,30 @@ export async function GET(request: Request) {
         ORDER BY ${grpBy}
       `, trendFilter.params),
 
-      // Recent orders (always scoped to curr — shows date range or all-time recent)
-      query<{
-        order_number: string; order_date: string; mmid: string; prod_num: string
-        sales_qty: string; sales_in_vat: string; dynamic_cmg: string
-        channel: string; agent: string; customer_type: string
-      }>(`
-        SELECT order_number, order_date::text, mmid, prod_num,
-               sales_qty::text, sales_in_vat::text, dynamic_cmg,
-               channel, agent, customer_type
-        FROM sales_hoc_orders
-        ${curr.where}
-        ORDER BY order_date DESC, order_number DESC
-        LIMIT 100
-      `, curr.params),
+      // Recent orders — 500 most recent when no search; full match (up to 2000) when searching
+      (() => {
+        const ordersParams = [...curr.params]
+        let ordersWhere    = curr.where
+        if (orderSearch) {
+          ordersParams.push(`%${orderSearch}%`)
+          const n          = ordersParams.length
+          const searchCond = `(mmid ILIKE $${n} OR order_number ILIKE $${n})`
+          ordersWhere = curr.where ? `${curr.where} AND ${searchCond}` : `WHERE ${searchCond}`
+        }
+        return query<{
+          order_number: string; order_date: string; mmid: string; prod_num: string
+          sales_qty: string; sales_in_vat: string; dynamic_cmg: string
+          channel: string; agent: string; customer_type: string
+        }>(`
+          SELECT order_number, order_date::text, mmid, prod_num,
+                 sales_qty::text, sales_in_vat::text, dynamic_cmg,
+                 channel, agent, customer_type
+          FROM sales_hoc_orders
+          ${ordersWhere}
+          ORDER BY order_date DESC, order_number DESC
+          ${orderSearch ? 'LIMIT 2000' : 'LIMIT 500'}
+        `, ordersParams)
+      })(),
 
       // Filter options (unfiltered)
       query<{ cmg: string; agent: string }>(`

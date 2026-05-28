@@ -1,6 +1,6 @@
 'use client'
 
-import { useMemo, useState } from 'react'
+import { useMemo, useRef, useState } from 'react'
 import {
   AreaChart, Area, XAxis, YAxis, CartesianGrid,
 } from 'recharts'
@@ -96,10 +96,19 @@ export default function SalesClient() {
   const [interval,    setInterval]    = useState<Interval>('custom')
   const [customStart, setCustomStart] = useState('2026-05-01')
   const [customEnd,   setCustomEnd]   = useState('2026-05-31')
-  const [channel,    setChannel]    = useState<string[]>([])
-  const [cmg,        setCmg]        = useState<string[]>([])
-  const [agent,      setAgent]      = useState<string[]>([])
-  const [conversion, setConversion] = useState<Conversion>('all')
+  const [channel,         setChannel]         = useState<string[]>([])
+  const [cmg,             setCmg]             = useState<string[]>([])
+  const [agent,           setAgent]           = useState<string[]>([])
+  const [conversion,      setConversion]      = useState<Conversion>('all')
+  const [orderSearch,     setOrderSearch]     = useState('')
+  const [debouncedSearch, setDebouncedSearch] = useState('')
+  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  const handleOrderSearch = (v: string) => {
+    setOrderSearch(v)
+    if (debounceRef.current) clearTimeout(debounceRef.current)
+    debounceRef.current = setTimeout(() => setDebouncedSearch(v), 300)
+  }
 
   const handleChipClick = (m: string) => {
     if (interval === 'custom') setInterval('monthly')
@@ -130,8 +139,9 @@ export default function SalesClient() {
     if (conversion !== 'all')  p.set('conversion', conversion)
     if (effectiveStart)        p.set('startDate',  effectiveStart)
     if (effectiveEnd)          p.set('endDate',    effectiveEnd)
+    if (debouncedSearch)       p.set('search',     debouncedSearch)
     return `/api/data/sales?${p.toString()}`
-  }, [calculatedInterval, channel, cmg, agent, conversion, effectiveStart, effectiveEnd])
+  }, [calculatedInterval, channel, cmg, agent, conversion, effectiveStart, effectiveEnd, debouncedSearch])
 
   const { data, isLoading, isValidating } = useDashboardSWR<SalesData>(apiUrl)
 
@@ -413,9 +423,10 @@ export default function SalesClient() {
         <CardContent>
           <DataTable
             columns={columns}
-            data={recent_orders}
-            searchKey="mmid"
-            searchPlaceholder="Search MMID..."
+            data={recent_orders ?? []}
+            searchValue={orderSearch}
+            onSearchChange={handleOrderSearch}
+            searchPlaceholder="Search MMID or Order No..."
           />
         </CardContent>
       </Card>
