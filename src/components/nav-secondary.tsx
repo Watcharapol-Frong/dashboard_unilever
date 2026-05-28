@@ -2,8 +2,8 @@
 
 import * as React from "react"
 import type { ComponentType } from "react"
-type LucideIcon = ComponentType<{ className?: string }>
-
+import { useUser } from "@clerk/nextjs"
+import { IconHelp } from "@tabler/icons-react"
 import {
   SidebarGroup,
   SidebarGroupContent,
@@ -11,33 +11,56 @@ import {
   SidebarMenuButton,
   SidebarMenuItem,
 } from "@/components/ui/sidebar"
+import { HelpSheet } from "@/components/dashboard/HelpSheet"
+
+type LucideIcon = ComponentType<{ className?: string }>
+
+interface NavItem {
+  title: string
+  url: string
+  icon: LucideIcon
+}
 
 export function NavSecondary({
   items,
   ...props
 }: {
-  items: {
-    title: string
-    url: string
-    icon: LucideIcon
-  }[]
+  items: NavItem[]
 } & React.ComponentPropsWithoutRef<typeof SidebarGroup>) {
+  const { user } = useUser()
+  const isAdmin = user?.publicMetadata?.role === 'admin'
+  const [helpOpen, setHelpOpen] = React.useState(false)
+
   return (
-    <SidebarGroup {...props}>
-      <SidebarGroupContent>
-        <SidebarMenu>
-          {items.map((item) => (
-            <SidebarMenuItem key={item.title}>
-              <SidebarMenuButton asChild tooltip={item.title}>
-                <a href={item.url}>
-                  <item.icon />
-                  <span>{item.title}</span>
-                </a>
-              </SidebarMenuButton>
-            </SidebarMenuItem>
-          ))}
-        </SidebarMenu>
-      </SidebarGroupContent>
-    </SidebarGroup>
+    <>
+      <SidebarGroup {...props}>
+        <SidebarGroupContent>
+          <SidebarMenu>
+            {items.map((item) => {
+              const isHelp = item.title === 'Get Help'
+              return (
+                <SidebarMenuItem key={item.title}>
+                  {isHelp ? (
+                    <SidebarMenuButton tooltip={item.title} onClick={() => setHelpOpen(true)}>
+                      <IconHelp />
+                      <span>{item.title}</span>
+                    </SidebarMenuButton>
+                  ) : (
+                    <SidebarMenuButton asChild tooltip={item.title}>
+                      <a href={item.url}>
+                        <item.icon />
+                        <span>{item.title}</span>
+                      </a>
+                    </SidebarMenuButton>
+                  )}
+                </SidebarMenuItem>
+              )
+            })}
+          </SidebarMenu>
+        </SidebarGroupContent>
+      </SidebarGroup>
+
+      <HelpSheet open={helpOpen} onOpenChange={setHelpOpen} isAdmin={isAdmin} />
+    </>
   )
 }
