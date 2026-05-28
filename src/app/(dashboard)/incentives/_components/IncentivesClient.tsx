@@ -66,7 +66,7 @@ const summaryColumns: ColumnDef<MonthlySummary>[] = [
     accessorKey: 'month',
     header: 'Month',
     cell: ({ row }) => {
-      const isExcluded = row.original.month >= DISTRIBUTOR_EXCLUDED_FROM
+      const isExcluded = row.original.month.slice(0, 7) >= '2025-05'
       return (
         <div className="flex items-center gap-1.5">
           <span>{formatPeriodLabel(row.original.month, 'month')}</span>
