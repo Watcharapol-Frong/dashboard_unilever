@@ -71,12 +71,13 @@ function buildFilters(
 export async function GET(request: Request) {
   return withAuth(async () => {
     const { searchParams } = new URL(request.url)
-    const startDate = searchParams.get('startDate')
-    const endDate   = searchParams.get('endDate')
-    const channel   = (searchParams.get('channel') || '').split(',').filter(Boolean)
-    const cmg       = (searchParams.get('cmg')     || '').split(',').filter(Boolean)
-    const agent     = (searchParams.get('agent')   || '').split(',').filter(Boolean)
-    const callSearch = searchParams.get('search')?.trim() || ''
+    const startDate   = searchParams.get('startDate')
+    const endDate     = searchParams.get('endDate')
+    const channel     = (searchParams.get('channel')     || '').split(',').filter(Boolean)
+    const cmg         = (searchParams.get('cmg')         || '').split(',').filter(Boolean)
+    const agent       = (searchParams.get('agent')       || '').split(',').filter(Boolean)
+    const callSearch  = searchParams.get('search')?.trim() || ''
+    const callStatus  = (searchParams.get('callStatus')  || '').split(',').filter(Boolean)
 
     const { params, where, whereTc, agentConvCTE } =
       buildFilters(startDate, endDate, agent, channel, cmg)
@@ -191,12 +192,17 @@ export async function GET(request: Request) {
         if (callSearch) {
           callParams.push(`%${callSearch}%`)
           const n = callParams.length
-          callWhere = `${where} AND (mmid ILIKE $${n} OR call_status ILIKE $${n})`
+          callWhere += ` AND (mmid ILIKE $${n} OR mobile ILIKE $${n})`
         }
-        // Drop LIMIT when a date range is active — the date bounds already constrain the result.
-        // Keep LIMIT 500 only for the unfiltered (all-time) fallback.
-        const hasDateRange = !!(startDate && endDate)
-        const callsLimit = callSearch ? 'LIMIT 2000' : hasDateRange ? '' : 'LIMIT 500'
+        if (callStatus.length > 0) {
+          callParams.push(callStatus)
+          callWhere += ` AND call_status = ANY($${callParams.length})`
+        }
+        // Drop LIMIT when any filter is active (date, agent, channel, cmg, callStatus).
+        // params.length > 0 means at least one of those filters was applied.
+        // Keep LIMIT 500 only for the completely unfiltered (all-time) fallback.
+        const hasAnyFilter = params.length > 0 || callStatus.length > 0
+        const callsLimit = callSearch ? 'LIMIT 2000' : hasAnyFilter ? '' : 'LIMIT 500'
         return query<{
           mmid: string; mobile: string | null; lead_customers: string | null; agent: string | null
           call_status: string | null; first_connected_date: string | null

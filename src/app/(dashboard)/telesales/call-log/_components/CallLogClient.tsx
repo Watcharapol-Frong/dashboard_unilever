@@ -27,8 +27,29 @@ interface CallRecord {
 interface TelesalesData {
   calls: CallRecord[]
   months: string[]
-  options: { cmg: string[]; agents: string[] }
+  options: { agents: string[] }
 }
+
+// ── Call status options (Thai DB values) ──────────────────────────────────────
+
+const CALL_STATUS_OPTIONS = [
+  'สั่งซื้อสินค้าเรียบร้อย',
+  'สั่งสินค้าอื่นๆ',
+  'เสนอราคาแล้ว อยู่ระหว่างรอการยืนยันคำสั่งซื้อ',
+  'นัดหมายติดต่อกลับ',
+  'ไม่สะดวกคุย',
+  'ไม่รับสาย 1',
+  'ไม่รับสาย 2',
+  'ไม่รับสาย 3',
+  'ไม่รับสาย',
+  'ไม่รับสาย/สายว่างแต่ไม่รับ',
+  'ยังไม่ต้องการสินค้า',
+  'ปิดเครื่อง/ติดต่อไม่ได้',
+  'สายไม่ว่าง',
+  'เบอร์ผิด/ไม่มีสัญญาน',
+  'สายว่างไม่มีคนรับ',
+  'เบอร์บ้านไม่มีคนรับ',
+]
 
 // ── Column definitions ────────────────────────────────────────────────────────
 
@@ -88,12 +109,13 @@ export default function CallLogClient() {
     handleChipClick: baseHandleChipClick, clearRange,
   } = useMonthRange()
 
-  const [interval,    setInterval]    = useState<'custom' | 'monthly'>('monthly')
+  // Default to 'custom' so date params are always sent → no LIMIT 500 on first load
+  const [interval,    setInterval]    = useState<'custom' | 'monthly'>('custom')
   const [customStart, setCustomStart] = useState('2026-05-01')
   const [customEnd,   setCustomEnd]   = useState('2026-05-31')
   const [channel,     setChannel]     = useState<string[]>([])
-  const [cmg,         setCmg]         = useState<string[]>([])
   const [agent,       setAgent]       = useState<string[]>([])
+  const [callStatus,  setCallStatus]  = useState<string[]>([])
   const [callSearch,          setCallSearch]          = useState('')
   const [debouncedCallSearch, setDebouncedCallSearch] = useState('')
   const callSearchRef = useRef<ReturnType<typeof setTimeout> | null>(null)
@@ -121,14 +143,14 @@ export default function CallLogClient() {
 
   const apiUrl = useMemo(() => {
     const p = new URLSearchParams()
-    if (effectiveStart)         p.set('startDate', effectiveStart)
-    if (effectiveEnd)           p.set('endDate',   effectiveEnd)
-    if (channel.length > 0)     p.set('channel',   channel.join(','))
-    if (cmg.length > 0)         p.set('cmg',       cmg.join(','))
-    if (agent.length > 0)       p.set('agent',     agent.join(','))
-    if (debouncedCallSearch)    p.set('search',    debouncedCallSearch)
+    if (effectiveStart)         p.set('startDate',   effectiveStart)
+    if (effectiveEnd)           p.set('endDate',     effectiveEnd)
+    if (channel.length > 0)     p.set('channel',     channel.join(','))
+    if (agent.length > 0)       p.set('agent',       agent.join(','))
+    if (callStatus.length > 0)  p.set('callStatus',  callStatus.join(','))
+    if (debouncedCallSearch)    p.set('search',      debouncedCallSearch)
     return `/api/data/telesales?${p.toString()}`
-  }, [effectiveStart, effectiveEnd, channel, cmg, agent, debouncedCallSearch])
+  }, [effectiveStart, effectiveEnd, channel, agent, callStatus, debouncedCallSearch])
 
   const { data, isLoading } = useDashboardSWR<TelesalesData>(apiUrl)
 
@@ -138,7 +160,7 @@ export default function CallLogClient() {
   }
 
   const { calls, options, months } = data
-  const hasFilter = channel.length > 0 || cmg.length > 0 || agent.length > 0
+  const hasFilter = channel.length > 0 || agent.length > 0 || callStatus.length > 0
   const hasRange  = !!(rangeFrom || interval === 'custom')
 
   const displayRangeLabel = (() => {
@@ -202,7 +224,7 @@ export default function CallLogClient() {
                 />
                 {interval === 'custom' && durationDays > 0 && (
                   <span className="text-[9px] bg-blue-50 text-[#003DA6] px-1.5 py-0.5 rounded font-bold uppercase shrink-0">
-                    daily · {durationDays}d
+                    {durationDays}d
                   </span>
                 )}
               </div>
@@ -218,24 +240,24 @@ export default function CallLogClient() {
                 width="w-[130px]"
               />
               <MultiSelect
-                label="All CMG"
-                value={cmg}
-                onChange={setCmg}
-                options={options.cmg.map(v => ({ value: v, label: v }))}
-                width="w-[150px]"
-              />
-              <MultiSelect
                 label="All Agents"
                 value={agent}
                 onChange={setAgent}
-                options={options.agents.map(v => ({ value: v, label: v }))}
+                options={(options.agents ?? []).map(v => ({ value: v, label: v }))}
                 width="w-[150px]"
+              />
+              <MultiSelect
+                label="All Statuses"
+                value={callStatus}
+                onChange={setCallStatus}
+                options={CALL_STATUS_OPTIONS.map(v => ({ value: v, label: v }))}
+                width="w-[160px]"
               />
               {(hasFilter || hasRange) && (
                 <button
                   onClick={() => {
-                    setChannel([]); setCmg([]); setAgent([])
-                    clearRange(); setInterval('monthly')
+                    setChannel([]); setAgent([]); setCallStatus([])
+                    clearRange(); setInterval('custom')
                     setCustomStart('2026-05-01'); setCustomEnd('2026-05-31')
                   }}
                   className="text-xs text-[#003DA6] hover:underline font-semibold"
@@ -249,7 +271,7 @@ export default function CallLogClient() {
           <p className="text-xs text-muted-foreground mt-3">
             {displayRangeLabel
               ? <>Showing: <span className="font-medium text-foreground">{displayRangeLabel}</span></>
-              : <>Showing: <span className="font-medium text-foreground">all available periods</span> — select month chips to filter</>
+              : <>Showing: <span className="font-medium text-foreground">all available periods</span></>
             }
           </p>
         </CardContent>
@@ -261,7 +283,7 @@ export default function CallLogClient() {
           <CardTitle className="text-sm font-medium">
             Call Log
             <span className="ml-2 text-xs font-normal text-muted-foreground">
-              {(calls?.length ?? 0).toLocaleString()} records · search by MMID or call status
+              {(calls?.length ?? 0).toLocaleString()} records · search by MMID or mobile
             </span>
           </CardTitle>
         </CardHeader>
@@ -271,7 +293,7 @@ export default function CallLogClient() {
             data={calls ?? []}
             searchValue={callSearch}
             onSearchChange={handleCallSearch}
-            searchPlaceholder="Search MMID or status..."
+            searchPlaceholder="Search MMID or mobile..."
           />
         </CardContent>
       </Card>
