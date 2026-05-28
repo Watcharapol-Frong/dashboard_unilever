@@ -1,8 +1,14 @@
 import { Pool } from 'pg'
 
+// Strict certificate validation in production; relaxed only for local development
+// where self-signed or no TLS may be in use.
+const sslConfig = process.env.NODE_ENV === 'production'
+  ? { rejectUnauthorized: true }
+  : { rejectUnauthorized: false }
+
 const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
-  ssl: { rejectUnauthorized: false },
+  ssl: sslConfig,
   max: 10,
   idleTimeoutMillis: 30000,
   connectionTimeoutMillis: 5000,
