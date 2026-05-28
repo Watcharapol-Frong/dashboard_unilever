@@ -3,11 +3,12 @@
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet"
 import { Accordion, AccordionItem, AccordionTrigger, AccordionContent } from "@/components/ui/accordion"
 import { Badge } from "@/components/ui/badge"
+import { Button } from "@/components/ui/button"
 import { Separator } from "@/components/ui/separator"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import {
   LayoutDashboard, PhoneCall, TrendingUp, Package, PiggyBank,
-  Upload, DatabaseZap, Shield, Users, Clock,
+  Upload, DatabaseZap, Shield, Users, Clock, Download,
 } from "lucide-react"
 
 // ─── Reusable small components ────────────────────────────────────────────────
@@ -42,6 +43,17 @@ function Note({ children }: { children: React.ReactNode }) {
     <div className="mt-2 rounded-md border border-amber-200 bg-amber-50 dark:border-amber-900 dark:bg-amber-950/30 px-3 py-2 text-xs text-amber-800 dark:text-amber-300">
       {children}
     </div>
+  )
+}
+
+function TemplateDownload({ fileKey, label }: { fileKey: string; label: string }) {
+  return (
+    <a href={`/api/data/template/${fileKey}`} download>
+      <Button variant="outline" size="sm" className="h-7 gap-1.5 text-xs mt-1 mb-3">
+        <Download className="h-3 w-3" />
+        Download {label} template (.xlsx)
+      </Button>
+    </a>
   )
 }
 
@@ -237,7 +249,7 @@ function AdminContent() {
   return (
     <Accordion type="multiple" className="w-full">
 
-      {/* Upload order */}
+      {/* 1. Upload order */}
       <AccordionItem value="upload-order">
         <AccordionTrigger>
           <span className="flex items-center gap-2">
@@ -249,7 +261,7 @@ function AdminContent() {
           <p className="text-muted-foreground text-xs mb-3">
             Upload files in this order to avoid foreign-key and join issues:
           </p>
-          <ol className="space-y-1 text-xs text-muted-foreground list-decimal list-inside">
+          <ol className="space-y-1.5 text-xs text-muted-foreground list-decimal list-inside">
             <li><span className="font-semibold text-foreground">Products</span> — must exist before sales orders (prod_num lookup)</li>
             <li><span className="font-semibold text-foreground">Leads</span> — MMID master list</li>
             <li><span className="font-semibold text-foreground">Telesales Calls</span> — requires MMIDs from Leads</li>
@@ -258,139 +270,19 @@ function AdminContent() {
             <li><span className="font-semibold text-foreground">Targets</span> — monthly targets per CMG</li>
             <li><span className="font-semibold text-foreground">Costs</span> — monthly cost per head</li>
             <li><span className="font-semibold text-foreground">Agent Headcount</span> — monthly FTE counts</li>
-            <li><span className="font-semibold text-foreground">Incentives</span> — tier → rate mapping</li>
+            <li><span className="font-semibold text-foreground">Incentive Tiers</span> — tier → rate mapping</li>
           </ol>
           <Note>After uploading new sales or calls data, always rebuild the mart to update all dashboard KPIs.</Note>
         </AccordionContent>
       </AccordionItem>
 
-      {/* Leads */}
-      <AccordionItem value="upload-leads">
-        <AccordionTrigger>
-          <span className="flex items-center gap-2 text-sm">📋 Leads (MMID Master)</span>
-        </AccordionTrigger>
-        <AccordionContent>
-          <UploadTable rows={[
-            { col: "mmid",               type: "TEXT",    note: "Unique customer ID — primary key" },
-            { col: "tier",               type: "TEXT",    note: "e.g. Gold, Silver, Bronze" },
-            { col: "lead_customers",     type: "TEXT",    note: "CMG bucket assigned to this lead" },
-            { col: "senior_buyer_name",  type: "TEXT",    note: "Senior buyer name (optional)" },
-          ]} />
-        </AccordionContent>
-      </AccordionItem>
-
-      {/* Telesales Calls */}
-      <AccordionItem value="upload-calls">
-        <AccordionTrigger>
-          <span className="flex items-center gap-2 text-sm">📞 Telesales Calls</span>
-        </AccordionTrigger>
-        <AccordionContent>
-          <UploadTable rows={[
-            { col: "mmid",                 type: "TEXT",  note: "Must match an MMID in Leads" },
-            { col: "agent",                type: "TEXT",  note: "Agent name or ID" },
-            { col: "call_status",          type: "TEXT",  note: "Thai call status value (from CRM)" },
-            { col: "first_connected_date", type: "DATE",  note: "YYYY-MM-DD — first successful contact" },
-          ]} />
-          <Note>call_status must match exact Thai strings from the CRM system. Do not translate before uploading.</Note>
-        </AccordionContent>
-      </AccordionItem>
-
-      {/* Sales */}
-      <AccordionItem value="upload-sales">
-        <AccordionTrigger>
-          <span className="flex items-center gap-2 text-sm">🛒 Online / Offline Sales</span>
-        </AccordionTrigger>
-        <AccordionContent>
-          <p className="text-muted-foreground text-xs mb-2">Same schema for both online and offline files:</p>
-          <UploadTable rows={[
-            { col: "order_number",  type: "TEXT",    note: "Unique order identifier" },
-            { col: "order_date",    type: "DATE",    note: "YYYY-MM-DD" },
-            { col: "mmid",         type: "TEXT",    note: "Must match an MMID in Leads" },
-            { col: "prod_num",     type: "TEXT",    note: "Must match a prod_num in Products" },
-            { col: "dynamic_cmg",  type: "TEXT",    note: "FOOD RETAILER / HORECA / DISTRIBUTOR / END USER" },
-            { col: "sales_qty",    type: "NUMERIC", note: "Quantity sold" },
-            { col: "sales_in_vat", type: "NUMERIC", note: "Revenue including VAT (THB)" },
-          ]} />
-        </AccordionContent>
-      </AccordionItem>
-
-      {/* Products */}
-      <AccordionItem value="upload-products">
-        <AccordionTrigger>
-          <span className="flex items-center gap-2 text-sm">📦 Products Master</span>
-        </AccordionTrigger>
-        <AccordionContent>
-          <UploadTable rows={[
-            { col: "prod_num",       type: "TEXT", note: "Unique SKU identifier — primary key" },
-            { col: "product_name_th",type: "TEXT", note: "Thai product name" },
-            { col: "product_name_en",type: "TEXT", note: "English product name" },
-            { col: "brands",         type: "TEXT", note: "Brand name (e.g. Dove)" },
-            { col: "class_name",     type: "TEXT", note: "Product category" },
-            { col: "subclass",       type: "TEXT", note: "Sub-category" },
-            { col: "senior_buyer_name", type: "TEXT", note: "Senior buyer (optional)" },
-            { col: "buyer_name",     type: "TEXT", note: "Buyer (optional)" },
-          ]} />
-        </AccordionContent>
-      </AccordionItem>
-
-      {/* Targets */}
-      <AccordionItem value="upload-targets">
-        <AccordionTrigger>
-          <span className="flex items-center gap-2 text-sm">🎯 Targets</span>
-        </AccordionTrigger>
-        <AccordionContent>
-          <UploadTable rows={[
-            { col: "month",        type: "DATE",    note: "YYYY-MM-DD (first day of month)" },
-            { col: "dynamic_cmg",  type: "TEXT",    note: "FOOD RETAILER / HORECA / DISTRIBUTOR / END USER" },
-            { col: "sales_target", type: "NUMERIC", note: "Monthly target in THB" },
-          ]} />
-          <Note>Incentive achievement uses targets for FOOD RETAILER + HORECA only (from May 2026, DISTRIBUTOR excluded).</Note>
-        </AccordionContent>
-      </AccordionItem>
-
-      {/* Costs & Headcount */}
-      <AccordionItem value="upload-costs">
-        <AccordionTrigger>
-          <span className="flex items-center gap-2 text-sm">💰 Costs &amp; Agent Headcount</span>
-        </AccordionTrigger>
-        <AccordionContent>
-          <p className="text-muted-foreground text-xs mb-1 font-medium">Costs (cost per head):</p>
-          <UploadTable rows={[
-            { col: "month",                type: "DATE",    note: "YYYY-MM-DD" },
-            { col: "cost_per_agent",       type: "NUMERIC", note: "Monthly salary per agent (THB)" },
-            { col: "cost_per_supervisor",  type: "NUMERIC", note: "Monthly salary per supervisor (THB)" },
-          ]} />
-          <p className="text-muted-foreground text-xs mt-3 mb-1 font-medium">Agent Headcount (FTE):</p>
-          <UploadTable rows={[
-            { col: "month",            type: "DATE",    note: "YYYY-MM-DD" },
-            { col: "agent_count",      type: "INTEGER", note: "Number of active agents" },
-            { col: "supervisor_count", type: "INTEGER", note: "Number of supervisors" },
-          ]} />
-        </AccordionContent>
-      </AccordionItem>
-
-      {/* Incentive Tiers */}
-      <AccordionItem value="upload-incentives">
-        <AccordionTrigger>
-          <span className="flex items-center gap-2 text-sm">🏆 Incentive Tiers</span>
-        </AccordionTrigger>
-        <AccordionContent>
-          <UploadTable rows={[
-            { col: "tier",               type: "NUMERIC", note: "Achievement threshold as a decimal (e.g. 0.8 = 80%)" },
-            { col: "incentive_per_head", type: "NUMERIC", note: "Bonus paid per agent (THB)" },
-          ]} />
-          <p className="text-muted-foreground text-xs mt-2">
-            System picks the <strong>highest tier ≤ achievement ratio</strong>. Example: achievement = 1.15 (115%) with tiers at 0.8 and 1.0 → uses the 1.0 tier rate.
-          </p>
-        </AccordionContent>
-      </AccordionItem>
-
-      {/* Mart Rebuild */}
+      {/* 2. Mart Rebuild — promoted to position 2 */}
       <AccordionItem value="rebuild">
         <AccordionTrigger>
           <span className="flex items-center gap-2">
             <DatabaseZap className="h-4 w-4 text-rose-600" />
-            Mart Rebuild
+            <span>Mart Rebuild</span>
+            <Badge variant="destructive" className="text-[10px] px-1.5 py-0 ml-1">Required after upload</Badge>
           </span>
         </AccordionTrigger>
         <AccordionContent>
@@ -415,6 +307,160 @@ function AdminContent() {
             <li>Drops and recreates <code>mart_performance_cmg</code> — CMG-level KPIs per month</li>
             <li>Drops and recreates <code>mart_performance_month</code> — month-level incentive, cost, ROI</li>
           </ol>
+        </AccordionContent>
+      </AccordionItem>
+
+      {/* 3. Leads */}
+      <AccordionItem value="upload-leads">
+        <AccordionTrigger>
+          <span className="flex items-center gap-2 text-sm">📋 Leads (MMID Master)</span>
+        </AccordionTrigger>
+        <AccordionContent>
+          <TemplateDownload fileKey="leads" label="Leads" />
+          <UploadTable rows={[
+            { col: "mmid",               type: "TEXT", note: "Unique customer ID — primary key" },
+            { col: "tier",               type: "TEXT", note: "e.g. Gold, Silver, Bronze" },
+            { col: "lead_customers",     type: "TEXT", note: "CMG bucket assigned to this lead" },
+            { col: "senior_buyer_name",  type: "TEXT", note: "Senior buyer name (optional)" },
+          ]} />
+        </AccordionContent>
+      </AccordionItem>
+
+      {/* 4. Telesales Calls */}
+      <AccordionItem value="upload-calls">
+        <AccordionTrigger>
+          <span className="flex items-center gap-2 text-sm">📞 Telesales Calls</span>
+        </AccordionTrigger>
+        <AccordionContent>
+          <TemplateDownload fileKey="telesales_calls" label="Telesales Calls" />
+          <UploadTable rows={[
+            { col: "mmid",                 type: "TEXT", note: "Must match an MMID in Leads" },
+            { col: "agent",                type: "TEXT", note: "Agent name or ID" },
+            { col: "call_status",          type: "TEXT", note: "Thai call status value (from CRM)" },
+            { col: "first_connected_date", type: "DATE", note: "YYYY-MM-DD — first successful contact" },
+          ]} />
+          <Note>call_status must match exact Thai strings from the CRM system. Do not translate before uploading.</Note>
+        </AccordionContent>
+      </AccordionItem>
+
+      {/* 5. Online Sales */}
+      <AccordionItem value="upload-online">
+        <AccordionTrigger>
+          <span className="flex items-center gap-2 text-sm">🛒 Online Sales</span>
+        </AccordionTrigger>
+        <AccordionContent>
+          <TemplateDownload fileKey="online_sales" label="Online Sales" />
+          <UploadTable rows={[
+            { col: "order_number",  type: "TEXT",    note: "Unique order identifier" },
+            { col: "order_date",    type: "DATE",    note: "YYYY-MM-DD" },
+            { col: "mmid",          type: "TEXT",    note: "Must match an MMID in Leads" },
+            { col: "prod_num",      type: "TEXT",    note: "Must match a prod_num in Products" },
+            { col: "dynamic_cmg",   type: "TEXT",    note: "FOOD RETAILER / HORECA / DISTRIBUTOR / END USER" },
+            { col: "sales_qty",     type: "NUMERIC", note: "Quantity sold" },
+            { col: "sales_in_vat",  type: "NUMERIC", note: "Revenue including VAT (THB)" },
+          ]} />
+        </AccordionContent>
+      </AccordionItem>
+
+      {/* 6. Offline Sales */}
+      <AccordionItem value="upload-offline">
+        <AccordionTrigger>
+          <span className="flex items-center gap-2 text-sm">🏪 Offline Sales</span>
+        </AccordionTrigger>
+        <AccordionContent>
+          <TemplateDownload fileKey="offline_sales" label="Offline Sales" />
+          <UploadTable rows={[
+            { col: "order_number",  type: "TEXT",    note: "Unique order identifier" },
+            { col: "order_date",    type: "DATE",    note: "YYYY-MM-DD" },
+            { col: "mmid",          type: "TEXT",    note: "Must match an MMID in Leads" },
+            { col: "prod_num",      type: "TEXT",    note: "Must match a prod_num in Products" },
+            { col: "dynamic_cmg",   type: "TEXT",    note: "FOOD RETAILER / HORECA / DISTRIBUTOR / END USER" },
+            { col: "sales_qty",     type: "NUMERIC", note: "Quantity sold" },
+            { col: "sales_in_vat",  type: "NUMERIC", note: "Revenue including VAT (THB)" },
+          ]} />
+        </AccordionContent>
+      </AccordionItem>
+
+      {/* 7. Products */}
+      <AccordionItem value="upload-products">
+        <AccordionTrigger>
+          <span className="flex items-center gap-2 text-sm">📦 Products Master</span>
+        </AccordionTrigger>
+        <AccordionContent>
+          <TemplateDownload fileKey="products" label="Products" />
+          <UploadTable rows={[
+            { col: "prod_num",          type: "TEXT", note: "Unique SKU identifier — primary key" },
+            { col: "product_name_th",   type: "TEXT", note: "Thai product name" },
+            { col: "product_name_en",   type: "TEXT", note: "English product name" },
+            { col: "brands",            type: "TEXT", note: "Brand name (e.g. Dove)" },
+            { col: "class_name",        type: "TEXT", note: "Product category" },
+            { col: "subclass",          type: "TEXT", note: "Sub-category" },
+            { col: "senior_buyer_name", type: "TEXT", note: "Senior buyer (optional)" },
+            { col: "buyer_name",        type: "TEXT", note: "Buyer (optional)" },
+          ]} />
+        </AccordionContent>
+      </AccordionItem>
+
+      {/* 8. Targets */}
+      <AccordionItem value="upload-targets">
+        <AccordionTrigger>
+          <span className="flex items-center gap-2 text-sm">🎯 Targets</span>
+        </AccordionTrigger>
+        <AccordionContent>
+          <TemplateDownload fileKey="targets" label="Targets" />
+          <UploadTable rows={[
+            { col: "month",        type: "DATE",    note: "YYYY-MM-DD (first day of month)" },
+            { col: "dynamic_cmg",  type: "TEXT",    note: "FOOD RETAILER / HORECA / DISTRIBUTOR / END USER" },
+            { col: "sales_target", type: "NUMERIC", note: "Monthly target in THB" },
+          ]} />
+          <Note>Incentive achievement uses targets for FOOD RETAILER + HORECA only (from May 2026, DISTRIBUTOR excluded).</Note>
+        </AccordionContent>
+      </AccordionItem>
+
+      {/* 9. Costs */}
+      <AccordionItem value="upload-costs">
+        <AccordionTrigger>
+          <span className="flex items-center gap-2 text-sm">💰 Costs (per head)</span>
+        </AccordionTrigger>
+        <AccordionContent>
+          <TemplateDownload fileKey="costs" label="Costs" />
+          <UploadTable rows={[
+            { col: "month",               type: "DATE",    note: "YYYY-MM-DD" },
+            { col: "cost_per_agent",      type: "NUMERIC", note: "Monthly salary per agent (THB)" },
+            { col: "cost_per_supervisor", type: "NUMERIC", note: "Monthly salary per supervisor (THB)" },
+          ]} />
+        </AccordionContent>
+      </AccordionItem>
+
+      {/* 10. Agent Headcount */}
+      <AccordionItem value="upload-headcount">
+        <AccordionTrigger>
+          <span className="flex items-center gap-2 text-sm">👥 Agent Headcount</span>
+        </AccordionTrigger>
+        <AccordionContent>
+          <TemplateDownload fileKey="agent_headcount" label="Agent Headcount" />
+          <UploadTable rows={[
+            { col: "month",            type: "DATE",    note: "YYYY-MM-DD" },
+            { col: "agent_count",      type: "INTEGER", note: "Number of active agents" },
+            { col: "supervisor_count", type: "INTEGER", note: "Number of supervisors" },
+          ]} />
+        </AccordionContent>
+      </AccordionItem>
+
+      {/* 11. Incentive Tiers */}
+      <AccordionItem value="upload-incentives">
+        <AccordionTrigger>
+          <span className="flex items-center gap-2 text-sm">🏆 Incentive Tiers</span>
+        </AccordionTrigger>
+        <AccordionContent>
+          <TemplateDownload fileKey="incentives" label="Incentive Tiers" />
+          <UploadTable rows={[
+            { col: "tier",               type: "NUMERIC", note: "Achievement threshold as decimal (0.8 = 80%)" },
+            { col: "incentive_per_head", type: "NUMERIC", note: "Bonus per agent (THB)" },
+          ]} />
+          <p className="text-muted-foreground text-xs mt-2">
+            System picks the <strong>highest tier ≤ achievement ratio</strong>. Example: achievement 115% with tiers at 0.8 and 1.0 → uses 1.0 tier rate.
+          </p>
         </AccordionContent>
       </AccordionItem>
 
