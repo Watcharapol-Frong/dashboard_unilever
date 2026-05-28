@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { withAuth } from '@/lib/auth'
 import { query, queryOne } from '@/lib/db'
+import { push as qpush, addDateRange, addFilter, setCacheHeader } from '@/lib/query'
 
 export const dynamic = 'force-dynamic'
 
@@ -16,13 +17,16 @@ function buildProductWhere(
   const conditions: string[] = []
   const params: any[] = []
 
-  if (startDate) { params.push(startDate); conditions.push(`m.order_date >= $${params.length}::date`) }
-  if (endDate)   { params.push(endDate);   conditions.push(`m.order_date <= $${params.length}::date`) }
-  if (brands.length > 0)      { params.push(brands);      conditions.push(`m.brands = ANY($${params.length})`) }
-  if (className.length > 0)   { params.push(className);   conditions.push(`m.class_name = ANY($${params.length})`) }
-  if (seniorBuyer.length > 0) { params.push(seniorBuyer); conditions.push(`m.prod_num IN (SELECT prod_num FROM products WHERE senior_buyer_name = ANY($${params.length}))`) }
-  if (buyer.length > 0)       { params.push(buyer);       conditions.push(`m.prod_num IN (SELECT prod_num FROM products WHERE buyer_name = ANY($${params.length}))`) }
-  if (subclass.length > 0)    { params.push(subclass);    conditions.push(`m.subclass = ANY($${params.length})`) }
+  addDateRange(params, conditions, startDate, endDate, 'm.order_date')
+  addFilter(params, conditions, brands, 'm.brands')
+  addFilter(params, conditions, className, 'm.class_name')
+  if (seniorBuyer.length > 0) {
+    conditions.push(`m.prod_num IN (SELECT prod_num FROM products WHERE senior_buyer_name = ANY(${qpush(params, seniorBuyer)}))`)
+  }
+  if (buyer.length > 0) {
+    conditions.push(`m.prod_num IN (SELECT prod_num FROM products WHERE buyer_name = ANY(${qpush(params, buyer)}))`)
+  }
+  addFilter(params, conditions, subclass, 'm.subclass')
 
   return { where: conditions.length ? 'AND ' + conditions.join(' AND ') : '', params }
 }
@@ -234,7 +238,7 @@ export async function GET(request: Request) {
         months: monthsRaw.map(r => r.month),
       },
     })
-    res.headers.set('Cache-Control', 'public, s-maxage=300, stale-while-revalidate=600')
+    setCacheHeader(res, 'MEDIUM')
     return res
   })
 }

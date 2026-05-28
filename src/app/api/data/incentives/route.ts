@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { withAuth } from '@/lib/auth'
 import { query } from '@/lib/db'
+import { setCacheHeader } from '@/lib/query'
 
 export const dynamic = 'force-dynamic'
 
@@ -47,7 +48,7 @@ export async function GET() {
       total_expense: string
       roi: string
       achievement_ratio: string
-      hoc_sales: string
+      incentive_hoc_sales: string
       sales_target: string
       incentive_per_head: string
     }>(`
@@ -57,11 +58,21 @@ export async function GET() {
         m.total_agent_cost::text                                                       AS total_agent_cost,
         m.total_expense::text                                                          AS total_expense,
         m.roi::text                                                                    AS roi,
-        (CASE WHEN SUM(c.sales_target) > 0
-              THEN SUM(c.hoc_sales) / SUM(c.sales_target)
-              ELSE 0 END)::text                                                         AS achievement_ratio,
-        SUM(c.hoc_sales)::text                                                         AS hoc_sales,
-        SUM(c.sales_target)::text                                                      AS sales_target,
+        (CASE WHEN SUM(c.sales_target) FILTER (
+                WHERE m.month < '2026-05-01' OR c.dynamic_cmg IN ('FOOD RETAILER', 'HORECA')
+              ) > 0
+              THEN SUM(c.hoc_sales)    FILTER (
+                WHERE m.month < '2026-05-01' OR c.dynamic_cmg IN ('FOOD RETAILER', 'HORECA')
+              ) / SUM(c.sales_target)  FILTER (
+                WHERE m.month < '2026-05-01' OR c.dynamic_cmg IN ('FOOD RETAILER', 'HORECA')
+              )
+              ELSE 0 END)::text                                                        AS achievement_ratio,
+        SUM(c.hoc_sales)    FILTER (
+          WHERE m.month < '2026-05-01' OR c.dynamic_cmg IN ('FOOD RETAILER', 'HORECA')
+        )::text                                                                        AS incentive_hoc_sales,
+        SUM(c.sales_target) FILTER (
+          WHERE m.month < '2026-05-01' OR c.dynamic_cmg IN ('FOOD RETAILER', 'HORECA')
+        )::text                                                                        AS sales_target,
         m.incentive_per_head::text                                                     AS incentive_per_head
       FROM mart_performance_month m
       LEFT JOIN mart_performance_cmg c ON c.month = m.month
@@ -88,14 +99,14 @@ export async function GET() {
         total_expense: Number(m.total_expense),
         roi: Number(m.roi),
         achievement_ratio: Number(m.achievement_ratio) * 100, // convert ratio to %
-        hoc_sales: Number(m.hoc_sales),
+        incentive_hoc_sales: Number(m.incentive_hoc_sales), // FOOD RETAILER + HORECA only
         sales_target: Number(m.sales_target),
         incentive_per_head: Number(m.incentive_per_head),
       })),
     }
 
     const res = NextResponse.json({ ok: true, data })
-    res.headers.set('Cache-Control', 'public, s-maxage=300, stale-while-revalidate=600')
+    setCacheHeader(res, 'MEDIUM')
     return res
   })
 }

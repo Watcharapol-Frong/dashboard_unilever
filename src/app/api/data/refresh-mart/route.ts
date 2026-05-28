@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server'
 import { withAdmin } from '@/lib/auth'
-import { refreshAllMarts } from '@/lib/services/mart-service'
+import { refreshAllMarts } from '@/lib/mart'
 import { buildLock } from '@/lib/build-lock'
 
 export async function POST(request: Request) {

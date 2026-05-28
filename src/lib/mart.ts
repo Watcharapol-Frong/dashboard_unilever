@@ -154,7 +154,7 @@ export async function buildMartMain(attributionDays = 14): Promise<number> {
   return rowCount
 }
 
-export async function buildMartPerformance(): Promise<number> {
+export async function buildMartPerformance(attributionDays = 14): Promise<number> {
   // Drop old single table if it exists (migration cleanup)
   await query(`DROP TABLE IF EXISTS mart_performance`)
   await query(`DROP TABLE IF EXISTS mart_performance_cmg`)
@@ -194,6 +194,7 @@ export async function buildMartPerformance(): Promise<number> {
       total_agent_cost    NUMERIC,
       total_expense       NUMERIC,
       roi                 NUMERIC,
+      attribution_days    INTEGER,
       refreshed_at        TIMESTAMPTZ DEFAULT NOW(),
       PRIMARY KEY (month)
     )
@@ -223,10 +224,11 @@ export async function buildMartPerformance(): Promise<number> {
         mc.primary_cmg AS dynamic_cmg,
         COUNT(DISTINCT tc.mmid) AS total_calls,
         COUNT(DISTINCT tc.mmid) FILTER (
-          WHERE tc.call_status NOT LIKE 'ไม่รับสาย%'
-            AND tc.call_status IS DISTINCT FROM 'ปิดเครื่อง/ติดต่อไม่ได้'
-            AND tc.call_status IS DISTINCT FROM 'ไม่สะดวกคุย'
-            AND tc.call_status IS DISTINCT FROM 'ยังไม่ต้องการสินค้า'
+          -- exclude no-answer and unreachable statuses (Thai DB values)
+          WHERE tc.call_status NOT LIKE 'ไม่รับสาย%'            -- no answer variants
+            AND tc.call_status IS DISTINCT FROM 'ปิดเครื่อง/ติดต่อไม่ได้' -- phone off / unreachable
+            AND tc.call_status IS DISTINCT FROM 'ไม่สะดวกคุย'           -- not convenient to talk
+            AND tc.call_status IS DISTINCT FROM 'ยังไม่ต้องการสินค้า'    -- not interested
         ) AS reached
       FROM telesales_calls tc
       JOIN mmid_cmg mc ON mc.mmid = tc.mmid
@@ -259,18 +261,23 @@ export async function buildMartPerformance(): Promise<number> {
         DATE_TRUNC('month', first_connected_date)::date AS month,
         COUNT(DISTINCT mmid) AS total_calls,
         COUNT(DISTINCT mmid) FILTER (
-          WHERE call_status NOT LIKE 'ไม่รับสาย%'
-            AND call_status IS DISTINCT FROM 'ปิดเครื่อง/ติดต่อไม่ได้'
+          -- exclude no-answer and unreachable statuses (Thai DB values)
+          WHERE call_status NOT LIKE 'ไม่รับสาย%'                        -- no answer variants
+            AND call_status IS DISTINCT FROM 'ปิดเครื่อง/ติดต่อไม่ได้'  -- phone off / unreachable
         ) AS reached
       FROM telesales_calls
       WHERE first_connected_date IS NOT NULL
       GROUP BY 1
     ),
     month_sales AS (
-      -- incentive คิดจาก FOOD RETAILER + HORECA เท่านั้น ไม่รวม DISTRIBUTOR / END USER
+      -- Before May 2025: all CMGs count toward incentive (DISTRIBUTOR included)
+      -- From May 2025:   DISTRIBUTOR excluded; only FOOD RETAILER + HORECA count
       SELECT month,
-        SUM(hoc_sales) FILTER (WHERE dynamic_cmg IN ('FOOD RETAILER', 'HORECA')) AS incentive_hoc_sales,
-        SUM(hoc_sales)                                                            AS total_hoc_sales
+        SUM(hoc_sales) FILTER (
+          WHERE month < '2026-05-01'
+             OR dynamic_cmg IN ('FOOD RETAILER', 'HORECA')
+        )              AS incentive_hoc_sales,
+        SUM(hoc_sales) AS total_hoc_sales
       FROM mart_performance_cmg
       GROUP BY month
     ),
@@ -282,7 +289,7 @@ export async function buildMartPerformance(): Promise<number> {
              ELSE 0 END AS achievement_ratio
       FROM month_sales ms
       LEFT JOIN targets tg ON tg.month = ms.month
-        AND tg.dynamic_cmg IN ('FOOD RETAILER', 'HORECA')
+        AND (ms.month < '2026-05-01' OR tg.dynamic_cmg IN ('FOOD RETAILER', 'HORECA'))
       GROUP BY ms.month, ms.incentive_hoc_sales
     ),
     month_incentive AS (
@@ -299,7 +306,9 @@ export async function buildMartPerformance(): Promise<number> {
       SELECT
         ms.month,
         ROUND(
-          ms.total_hoc_sales / NULLIF(
+          -- ROI numerator uses incentive-eligible sales (FOOD RETAILER + HORECA only)
+          -- to be consistent with the achievement % calculation
+          ms.incentive_hoc_sales / NULLIF(
             COALESCE(ah.agent_count, 0)      * COALESCE(mi.incentive_per_head, 0)
             + COALESCE(ah.supervisor_count, 0) * COALESCE(co.cost_per_supervisor, 0)
             + COALESCE(ah.agent_count, 0)      * COALESCE(co.cost_per_agent, 0)
@@ -315,7 +324,7 @@ export async function buildMartPerformance(): Promise<number> {
       incentive_per_head, total_incentive,
       cost_per_agent, cost_per_supervisor,
       supervisor_count, agent_count,
-      total_agent_cost, total_expense, roi
+      total_agent_cost, total_expense, roi, attribution_days
     )
     SELECT
       tc.month,
@@ -332,7 +341,8 @@ export async function buildMartPerformance(): Promise<number> {
       COALESCE(ah.agent_count, 0)      * COALESCE(mi.incentive_per_head, 0)
         + COALESCE(ah.supervisor_count, 0) * COALESCE(co.cost_per_supervisor, 0)
         + COALESCE(ah.agent_count, 0)      * COALESCE(co.cost_per_agent, 0)     AS total_expense,
-      mr.roi
+      mr.roi,
+      ${attributionDays}
     FROM tier_calls tc
     LEFT JOIN month_incentive mi ON mi.month = tc.month
     LEFT JOIN costs           co ON co.month = tc.month
@@ -347,6 +357,6 @@ export async function buildMartPerformance(): Promise<number> {
 
 export async function refreshAllMarts(attributionDays = 14): Promise<{ mart_main: number; performance: number }> {
   const mart_main   = await buildMartMain(attributionDays)
-  const performance = await buildMartPerformance()
+  const performance = await buildMartPerformance(attributionDays)
   return { mart_main, performance }
 }

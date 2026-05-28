@@ -1,10 +1,10 @@
 import { NextResponse } from 'next/server'
 import { CompleteMultipartUploadCommand } from '@aws-sdk/client-s3'
 import { currentUser } from '@clerk/nextjs/server'
-import { r2, R2_BUCKET } from '@/lib/storage/r2'
-import { FILE_TYPE_CONFIGS } from '@/lib/upload/config'
-import type { UploadFileType } from '@/lib/upload/config'
-import { processUploadFromKey } from '@/lib/services/upload-service'
+import { r2, R2_BUCKET } from '@/lib/r2'
+import { FILE_TYPE_CONFIGS } from '@/lib/upload-config'
+import type { UploadFileType } from '@/lib/upload-config'
+import { processUploadFromKey } from '@/lib/upload-service'
 
 const KEY_RE = /^tmp\/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\.csv$/i
 

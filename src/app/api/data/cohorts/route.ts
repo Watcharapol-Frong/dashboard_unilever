@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { withAuth } from '@/lib/auth'
 import { query } from '@/lib/db'
+import { push as qpush, addDateRange, setCacheHeader } from '@/lib/query'
 
 export const dynamic = 'force-dynamic'
 
@@ -23,25 +24,9 @@ export async function GET(request: Request) {
     const conditions: string[] = []
     const params: any[] = []
 
-    if (cmg !== 'all') {
-      params.push(cmg)
-      conditions.push(`dynamic_cmg = $${params.length}`)
-    }
-
-    if (channel !== 'all') {
-      params.push(channel)
-      conditions.push(`channel = $${params.length}`)
-    }
-
-    if (startDate) {
-      params.push(startDate)
-      conditions.push(`order_date >= $${params.length}::date`)
-    }
-
-    if (endDate) {
-      params.push(endDate)
-      conditions.push(`order_date <= $${params.length}::date`)
-    }
+    if (cmg !== 'all') conditions.push(`dynamic_cmg = ${qpush(params, cmg)}`)
+    if (channel !== 'all') conditions.push(`channel = ${qpush(params, channel)}`)
+    addDateRange(params, conditions, startDate, endDate)
 
     const whereClause = conditions.length > 0 ? 'WHERE ' + conditions.join(' AND ') : ''
     const sql = `
@@ -125,7 +110,7 @@ export async function GET(request: Request) {
     }))
 
     const res = NextResponse.json({ ok: true, data })
-    res.headers.set('Cache-Control', 'public, s-maxage=300, stale-while-revalidate=600')
+    setCacheHeader(res, 'MEDIUM')
     return res
   })
 }

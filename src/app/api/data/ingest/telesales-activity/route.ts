@@ -2,8 +2,8 @@ import { NextResponse } from 'next/server'
 import type { NextRequest } from 'next/server'
 import { randomBytes, timingSafeEqual } from 'crypto'
 import { query } from '@/lib/db'
-import { uploadToR2 } from '@/lib/storage/r2'
-import { encrypt } from '@/lib/utils/crypto'
+import { uploadToR2 } from '@/lib/r2'
+import { encrypt } from '@/lib/crypto'
 
 function isAuthorized(request: NextRequest) {
   const provided = request.headers.get('Authorization') ?? ''

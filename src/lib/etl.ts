@@ -1,4 +1,4 @@
-import type { UploadFileType } from './config'
+import type { UploadFileType } from '@/lib/upload-config'
 
 // "Feb 2026" → "2026-02-01"
 function parseMonth(raw: string | undefined): string | null {

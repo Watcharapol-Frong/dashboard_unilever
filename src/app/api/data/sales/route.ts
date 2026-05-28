@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { withAuth } from '@/lib/auth'
 import { query, queryOne } from '@/lib/db'
+import { addDateRange, addFilter, toWhere, setCacheHeader } from '@/lib/query'
 
 export const dynamic = 'force-dynamic'
 
@@ -29,17 +30,16 @@ function buildWhere(
   const conditions: string[] = []
   const params: any[] = []
 
-  if (startDate) { params.push(startDate); conditions.push(`order_date >= $${params.length}::date`) }
-  if (endDate)   { params.push(endDate);   conditions.push(`order_date <= $${params.length}::date`) }
-  if (channel.length > 0) { params.push(channel); conditions.push(`channel = ANY($${params.length})`) }
-  if (cmg.length > 0)     { params.push(cmg);     conditions.push(`dynamic_cmg = ANY($${params.length})`) }
-  if (agent.length > 0)   { params.push(agent);   conditions.push(`agent = ANY($${params.length})`) }
+  addDateRange(params, conditions, startDate, endDate)
+  addFilter(params, conditions, channel, 'channel')
+  addFilter(params, conditions, cmg, 'dynamic_cmg')
+  addFilter(params, conditions, agent, 'agent')
   if (conversion === 'converted') {
     conditions.push(`customer_type IN ('new_customer', 'retention')`)
   } else if (conversion === 'not_converted') {
     conditions.push(`customer_type IN ('first_order_not_converted', 'retention_not_converted')`)
   }
-  return { where: conditions.length ? 'WHERE ' + conditions.join(' AND ') : '', params }
+  return { where: toWhere(conditions), params }
 }
 
 async function fetchKpis(where: string, params: any[]) {
@@ -325,7 +325,7 @@ export async function GET(request: Request) {
         months: monthsRaw.map(r => r.month),
       },
     })
-    res.headers.set('Cache-Control', 'public, s-maxage=300, stale-while-revalidate=600')
+    setCacheHeader(res, 'MEDIUM')
     return res
   })
 }
