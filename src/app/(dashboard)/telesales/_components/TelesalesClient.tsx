@@ -1,6 +1,6 @@
 'use client'
 
-import { useMemo, useState } from 'react'
+import { useMemo, useRef, useState } from 'react'
 import {
   AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip,
   BarChart, Bar, Legend
@@ -19,6 +19,9 @@ import { MonthChipGroup } from '@/components/dashboard/MonthChipGroup'
 import { formatNumber, formatPct, colorRate } from '@/lib/formatters'
 import { columns } from '../columns'
 import { Calendar, Phone, PhoneCall, UserCheck, Users } from 'lucide-react'
+import { type ColumnDef } from '@tanstack/react-table'
+import { DataTableColumnHeader } from '@/components/ui/data-table-column-header'
+import { Badge } from '@/components/ui/badge'
 import { TelesalesFunnelChart } from './TelesalesFunnelChart'
 
 interface AgentPerformance {
@@ -37,6 +40,15 @@ interface TierStatusItem {
   count: number
 }
 
+interface CallRecord {
+  mmid: string
+  lead_customers: string | null
+  agent: string | null
+  call_status: string | null
+  first_connected_date: string | null
+  reason_group: string | null
+}
+
 interface TelesalesData {
   summary: {
     total_leads: number
@@ -51,6 +63,7 @@ interface TelesalesData {
   by_agent: AgentPerformance[]
   by_period: { period: string; total_calls: number; converted: number }[]
   by_tier_status: TierStatusItem[]
+  calls: CallRecord[]
   months: string[]
   options: {
     cmg: string[]
@@ -159,9 +172,18 @@ export default function TelesalesClient() {
   const [customEnd,   setCustomEnd]   = useState('2026-05-31')
 
   // Dimension filters
-  const [channel,     setChannel]     = useState<string[]>([])
-  const [cmg,         setCmg]         = useState<string[]>([])
-  const [agent,       setAgent]       = useState<string[]>([])
+  const [channel,       setChannel]       = useState<string[]>([])
+  const [cmg,           setCmg]           = useState<string[]>([])
+  const [agent,         setAgent]         = useState<string[]>([])
+  const [callSearch,    setCallSearch]    = useState('')
+  const [debouncedCallSearch, setDebouncedCallSearch] = useState('')
+  const callSearchRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  const handleCallSearch = (v: string) => {
+    setCallSearch(v)
+    if (callSearchRef.current) clearTimeout(callSearchRef.current)
+    callSearchRef.current = setTimeout(() => setDebouncedCallSearch(v), 300)
+  }
 
   // Chip click handler
   const handleChipClick = (m: string) => {
@@ -184,11 +206,12 @@ export default function TelesalesClient() {
     const p = new URLSearchParams()
     if (effectiveStart) p.set('startDate', effectiveStart)
     if (effectiveEnd)   p.set('endDate',   effectiveEnd)
-    if (channel.length > 0) p.set('channel', channel.join(','))
-    if (cmg.length > 0)     p.set('cmg', cmg.join(','))
-    if (agent.length > 0)   p.set('agent', agent.join(','))
+    if (channel.length > 0)  p.set('channel', channel.join(','))
+    if (cmg.length > 0)      p.set('cmg',     cmg.join(','))
+    if (agent.length > 0)    p.set('agent',   agent.join(','))
+    if (debouncedCallSearch) p.set('search',  debouncedCallSearch)
     return `/api/data/telesales?${p.toString()}`
-  }, [effectiveStart, effectiveEnd, channel, cmg, agent])
+  }, [effectiveStart, effectiveEnd, channel, cmg, agent, debouncedCallSearch])
 
   const { data, isLoading, isValidating } = useDashboardSWR<TelesalesData>(apiUrl)
 
@@ -552,6 +575,73 @@ export default function TelesalesClient() {
           <DataTable columns={columns} data={data.by_agent} />
         </CardContent>
       </Card>
+
+      {/* ── Call Log ─────────────────────────────────────────────────────── */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-sm font-medium">Call Log</CardTitle>
+          <p className="text-xs text-muted-foreground mt-0.5">
+            {(data.calls?.length ?? 0).toLocaleString()} records · search by MMID or call status
+          </p>
+        </CardHeader>
+        <CardContent>
+          <DataTable
+            columns={callLogColumns}
+            data={data.calls ?? []}
+            searchValue={callSearch}
+            onSearchChange={handleCallSearch}
+            searchPlaceholder="Search MMID or status..."
+          />
+        </CardContent>
+      </Card>
     </div>
   )
 }
+
+// ── Call Log column definitions ───────────────────────────────────────────────
+
+const callLogColumns: ColumnDef<CallRecord>[] = [
+  {
+    accessorKey: 'first_connected_date',
+    header: ({ column }) => <DataTableColumnHeader column={column} title="Call Date" />,
+    cell: ({ row }) => row.original.first_connected_date
+      ? new Date(row.original.first_connected_date).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })
+      : <span className="text-muted-foreground">—</span>,
+  },
+  {
+    accessorKey: 'mmid',
+    header: 'MMID',
+    cell: ({ row }) => <span className="font-mono text-xs">{row.original.mmid}</span>,
+  },
+  {
+    accessorKey: 'lead_customers',
+    header: 'Tier',
+    cell: ({ row }) => row.original.lead_customers ?? <span className="text-muted-foreground">—</span>,
+  },
+  {
+    accessorKey: 'agent',
+    header: 'Agent',
+    cell: ({ row }) => row.original.agent ?? <span className="text-muted-foreground">—</span>,
+  },
+  {
+    accessorKey: 'call_status',
+    header: 'Call Status',
+    cell: ({ row }) => {
+      const raw = row.original.call_status
+      if (!raw) return <span className="text-muted-foreground">—</span>
+      const label = CALL_STATUS_LABELS[raw] ?? raw
+      const isOrder = raw === 'สั่งซื้อสินค้าเรียบร้อย' || raw === 'สั่งสินค้าอื่นๆ'
+      const isNoAnswer = raw.startsWith('ไม่รับสาย') || raw === 'ปิดเครื่อง/ติดต่อไม่ได้'
+      return (
+        <Badge variant={isOrder ? 'default' : isNoAnswer ? 'secondary' : 'outline'} className="text-xs whitespace-nowrap">
+          {label}
+        </Badge>
+      )
+    },
+  },
+  {
+    accessorKey: 'reason_group',
+    header: 'Reason',
+    cell: ({ row }) => row.original.reason_group ?? <span className="text-muted-foreground">—</span>,
+  },
+]

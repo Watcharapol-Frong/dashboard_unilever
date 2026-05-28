@@ -76,6 +76,7 @@ export async function GET(request: Request) {
     const channel   = (searchParams.get('channel') || '').split(',').filter(Boolean)
     const cmg       = (searchParams.get('cmg')     || '').split(',').filter(Boolean)
     const agent     = (searchParams.get('agent')   || '').split(',').filter(Boolean)
+    const callSearch = searchParams.get('search')?.trim() || ''
 
     const { params, where, whereTc, agentConvCTE } =
       buildFilters(startDate, endDate, agent, channel, cmg)
@@ -124,7 +125,7 @@ export async function GET(request: Request) {
     const totalCalls     = Number(summaryRow?.total_calls ?? 0)
     const reached        = Number(summaryRow?.reached ?? 0)
 
-    const [tierStatusRows, agentRows, trendRows, monthsRaw, cmgOpts, agentOpts] = await Promise.all([
+    const [tierStatusRows, agentRows, trendRows, monthsRaw, cmgOpts, agentOpts, callRows] = await Promise.all([
       // Call status breakdown by tier
       query<{ tier: string; call_status: string; cnt: string }>(`
         SELECT
@@ -182,6 +183,29 @@ export async function GET(request: Request) {
       query<{ agent: string }>(`
         SELECT DISTINCT agent FROM telesales_calls WHERE agent IS NOT NULL ORDER BY agent
       `),
+
+      // Call log — filtered + optional MMID/status search
+      (() => {
+        const callParams = [...params]
+        let callWhere = where
+        if (callSearch) {
+          callParams.push(`%${callSearch}%`)
+          const n = callParams.length
+          callWhere = `${where} AND (mmid ILIKE $${n} OR call_status ILIKE $${n})`
+        }
+        return query<{
+          mmid: string; lead_customers: string | null; agent: string | null
+          call_status: string | null; first_connected_date: string | null
+          reason_group: string | null
+        }>(`
+          SELECT mmid, lead_customers, agent, call_status,
+                 first_connected_date::text, reason_group
+          FROM telesales_calls
+          ${callWhere}
+          ORDER BY first_connected_date DESC NULLS LAST, mmid
+          ${callSearch ? 'LIMIT 2000' : 'LIMIT 500'}
+        `, callParams)
+      })(),
     ])
 
     const call_status_breakdown: Record<string, number> = {}
@@ -236,6 +260,7 @@ export async function GET(request: Request) {
           cmg:    cmgOpts.map(o => o.cmg).filter(Boolean),
           agents: agentOpts.map(o => o.agent).filter(Boolean),
         },
+        calls: callRows,
       },
     })
     setCacheHeader(res, 'MEDIUM')
