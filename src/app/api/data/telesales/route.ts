@@ -193,6 +193,10 @@ export async function GET(request: Request) {
           const n = callParams.length
           callWhere = `${where} AND (mmid ILIKE $${n} OR call_status ILIKE $${n})`
         }
+        // Drop LIMIT when a date range is active — the date bounds already constrain the result.
+        // Keep LIMIT 500 only for the unfiltered (all-time) fallback.
+        const hasDateRange = !!(startDate && endDate)
+        const callsLimit = callSearch ? 'LIMIT 2000' : hasDateRange ? '' : 'LIMIT 500'
         return query<{
           mmid: string; mobile: string | null; lead_customers: string | null; agent: string | null
           call_status: string | null; first_connected_date: string | null
@@ -202,7 +206,7 @@ export async function GET(request: Request) {
           FROM telesales_calls
           ${callWhere}
           ORDER BY first_connected_date DESC NULLS LAST, mmid
-          ${callSearch ? 'LIMIT 2000' : 'LIMIT 500'}
+          ${callsLimit}
         `, callParams)
       })(),
     ])
