@@ -1,3 +1,5 @@
+import { randomBytes } from 'crypto'
+
 export type UploadFileType =
   | 'online_sales'
   | 'offline_sales'
@@ -111,8 +113,8 @@ export const FILE_TYPE_CONFIGS: Record<UploadFileType, FileTypeConfig> = {
 
 export function generateStoragePath(type: UploadFileType): string {
   const { storageFolder, storageFilename } = FILE_TYPE_CONFIGS[type]
-  const ts = new Date().toISOString().replace(/[-:]/g, '').split('.')[0] // 20260510T143022
-  const token = Math.random().toString(36).substring(2, 8)               // 6-char random token
+  const ts    = new Date().toISOString().replace(/[-:]/g, '').split('.')[0] // 20260510T143022
+  const token = randomBytes(4).toString('hex')                               // 8-char hex token
   return `${storageFolder}/${ts}_${token}_${storageFilename}.csv`
 }
 
