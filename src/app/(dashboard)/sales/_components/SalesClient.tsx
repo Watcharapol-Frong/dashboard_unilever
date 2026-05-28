@@ -1,6 +1,6 @@
 'use client'
 
-import { useMemo, useRef, useState } from 'react'
+import { useMemo, useState } from 'react'
 import {
   AreaChart, Area, XAxis, YAxis, CartesianGrid,
 } from 'recharts'
@@ -12,14 +12,12 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { MultiSelect } from '@/components/dashboard/MultiSelect'
 import { KpiCard } from '@/components/dashboard/KpiCard'
 import { KpiGrid } from '@/components/dashboard/KpiGrid'
-import { DataTable } from '@/components/ui/data-table'
 import { PageLoading, PageEmpty } from '@/components/dashboard/PageState'
 import { DateRangePicker } from '@/components/dashboard/DateRangePicker'
 import { useDashboardSWR } from '@/hooks/useDashboardSWR'
 import { useMonthRange, lastDayOfMonth } from '@/hooks/useMonthRange'
 import { MonthChipGroup } from '@/components/dashboard/MonthChipGroup'
 import { fmtBaht, fmt } from '@/lib/formatters'
-import { columns } from '../columns'
 import { TrendingUp, UserPlus, Users, CreditCard, Calendar } from 'lucide-react'
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -37,7 +35,6 @@ interface SalesKpi {
 interface SalesData {
   kpi: SalesKpi
   by_period: { period: string; period_label: string; online: number; offline: number; total: number }[]
-  recent_orders: any[]
   options: { cmg: string[]; agents: string[] }
   months: string[]
 }
@@ -96,19 +93,10 @@ export default function SalesClient() {
   const [interval,    setInterval]    = useState<Interval>('custom')
   const [customStart, setCustomStart] = useState('2026-05-01')
   const [customEnd,   setCustomEnd]   = useState('2026-05-31')
-  const [channel,         setChannel]         = useState<string[]>([])
-  const [cmg,             setCmg]             = useState<string[]>([])
-  const [agent,           setAgent]           = useState<string[]>([])
-  const [conversion,      setConversion]      = useState<Conversion>('all')
-  const [orderSearch,     setOrderSearch]     = useState('')
-  const [debouncedSearch, setDebouncedSearch] = useState('')
-  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
-
-  const handleOrderSearch = (v: string) => {
-    setOrderSearch(v)
-    if (debounceRef.current) clearTimeout(debounceRef.current)
-    debounceRef.current = setTimeout(() => setDebouncedSearch(v), 300)
-  }
+  const [channel,    setChannel]    = useState<string[]>([])
+  const [cmg,        setCmg]        = useState<string[]>([])
+  const [agent,      setAgent]      = useState<string[]>([])
+  const [conversion, setConversion] = useState<Conversion>('all')
 
   const handleChipClick = (m: string) => {
     if (interval === 'custom') setInterval('monthly')
@@ -133,15 +121,14 @@ export default function SalesClient() {
 
   const apiUrl = useMemo(() => {
     const p = new URLSearchParams({ interval: calculatedInterval })
-    if (channel.length > 0)    p.set('channel',    channel.join(','))
-    if (cmg.length > 0)        p.set('cmg',        cmg.join(','))
-    if (agent.length > 0)      p.set('agent',      agent.join(','))
-    if (conversion !== 'all')  p.set('conversion', conversion)
-    if (effectiveStart)        p.set('startDate',  effectiveStart)
-    if (effectiveEnd)          p.set('endDate',    effectiveEnd)
-    if (debouncedSearch)       p.set('search',     debouncedSearch)
+    if (channel.length > 0)   p.set('channel',    channel.join(','))
+    if (cmg.length > 0)       p.set('cmg',        cmg.join(','))
+    if (agent.length > 0)     p.set('agent',      agent.join(','))
+    if (conversion !== 'all') p.set('conversion', conversion)
+    if (effectiveStart)       p.set('startDate',  effectiveStart)
+    if (effectiveEnd)         p.set('endDate',    effectiveEnd)
     return `/api/data/sales?${p.toString()}`
-  }, [calculatedInterval, channel, cmg, agent, conversion, effectiveStart, effectiveEnd, debouncedSearch])
+  }, [calculatedInterval, channel, cmg, agent, conversion, effectiveStart, effectiveEnd])
 
   const { data, isLoading, isValidating } = useDashboardSWR<SalesData>(apiUrl)
 
@@ -150,7 +137,7 @@ export default function SalesClient() {
     return <PageEmpty message="No telesales sales data available" hint="Please build mart first." />
   }
 
-  const { kpi, by_period, recent_orders, options, months } = data
+  const { kpi, by_period, options, months } = data
 
   const onlinePct  = kpi.total_sales > 0 ? (kpi.online_sales  / kpi.total_sales) * 100 : 0
   const offlinePct = kpi.total_sales > 0 ? (kpi.offline_sales / kpi.total_sales) * 100 : 0
@@ -415,21 +402,6 @@ export default function SalesClient() {
         </Card>
       </div>
 
-      {/* ── Orders Table ──────────────────────────────────────────────────── */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-sm font-medium">Recent Telesales Orders</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <DataTable
-            columns={columns}
-            data={recent_orders ?? []}
-            searchValue={orderSearch}
-            onSearchChange={handleOrderSearch}
-            searchPlaceholder="Search MMID or Order No..."
-          />
-        </CardContent>
-      </Card>
     </div>
   )
 }
