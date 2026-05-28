@@ -159,9 +159,9 @@ export default function TelesalesClient() {
   const [customEnd,   setCustomEnd]   = useState('2026-05-31')
 
   // Dimension filters
-  const [channel,     setChannel]     = useState<string[]>([])
-  const [cmg,         setCmg]         = useState<string[]>([])
-  const [agent,       setAgent]       = useState<string[]>([])
+  const [channel, setChannel] = useState<string[]>([])
+  const [cmg,     setCmg]     = useState<string[]>([])
+  const [agent,   setAgent]   = useState<string[]>([])
 
   // Chip click handler
   const handleChipClick = (m: string) => {
@@ -182,11 +182,11 @@ export default function TelesalesClient() {
 
   const apiUrl = useMemo(() => {
     const p = new URLSearchParams()
-    if (effectiveStart) p.set('startDate', effectiveStart)
-    if (effectiveEnd)   p.set('endDate',   effectiveEnd)
-    if (channel.length > 0) p.set('channel', channel.join(','))
-    if (cmg.length > 0)     p.set('cmg', cmg.join(','))
-    if (agent.length > 0)   p.set('agent', agent.join(','))
+    if (effectiveStart)      p.set('startDate', effectiveStart)
+    if (effectiveEnd)        p.set('endDate',   effectiveEnd)
+    if (channel.length > 0)  p.set('channel',   channel.join(','))
+    if (cmg.length > 0)      p.set('cmg',       cmg.join(','))
+    if (agent.length > 0)    p.set('agent',     agent.join(','))
     return `/api/data/telesales?${p.toString()}`
   }, [effectiveStart, effectiveEnd, channel, cmg, agent])
 
@@ -552,6 +552,7 @@ export default function TelesalesClient() {
           <DataTable columns={columns} data={data.by_agent} />
         </CardContent>
       </Card>
+
     </div>
   )
 }

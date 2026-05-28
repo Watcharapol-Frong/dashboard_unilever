@@ -189,6 +189,10 @@ export async function GET(request: Request) {
           const searchCond = `(mmid ILIKE $${n} OR order_number ILIKE $${n})`
           ordersWhere = curr.where ? `${curr.where} AND ${searchCond}` : `WHERE ${searchCond}`
         }
+        // When a date range is explicitly set (or search active), remove the cap so
+        // the full filtered result set is returned. Without any date bounds we fall
+        // back to 500 to avoid returning the entire order history.
+        const ordersLimit = orderSearch ? 'LIMIT 2000' : hasDateRange ? '' : 'LIMIT 500'
         return query<{
           order_number: string; order_date: string; mmid: string; prod_num: string
           sales_qty: string; sales_in_vat: string; dynamic_cmg: string
@@ -200,7 +204,7 @@ export async function GET(request: Request) {
           FROM sales_hoc_orders
           ${ordersWhere}
           ORDER BY order_date DESC, order_number DESC
-          ${orderSearch ? 'LIMIT 2000' : 'LIMIT 500'}
+          ${ordersLimit}
         `, ordersParams)
       })(),
 

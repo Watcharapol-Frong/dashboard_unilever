@@ -71,11 +71,13 @@ function buildFilters(
 export async function GET(request: Request) {
   return withAuth(async () => {
     const { searchParams } = new URL(request.url)
-    const startDate = searchParams.get('startDate')
-    const endDate   = searchParams.get('endDate')
-    const channel   = (searchParams.get('channel') || '').split(',').filter(Boolean)
-    const cmg       = (searchParams.get('cmg')     || '').split(',').filter(Boolean)
-    const agent     = (searchParams.get('agent')   || '').split(',').filter(Boolean)
+    const startDate   = searchParams.get('startDate')
+    const endDate     = searchParams.get('endDate')
+    const channel     = (searchParams.get('channel')     || '').split(',').filter(Boolean)
+    const cmg         = (searchParams.get('cmg')         || '').split(',').filter(Boolean)
+    const agent       = (searchParams.get('agent')       || '').split(',').filter(Boolean)
+    const callSearch  = searchParams.get('search')?.trim() || ''
+    const callStatus  = (searchParams.get('callStatus')  || '').split(',').filter(Boolean)
 
     const { params, where, whereTc, agentConvCTE } =
       buildFilters(startDate, endDate, agent, channel, cmg)
@@ -124,7 +126,7 @@ export async function GET(request: Request) {
     const totalCalls     = Number(summaryRow?.total_calls ?? 0)
     const reached        = Number(summaryRow?.reached ?? 0)
 
-    const [tierStatusRows, agentRows, trendRows, monthsRaw, cmgOpts, agentOpts] = await Promise.all([
+    const [tierStatusRows, agentRows, trendRows, monthsRaw, cmgOpts, agentOpts, callRows] = await Promise.all([
       // Call status breakdown by tier
       query<{ tier: string; call_status: string; cnt: string }>(`
         SELECT
@@ -182,6 +184,37 @@ export async function GET(request: Request) {
       query<{ agent: string }>(`
         SELECT DISTINCT agent FROM telesales_calls WHERE agent IS NOT NULL ORDER BY agent
       `),
+
+      // Call log — filtered + optional MMID/status search
+      (() => {
+        const callParams = [...params]
+        let callWhere = where
+        if (callSearch) {
+          callParams.push(`%${callSearch}%`)
+          const n = callParams.length
+          callWhere += ` AND (mmid ILIKE $${n} OR mobile ILIKE $${n})`
+        }
+        if (callStatus.length > 0) {
+          callParams.push(callStatus)
+          callWhere += ` AND call_status = ANY($${callParams.length})`
+        }
+        // Drop LIMIT when any filter is active (date, agent, channel, cmg, callStatus).
+        // params.length > 0 means at least one of those filters was applied.
+        // Keep LIMIT 500 only for the completely unfiltered (all-time) fallback.
+        const hasAnyFilter = params.length > 0 || callStatus.length > 0
+        const callsLimit = callSearch ? 'LIMIT 2000' : hasAnyFilter ? '' : 'LIMIT 500'
+        return query<{
+          mmid: string; mobile: string | null; lead_customers: string | null; agent: string | null
+          call_status: string | null; first_connected_date: string | null
+        }>(`
+          SELECT mmid, mobile, lead_customers, agent, call_status,
+                 first_connected_date::text
+          FROM telesales_calls
+          ${callWhere}
+          ORDER BY first_connected_date DESC NULLS LAST, mmid
+          ${callsLimit}
+        `, callParams)
+      })(),
     ])
 
     const call_status_breakdown: Record<string, number> = {}
@@ -236,6 +269,7 @@ export async function GET(request: Request) {
           cmg:    cmgOpts.map(o => o.cmg).filter(Boolean),
           agents: agentOpts.map(o => o.agent).filter(Boolean),
         },
+        calls: callRows,
       },
     })
     setCacheHeader(res, 'MEDIUM')

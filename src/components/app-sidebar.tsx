@@ -4,13 +4,15 @@ import * as React from "react"
 import { usePathname } from "next/navigation"
 import { useUser } from "@clerk/nextjs"
 import {
-  IconChartBar,
   IconDashboard,
   IconHelp,
   IconGift,
   IconUsers,
   IconUpload,
   IconFileExport,
+  IconShoppingCart,
+  IconPhoneCall,
+  IconPackage,
 } from "@tabler/icons-react"
 
 import { NavDocuments } from "@/components/nav-documents"
@@ -35,15 +37,27 @@ const navMain = [
     icon: IconDashboard,
   },
   {
-    title: "Performance",
+    title: "Sales",
     url: "#",
-    icon: IconChartBar,
-    isActive: true,
+    icon: IconShoppingCart,
     items: [
-      { title: "Sales Performance",  url: "/sales" },
-      { title: "Telesales",          url: "/telesales" },
-      { title: "Product Performance", url: "/products" },
+      { title: "Sales Performance", url: "/sales" },
+      { title: "Orders",            url: "/sales/orders" },
     ],
+  },
+  {
+    title: "Telesales",
+    url: "#",
+    icon: IconPhoneCall,
+    items: [
+      { title: "Telesales Overview", url: "/telesales" },
+      { title: "Call Log",           url: "/telesales/call-log" },
+    ],
+  },
+  {
+    title: "Products",
+    url: "/products",
+    icon: IconPackage,
   },
   {
     title: "Programs",
