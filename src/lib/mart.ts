@@ -273,7 +273,7 @@ export async function buildMartPerformance(): Promise<number> {
       -- From May 2025:   DISTRIBUTOR excluded; only FOOD RETAILER + HORECA count
       SELECT month,
         SUM(hoc_sales) FILTER (
-          WHERE month < '2025-05-01'
+          WHERE month < '2026-05-01'
              OR dynamic_cmg IN ('FOOD RETAILER', 'HORECA')
         )              AS incentive_hoc_sales,
         SUM(hoc_sales) AS total_hoc_sales
@@ -288,7 +288,7 @@ export async function buildMartPerformance(): Promise<number> {
              ELSE 0 END AS achievement_ratio
       FROM month_sales ms
       LEFT JOIN targets tg ON tg.month = ms.month
-        AND (ms.month < '2025-05-01' OR tg.dynamic_cmg IN ('FOOD RETAILER', 'HORECA'))
+        AND (ms.month < '2026-05-01' OR tg.dynamic_cmg IN ('FOOD RETAILER', 'HORECA'))
       GROUP BY ms.month, ms.incentive_hoc_sales
     ),
     month_incentive AS (
