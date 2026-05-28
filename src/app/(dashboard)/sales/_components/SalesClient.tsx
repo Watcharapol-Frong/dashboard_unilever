@@ -96,10 +96,11 @@ export default function SalesClient() {
   const [interval,    setInterval]    = useState<Interval>('custom')
   const [customStart, setCustomStart] = useState('2026-05-01')
   const [customEnd,   setCustomEnd]   = useState('2026-05-31')
-  const [channel,    setChannel]    = useState<string[]>([])
-  const [cmg,        setCmg]        = useState<string[]>([])
-  const [agent,      setAgent]      = useState<string[]>([])
-  const [conversion, setConversion] = useState<Conversion>('all')
+  const [channel,     setChannel]     = useState<string[]>([])
+  const [cmg,         setCmg]         = useState<string[]>([])
+  const [agent,       setAgent]       = useState<string[]>([])
+  const [conversion,  setConversion]  = useState<Conversion>('all')
+  const [orderSearch, setOrderSearch] = useState('')
 
   const handleChipClick = (m: string) => {
     if (interval === 'custom') setInterval('monthly')
@@ -141,6 +142,15 @@ export default function SalesClient() {
   }
 
   const { kpi, by_period, recent_orders, options, months } = data
+
+  const filteredOrders = useMemo(() => {
+    if (!orderSearch) return recent_orders ?? []
+    const q = orderSearch.toLowerCase()
+    return (recent_orders ?? []).filter((r: any) =>
+      (r.mmid         ?? '').toLowerCase().includes(q) ||
+      (r.order_number ?? '').toLowerCase().includes(q)
+    )
+  }, [recent_orders, orderSearch])
 
   const onlinePct  = kpi.total_sales > 0 ? (kpi.online_sales  / kpi.total_sales) * 100 : 0
   const offlinePct = kpi.total_sales > 0 ? (kpi.offline_sales / kpi.total_sales) * 100 : 0
@@ -413,9 +423,10 @@ export default function SalesClient() {
         <CardContent>
           <DataTable
             columns={columns}
-            data={recent_orders}
-            searchKey="mmid"
-            searchPlaceholder="Search MMID..."
+            data={filteredOrders}
+            searchValue={orderSearch}
+            onSearchChange={setOrderSearch}
+            searchPlaceholder="Search MMID or Order No..."
           />
         </CardContent>
       </Card>
