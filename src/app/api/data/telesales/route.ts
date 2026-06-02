@@ -5,9 +5,8 @@ import { setCacheHeader } from '@/lib/query'
 
 export const dynamic = 'force-dynamic'
 
-// Builds WHERE clauses for telesales_calls (bare + tc.-prefixed), pre-computed
-// MMID filter CTEs, and the agent_conversions CTE for sales_hoc_orders.
-// Uses CTE + JOIN strategy for segment/channel filters to avoid correlated subqueries.
+// Builds WHERE clauses for telesales_calls (bare + tc.-prefixed) and the
+// agent_conversions CTE for sales_hoc_orders — all from one set of params.
 function buildFilters(
   startDate: string | null,
   endDate: string | null,
@@ -16,12 +15,13 @@ function buildFilters(
   cmg: string[],
 ) {
   const params: any[] = []
-  const push = (v: any) => { params.push(v); return params.length }
-
-  // Simple indexed conditions (fast)
   const bare: string[]     = ['first_connected_date IS NOT NULL']
   const prefixed: string[] = ['tc.first_connected_date IS NOT NULL']
+  // order_date is intentionally NOT date-filtered — customer_type already encodes
+  // the attribution window, so a retention order outside the call period still counts
   const orderConds: string[] = [`customer_type IN ('new_customer', 'retention')`]
+
+  const push = (v: any) => { params.push(v); return params.length }
 
   if (startDate) {
     const i = push(startDate)
@@ -33,66 +33,52 @@ function buildFilters(
     const i = push(endDate)
     bare.push(`first_connected_date <= $${i}::date`)
     prefixed.push(`tc.first_connected_date <= $${i}::date`)
+    // NOT added to orderConds
   }
   if (agent.length > 0) {
     const i = push(agent)
     bare.push(`agent = ANY($${i})`)
     prefixed.push(`tc.agent = ANY($${i})`)
   }
+  if (channel.length > 0 || cmg.length > 0) {
+    // Channel filter: use sales_hoc_orders (HOC orders)
+    // CMG filter: use mart_telesales_orders.primary_cmg (covers all called mmids)
+    if (channel.length > 0) {
+      const i = push(channel)
+      bare.push(`mmid IN (SELECT DISTINCT mmid FROM sales_hoc_orders WHERE channel = ANY($${i}))`)
+      prefixed.push(`tc.mmid IN (SELECT DISTINCT mmid FROM sales_hoc_orders WHERE channel = ANY($${i}))`)
+      orderConds.push(`channel = ANY($${i})`)
+    }
+    if (cmg.length > 0) {
+      const NO_SEG    = '__no_segment__'
+      const realCmg   = cmg.filter(c => c !== NO_SEG)
+      const inclNoSeg = cmg.includes(NO_SEG)
+      // Use NOT EXISTS for better performance than NOT IN subquery
+      const noSegSql  = `NOT EXISTS (SELECT 1 FROM mart_telesales_orders WHERE mmid = telesales_calls.mmid AND primary_cmg IS NOT NULL)`
+      const noSegSqlTc = `NOT EXISTS (SELECT 1 FROM mart_telesales_orders WHERE mmid = tc.mmid AND primary_cmg IS NOT NULL)`
 
-  // Pre-computed MMID CTEs (each table scanned once, then hash-joined)
-  const filterCTEs: string[] = []
-
-  if (channel.length > 0) {
-    const i = push(channel)
-    filterCTEs.push(`ch_set AS (SELECT DISTINCT mmid FROM sales_hoc_orders WHERE channel = ANY($${i}))`)
-    bare.push(`mmid IN (SELECT mmid FROM ch_set)`)
-    prefixed.push(`tc.mmid IN (SELECT mmid FROM ch_set)`)
-    orderConds.push(`channel = ANY($${i})`)
-  }
-
-  if (cmg.length > 0) {
-    const NO_SEG    = '__no_segment__'
-    const realCmg   = cmg.filter(c => c !== NO_SEG)
-    const inclNoSeg = cmg.includes(NO_SEG)
-
-    if (realCmg.length > 0) {
-      const i = push(realCmg)
-      filterCTEs.push(`seg_set AS (SELECT DISTINCT mmid FROM mart_telesales_orders WHERE primary_cmg = ANY($${i}))`)
-      orderConds.push(`mmid IN (SELECT mmid FROM seg_set)`)
-
-      if (inclNoSeg) {
-        // noseg_set: called MMIDs with no segment — EXCEPT is O(n+m), not correlated
-        filterCTEs.push(`noseg_set AS (
-          SELECT DISTINCT mmid FROM telesales_calls
-          EXCEPT
-          SELECT DISTINCT mmid FROM mart_telesales_orders WHERE primary_cmg IS NOT NULL
-        )`)
-        bare.push(`(mmid IN (SELECT mmid FROM seg_set) OR mmid IN (SELECT mmid FROM noseg_set))`)
-        prefixed.push(`(tc.mmid IN (SELECT mmid FROM seg_set) OR tc.mmid IN (SELECT mmid FROM noseg_set))`)
-      } else {
-        bare.push(`mmid IN (SELECT mmid FROM seg_set)`)
-        prefixed.push(`tc.mmid IN (SELECT mmid FROM seg_set)`)
+      if (realCmg.length > 0) {
+        const i = push(realCmg)
+        const inSql   = `mmid IN (SELECT DISTINCT mmid FROM mart_telesales_orders WHERE primary_cmg = ANY($${i}))`
+        const inSqlTc = `tc.mmid IN (SELECT DISTINCT mmid FROM mart_telesales_orders WHERE primary_cmg = ANY($${i}))`
+        bare.push(inclNoSeg     ? `(${inSql} OR ${noSegSql})`     : inSql)
+        prefixed.push(inclNoSeg ? `(${inSqlTc} OR ${noSegSqlTc})` : inSqlTc)
+        // Conversions only counted for real segments (No Segment MMIDs have no orders)
+        orderConds.push(`mmid IN (SELECT DISTINCT mmid FROM mart_telesales_orders WHERE primary_cmg = ANY($${i}))`)
+      } else if (inclNoSeg) {
+        // Only "No Segment" — MMIDs never in mart (no orders placed)
+        bare.push(noSegSql)
+        prefixed.push(noSegSqlTc)
+        // No orderConds addition — these MMIDs have no orders so conversions = 0
       }
-    } else if (inclNoSeg) {
-      filterCTEs.push(`noseg_set AS (
-        SELECT DISTINCT mmid FROM telesales_calls
-        EXCEPT
-        SELECT DISTINCT mmid FROM mart_telesales_orders WHERE primary_cmg IS NOT NULL
-      )`)
-      bare.push(`mmid IN (SELECT mmid FROM noseg_set)`)
-      prefixed.push(`tc.mmid IN (SELECT mmid FROM noseg_set)`)
-      // No orderConds — No Segment MMIDs have no orders, conversions = 0
     }
   }
-
-  const ctePreamble = filterCTEs.length > 0 ? filterCTEs.join(',\n  ') + ',\n  ' : ''
 
   return {
     params,
     where:   'WHERE ' + bare.join(' AND '),
     whereTc: 'WHERE ' + prefixed.join(' AND '),
-    agentConvCTE: `WITH\n  ${ctePreamble}agent_conversions AS (
+    agentConvCTE: `WITH agent_conversions AS (
       SELECT DISTINCT mmid FROM sales_hoc_orders
       WHERE ${orderConds.join(' AND ')}
     )`,
