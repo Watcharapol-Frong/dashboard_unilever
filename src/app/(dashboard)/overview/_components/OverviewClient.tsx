@@ -12,7 +12,7 @@ import { PageLoading, PageEmpty } from '@/components/dashboard/PageState'
 import { MonthChipGroup } from '@/components/dashboard/MonthChipGroup'
 
 import { useDashboardSWR } from '@/hooks/useDashboardSWR'
-import { useMonthRange } from '@/hooks/useMonthRange'
+import { useMonthRange, lastDayOfMonth } from '@/hooks/useMonthRange'
 import { fmtBaht, colorAchievement, colorRoi, formatTHB } from '@/lib/formatters'
 import { type OverviewRow } from './columns'
 import {
@@ -134,18 +134,18 @@ export default function OverviewClient() {
 
   const kpi = useMemo(() => aggregate(mappedFiltered, filterChannel), [mappedFiltered, filterChannel])
 
-  // Total calls for the selected date range, ignoring CMG filter (calls can't be CMG-attributed)
-  const dateOnlyKpi = useMemo(() => {
-    const effectiveTo = rangeTo ?? (rangeFrom ? hoverMonth : null)
-    const dateRows = rows.filter(r => {
-      if (rangeFrom) {
-        if (!effectiveTo) return r.month === rangeFrom
-        if (r.month < rangeFrom || r.month > effectiveTo) return false
-      }
-      return true
-    })
-    return aggregate(dateRows, filterChannel)
-  }, [rows, rangeFrom, rangeTo, hoverMonth, filterChannel])
+  // Call stats from telesales_calls directly — accurate COUNT DISTINCT (not limited to ordered MMIDs)
+  const callsApiUrl = useMemo(() => {
+    const p = new URLSearchParams()
+    if (rangeFrom) {
+      p.set('startDate', rangeFrom)
+      p.set('endDate', lastDayOfMonth(rangeTo ?? rangeFrom))
+    }
+    if (filterCmg.length > 0) p.set('cmg', filterCmg.join(','))
+    return `/api/data/overview/calls?${p.toString()}`
+  }, [rangeFrom, rangeTo, filterCmg])
+
+  const { data: callStats } = useDashboardSWR<{ total_calls: number; converted: number }>(callsApiUrl)
 
   // ROI uses month-level data regardless of CMG filter (costs are not CMG-specific)
   const roiKpi = useMemo(() => {
@@ -270,10 +270,10 @@ export default function OverviewClient() {
         />
         <KpiCard
           title="Total Calls"
-          value={rangeFrom ? dateOnlyKpi.total_calls.toLocaleString() : allTimeCalls.toLocaleString()}
-          subtitle={`Converted: ${kpi.ordered.toLocaleString()}`}
+          value={(callStats?.total_calls ?? allTimeCalls).toLocaleString()}
+          subtitle={`Converted: ${(callStats?.converted ?? 0).toLocaleString()}`}
           icon={PhoneCall}
-          tooltip={`Unique customers called (1 per MMID). Without date filter shows all-time total.\n\nConverted count responds to both date range and segment filter — customers who placed an order within the attribution window.`}
+          tooltip="Unique customers called (1 per MMID) — from telesales_calls directly. Updates with date range filter. Converted = called MMIDs who placed a HOC order within the attribution window; responds to both date range and segment filter."
         />
         <KpiCard
           title="Program ROI"
