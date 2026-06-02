@@ -42,7 +42,7 @@ export async function GET(request: Request) {
       const NO_SEG    = '__no_segment__'
       const realCmg   = cmg.filter(c => c !== NO_SEG)
       const inclNoSeg = cmg.includes(NO_SEG)
-      const noSegSql  = `mmid NOT IN (SELECT DISTINCT mmid FROM mart_telesales_orders WHERE primary_cmg IS NOT NULL)`
+      const noSegSql  = `mmid IN (SELECT DISTINCT mmid FROM mart_telesales_orders WHERE primary_cmg IS NULL)`
 
       if (realCmg.length > 0) {
         params.push(realCmg)
@@ -56,10 +56,9 @@ export async function GET(request: Request) {
 
     const whereClause = 'WHERE ' + conditions.join(' AND ')
 
-    // mart_telesales_orders channel/cmg filter
+    // sales_hoc_orders channel filter (CMG filtering handled by call_stats)
     const orderExtraConditions: string[] = []
     if (channelParamIdx !== null) orderExtraConditions.push(`channel = ANY($${channelParamIdx})`)
-    if (cmgParamIdx !== null)     orderExtraConditions.push(`dynamic_cmg = ANY($${cmgParamIdx})`)
     const orderExtra = orderExtraConditions.length ? 'AND ' + orderExtraConditions.join(' AND ') : ''
 
     const row = await queryOne<{

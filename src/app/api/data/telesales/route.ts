@@ -53,21 +53,22 @@ function buildFilters(
       const NO_SEG    = '__no_segment__'
       const realCmg   = cmg.filter(c => c !== NO_SEG)
       const inclNoSeg = cmg.includes(NO_SEG)
-      const noSegSql  = `mmid NOT IN (SELECT DISTINCT mmid FROM mart_telesales_orders WHERE primary_cmg IS NOT NULL)`
-      const noSegSqlTc = `tc.mmid NOT IN (SELECT DISTINCT mmid FROM mart_telesales_orders WHERE primary_cmg IS NOT NULL)`
+      const noSegSql  = `mmid IN (SELECT DISTINCT mmid FROM mart_telesales_orders WHERE primary_cmg IS NULL)`
+      const noSegSqlTc = `tc.mmid IN (SELECT DISTINCT mmid FROM mart_telesales_orders WHERE primary_cmg IS NULL)`
 
       if (realCmg.length > 0) {
         const i = push(realCmg)
         const inSql   = `mmid IN (SELECT DISTINCT mmid FROM mart_telesales_orders WHERE primary_cmg = ANY($${i}))`
         const inSqlTc = `tc.mmid IN (SELECT DISTINCT mmid FROM mart_telesales_orders WHERE primary_cmg = ANY($${i}))`
+        const orderInSql = `mmid IN (SELECT DISTINCT mmid FROM mart_telesales_orders WHERE primary_cmg = ANY($${i}))`
         bare.push(inclNoSeg     ? `(${inSql} OR ${noSegSql})`     : inSql)
         prefixed.push(inclNoSeg ? `(${inSqlTc} OR ${noSegSqlTc})` : inSqlTc)
-        orderConds.push(`dynamic_cmg = ANY($${i})`)
+        orderConds.push(inclNoSeg ? `(${orderInSql} OR ${noSegSql})` : orderInSql)
       } else if (inclNoSeg) {
-        // Only "No Segment" — MMIDs with no HOC orders at all
+        // Only "No Segment" — MMIDs with orders but no segment assigned (primary_cmg IS NULL)
         bare.push(noSegSql)
         prefixed.push(noSegSqlTc)
-        // orderConds unchanged — these MMIDs have no orders so conversions = 0
+        orderConds.push(noSegSql)
       }
     }
   }
