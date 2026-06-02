@@ -48,12 +48,12 @@ function Note({ children }: { children: React.ReactNode }) {
 
 function TemplateDownload({ fileKey, label }: { fileKey: string; label: string }) {
   return (
-    <a href={`/api/data/template/${fileKey}`} download>
-      <Button variant="outline" size="sm" className="h-7 gap-1.5 text-xs mt-1 mb-3">
+    <Button variant="outline" size="sm" className="h-7 gap-1.5 text-xs mt-1 mb-3" asChild>
+      <a href={`/api/data/template/${fileKey}`} download>
         <Download className="h-3 w-3" />
         Download {label} template (.xlsx)
-      </Button>
-    </a>
+      </a>
+    </Button>
   )
 }
 

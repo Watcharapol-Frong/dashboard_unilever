@@ -41,7 +41,7 @@ export function NavSecondary({
               return (
                 <SidebarMenuItem key={item.title}>
                   {isHelp ? (
-                    <SidebarMenuButton tooltip={item.title} onClick={() => setHelpOpen(true)}>
+                    <SidebarMenuButton type="button" tooltip={item.title} onClick={() => setHelpOpen(true)}>
                       <IconHelp />
                       <span>{item.title}</span>
                     </SidebarMenuButton>
