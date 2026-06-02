@@ -162,7 +162,7 @@ export default function ExportsClient() {
         <div>
           <p className="text-sm font-medium">Desktop only</p>
           <p className="text-xs text-muted-foreground mt-1">
-            หน้า Exports ต้องใช้บน Desktop เท่านั้น
+            This page is only available on desktop.
           </p>
         </div>
       </div>
@@ -240,7 +240,7 @@ export default function ExportsClient() {
             ) : (
               <Select value={filterCmg} onValueChange={setFilterCmg}>
                 <SelectTrigger className="h-8 w-36 text-xs">
-                  <SelectValue placeholder="All CMGs" />
+                  <SelectValue placeholder="All Segments" />
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="all">All CMGs</SelectItem>
@@ -272,9 +272,9 @@ export default function ExportsClient() {
                 <SelectContent>
                   <SelectItem value="all">All types</SelectItem>
                   <SelectItem value="new_customer">New Customer</SelectItem>
-                  <SelectItem value="retention">Retention</SelectItem>
+                  <SelectItem value="retention">Repeat</SelectItem>
                   <SelectItem value="first_order_not_converted">First Order (Not Conv.)</SelectItem>
-                  <SelectItem value="retention_not_converted">Retention (Not Conv.)</SelectItem>
+                  <SelectItem value="retention_not_converted">Repeat (Not Conv.)</SelectItem>
                 </SelectContent>
               </Select>
             )}

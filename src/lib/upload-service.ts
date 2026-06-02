@@ -1,10 +1,10 @@
 import Papa from 'papaparse'
 import { query, queryOne } from '@/lib/db'
-import { uploadToR2, downloadFromR2, deleteFromR2, listR2Folder } from '@/lib/storage/r2'
-import { FILE_TYPE_CONFIGS, generateStoragePath, validateHeaders } from '@/lib/upload/config'
-import { transformRows } from '@/lib/upload/etl'
-import { encrypt } from '@/lib/utils/crypto'
-import type { UploadFileType } from '@/lib/upload/config'
+import { uploadToR2, downloadFromR2, deleteFromR2, listR2Folder } from '@/lib/r2'
+import { FILE_TYPE_CONFIGS, generateStoragePath, validateHeaders } from '@/lib/upload-config'
+import { transformRows } from '@/lib/etl'
+import { encrypt } from '@/lib/crypto'
+import type { UploadFileType } from '@/lib/upload-config'
 
 const CHUNK = 500
 

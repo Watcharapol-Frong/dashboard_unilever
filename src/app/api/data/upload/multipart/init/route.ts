@@ -1,9 +1,9 @@
 import { NextResponse } from 'next/server'
 import { CreateMultipartUploadCommand, UploadPartCommand } from '@aws-sdk/client-s3'
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner'
-import { r2, R2_BUCKET } from '@/lib/storage/r2'
-import { FILE_TYPE_CONFIGS } from '@/lib/upload/config'
-import type { UploadFileType } from '@/lib/upload/config'
+import { r2, R2_BUCKET } from '@/lib/r2'
+import { FILE_TYPE_CONFIGS } from '@/lib/upload-config'
+import type { UploadFileType } from '@/lib/upload-config'
 import { randomUUID } from 'crypto'
 
 const PART_SIZE = 10 * 1024 * 1024      // 10MB per part

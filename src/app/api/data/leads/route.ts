@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { withAdmin } from '@/lib/auth'
 import { query } from '@/lib/db'
+import { setCacheHeader } from '@/lib/query'
 
 export const dynamic = 'force-dynamic'
 
@@ -26,8 +27,8 @@ export async function GET(req: NextRequest) {
     if (tier.length > 0)    { params.push(tier);    conditions.push(`l.lead_customers = ANY($${params.length})`) }
     if (contact.length > 0) { params.push(contact); conditions.push(`COALESCE(cs.contact_status,'not_called') = ANY($${params.length})`) }
     if (conv.length > 0)    { params.push(conv);    conditions.push(`CASE WHEN os.is_converted THEN 'converted' WHEN os.mmid IS NOT NULL THEN 'not_converted' ELSE 'no_hoc_order' END = ANY($${params.length})`) }
-    if (cmg.length > 0)     { params.push(cmg);     conditions.push(`os.dynamic_cmg = ANY($${params.length})`) }
-    if (agent.length > 0)   { params.push(agent);   conditions.push(`cs.agent = ANY($${params.length})`) }
+    if (cmg.length > 0)     { params.push(cmg);     conditions.push(`l.mmid IN (SELECT mmid FROM sales_hoc_orders WHERE dynamic_cmg = ANY($${params.length}))`) }
+    if (agent.length > 0)   { params.push(agent);   conditions.push(`l.mmid IN (SELECT mmid FROM telesales_calls WHERE agent = ANY($${params.length}) AND first_connected_date IS NOT NULL)`) }
     if (search)  { params.push(`%${search}%`); conditions.push(`(l.mmid ILIKE $${params.length} OR COALESCE(l.cust_name,'') ILIKE $${params.length})`) }
 
     const whereClause = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : ''
@@ -51,6 +52,7 @@ export async function GET(req: NextRequest) {
         SELECT mmid,
           CASE
             WHEN COUNT(*) FILTER (
+              -- Thai DB values: no-answer variants / phone off or unreachable
               WHERE call_status NOT LIKE 'ไม่รับสาย%'
                 AND call_status IS DISTINCT FROM 'ปิดเครื่อง/ติดต่อไม่ได้'
             ) > 0 THEN 'reached'
@@ -67,7 +69,7 @@ export async function GET(req: NextRequest) {
           COALESCE(SUM(sales_in_vat)   FILTER (WHERE customer_type IN ('new_customer','retention')), 0) AS hoc_sales,
           BOOL_OR(customer_type IN ('new_customer','retention')) AS is_converted,
           MAX(dynamic_cmg) AS dynamic_cmg
-        FROM mart_telesales_orders
+        FROM sales_hoc_orders
         GROUP BY mmid
       ),
       base AS (
@@ -110,7 +112,7 @@ export async function GET(req: NextRequest) {
     }))
 
     const res = NextResponse.json({ ok: true, data, total, page, limit })
-    res.headers.set('Cache-Control', 'public, s-maxage=60, stale-while-revalidate=120')
+    setCacheHeader(res, 'SHORT')
     return res
   })
 }

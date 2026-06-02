@@ -123,12 +123,14 @@ export default function LeadsClient() {
           value={kpi.total.toLocaleString()}
           subtitle="Assigned telesales leads"
           icon={Users}
+          tooltip="Total number of MMIDs assigned to the telesales team as leads."
         />
         <KpiCard
           title="Contacted"
           value={kpi.contacted.toLocaleString()}
           subtitle={fmtPct(kpi.contacted, kpi.total)}
           icon={PhoneCall}
+          tooltip="MMIDs that have been called at least once — includes both Reached and Called Not Reached."
         />
         <KpiCard
           title="Conversion"
@@ -136,6 +138,7 @@ export default function LeadsClient() {
           subtitle={fmtPct(kpi.converted, kpi.total)}
           valueClassName="text-blue-600"
           icon={Award}
+          tooltip="Unique MMIDs with at least one HOC order (new_customer or retention)."
         />
         <KpiCard
           title="Orders"
@@ -143,6 +146,7 @@ export default function LeadsClient() {
           subtitle={kpi.converted > 0 ? `avg ${(kpi.orders / kpi.converted).toFixed(1)}x / person` : undefined}
           valueClassName="text-green-600"
           icon={ShoppingBag}
+          tooltip="Total HOC orders placed by converted MMIDs only. Non-converted leads are excluded."
         />
       </KpiGrid>
 
@@ -184,7 +188,7 @@ export default function LeadsClient() {
               ]}
             />
             <MultiSelect
-              label="All CMG"
+              label="All Segments"
               value={filterCmg}
               onChange={setFilterCmg}
               options={cmgs.map(v => ({ value: v, label: v }))}
@@ -206,6 +210,10 @@ export default function LeadsClient() {
           key={pageUrl}
           columns={leadsColumns}
           data={rows}
+          searchValue={search}
+          onSearchChange={(v) => { setSearch(v); setPage(1) }}
+          searchPlaceholder="Search MMID or name..."
+          defaultPageSize={20}
         />
       </div>
 

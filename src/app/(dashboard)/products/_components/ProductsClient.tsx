@@ -1,10 +1,13 @@
 'use client'
 
-import { useEffect, useMemo, useState } from 'react'
+import { useMemo, useState } from 'react'
 import { useDashboardSWR } from '@/hooks/useDashboardSWR'
+import { useMonthRange, lastDayOfMonth } from '@/hooks/useMonthRange'
+import { MonthChipGroup } from '@/components/dashboard/MonthChipGroup'
+import { useBuild } from '@/context/BuildContext'
 import {
-  LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend,
-  ResponsiveContainer,
+  LineChart, Line, XAxis, YAxis, CartesianGrid, Legend,
+  ResponsiveContainer, Tooltip,
 } from 'recharts'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
@@ -13,9 +16,7 @@ import { KpiCard } from '@/components/dashboard/KpiCard'
 import { KpiGrid } from '@/components/dashboard/KpiGrid'
 import { DataTable } from '@/components/ui/data-table'
 import { PageLoading, PageEmpty } from '@/components/dashboard/PageState'
-import { useBuild } from '@/context/BuildContext'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
-import { CHART_AXIS_CLS, CHART_TOOLTIP_STYLE } from '@/lib/chart-utils'
 import { formatTHB, formatNumber, formatPct, fmtBaht } from '@/lib/formatters'
 import { columns as baseProductColumns } from '../columns'
 import { Package, ShoppingCart, TrendingUp, BarChart2, Calendar, UserPlus, Users } from 'lucide-react'
@@ -79,11 +80,6 @@ interface ProductData {
 
 const BRAND_COLORS = ['#003DA6', '#EE2737', '#10b981', '#f59e0b', '#8b5cf6']
 
-function lastDayOfMonth(isoDate: string) {
-  const [y, m] = isoDate.split('-').map(Number)
-  return new Date(y, m, 0).toISOString().split('T')[0]
-}
-
 function getSegment(p: { new_customers: number; retention_customers: number }): 'hook_new' | 'pull_old' | 'mixed' | 'no_data' {
   const total = p.new_customers + p.retention_customers
   if (total === 0) return 'no_data'
@@ -128,7 +124,7 @@ const newVsRetentionColumns: ColumnDef<ExtProductRow>[] = [
   {
     accessorKey: 'retention_customers',
     header: ({ column }) => (
-      <DataTableColumnHeader column={column} title="Retention" className="justify-end" />
+      <DataTableColumnHeader column={column} title="Repeat" className="justify-end" />
     ),
     cell: ({ row }) => (
       <div className="text-right font-semibold text-teal-600">
@@ -167,7 +163,7 @@ const newVsRetentionColumns: ColumnDef<ExtProductRow>[] = [
       )
       if (seg === 'pull_old') return (
         <span className="inline-flex items-center gap-1 text-xs font-semibold text-teal-600">
-          <Users className="h-3 w-3" /> Retention Driver
+          <Users className="h-3 w-3" /> Repeat Driver
         </span>
       )
       return <span className="text-xs text-muted-foreground font-medium">Mixed</span>
@@ -259,9 +255,10 @@ export default function ProductsClient() {
   const opts = optsData ?? EMPTY_OPTS
 
   // Date range
-  const [rangeFrom,  setRangeFrom]  = useState<string | null>(null)
-  const [rangeTo,    setRangeTo]    = useState<string | null>(null)
-  const [hoverMonth, setHoverMonth] = useState<string | null>(null)
+  const {
+    rangeFrom, rangeTo, hoverMonth, setHoverMonth,
+    handleChipClick, clearRange, activeRangeLabel,
+  } = useMonthRange()
 
   // Dimension filters
   const [filterBrands,      setFilterBrands]      = useState<string[]>([])
@@ -272,18 +269,6 @@ export default function ProductsClient() {
   const [filterSegment,     setFilterSegment]     = useState('all')
   const [prodSearch,        setProdSearch]        = useState('')
   const [activeTab,         setActiveTab]         = useState('products')
-
-  const handleChipClick = (m: string) => {
-    if (!rangeFrom || (rangeFrom && rangeTo)) {
-      setRangeFrom(m); setRangeTo(null)
-    } else if (m === rangeFrom) {
-      setRangeFrom(null); setRangeTo(null)
-    } else if (m < rangeFrom) {
-      setRangeFrom(m); setRangeTo(rangeFrom)
-    } else {
-      setRangeTo(m)
-    }
-  }
 
   // Build API URL from current filter state
   const apiUrl = useMemo(() => {
@@ -297,35 +282,13 @@ export default function ProductsClient() {
       p.set('startDate', rangeFrom)
       p.set('endDate',   lastDayOfMonth(rangeTo ?? rangeFrom))
     }
+    // Include buildVersion so mart rebuild triggers a fresh fetch
+    if (buildVersion) p.set('_v', String(buildVersion))
     const qs = p.toString()
     return `/api/data/products${qs ? `?${qs}` : ''}`
-  }, [filterBrands, filterClass, filterSeniorBuyer, filterBuyer, filterSubclass, rangeFrom, rangeTo])
+  }, [filterBrands, filterClass, filterSeniorBuyer, filterBuyer, filterSubclass, rangeFrom, rangeTo, buildVersion])
 
-  // useEffect fetch — re-runs whenever apiUrl changes; keeps previous data on error
-  const [data,      setData]      = useState<ProductData | null>(null)
-  const [isLoading, setIsLoading] = useState(true)
-  const [fetchErr,  setFetchErr]  = useState<string | null>(null)
-
-  useEffect(() => {
-    let cancelled = false
-    setIsLoading(true)
-    setFetchErr(null)
-    fetch(apiUrl)
-      .then(r => r.json())
-      .then((j: { ok: boolean; data?: ProductData; error?: string }) => {
-        if (!cancelled) {
-          if (j.ok && j.data) setData(j.data)
-          else setFetchErr(j.error ?? 'Unknown error')
-        }
-      })
-      .catch((err: Error) => {
-        if (!cancelled) setFetchErr(err.message)
-      })
-      .finally(() => {
-        if (!cancelled) setIsLoading(false)
-      })
-    return () => { cancelled = true }
-  }, [apiUrl, buildVersion])
+  const { data, isLoading, isValidating, error } = useDashboardSWR<ProductData>(apiUrl)
 
   const hasFilter = filterBrands.length > 0 || filterClass.length > 0 ||
     filterSeniorBuyer.length > 0 || filterBuyer.length > 0 || filterSubclass.length > 0
@@ -334,7 +297,7 @@ export default function ProductsClient() {
   const clearAll = () => {
     setFilterBrands([]); setFilterClass([])
     setFilterSeniorBuyer([]); setFilterBuyer([]); setFilterSubclass([])
-    setRangeFrom(null); setRangeTo(null)
+    clearRange()
   }
 
   const filteredProducts = useMemo(() => {
@@ -354,21 +317,13 @@ export default function ProductsClient() {
   }, [filteredProducts, filterSegment])
 
   if (isLoading && !data) return <PageLoading />
-  if (!data) {
+  if (!data || data.months.length === 0) {
     return <PageEmpty message="No product sales data available" hint="Please build mart first." />
   }
 
   const top5      = data.top5_brands
   const trendData = data.by_brand_trend
-  const months    = opts.months
-
-  const activeRangeLabel = (() => {
-    if (!rangeFrom) return 'All available periods'
-    const fromLabel = new Date(rangeFrom).toLocaleDateString('en-GB', { month: 'short', year: 'numeric' })
-    if (!rangeTo) return `Month: ${fromLabel}`
-    const toLabel = new Date(rangeTo).toLocaleDateString('en-GB', { month: 'short', year: 'numeric' })
-    return `${fromLabel} – ${toLabel}`
-  })()
+  const months    = opts.months.length > 0 ? opts.months : data.months
 
   return (
     <div className="space-y-6">
@@ -378,38 +333,24 @@ export default function ProductsClient() {
         <CardHeader className="pb-3">
           <div className="flex items-center gap-2">
             <Calendar className="h-4 w-4 text-[#003DA6]" />
-            <CardTitle className="text-sm font-medium">Filter & Range Selection</CardTitle>
+            <CardTitle className="text-sm font-medium flex items-center gap-2">
+            Filter & Range Selection
+            {isValidating && !isLoading && <span className="text-xs font-normal text-muted-foreground animate-pulse">Updating…</span>}
+          </CardTitle>
           </div>
         </CardHeader>
         <CardContent>
           <div className="flex flex-wrap items-center gap-4">
             {/* Month chips */}
-            <div className="flex items-center gap-1.5 flex-wrap">
-              {months.map(m => {
-                const effectiveTo = rangeTo ?? (rangeFrom ? hoverMonth : null)
-                const active   = m === rangeFrom || m === rangeTo
-                const inRange  = !!(rangeFrom && effectiveTo && m > rangeFrom && m < effectiveTo)
-                const preview  = !!(!rangeTo && rangeFrom && hoverMonth && m > rangeFrom && m <= hoverMonth)
-                return (
-                  <button
-                    key={m}
-                    onClick={() => handleChipClick(m)}
-                    onMouseEnter={() => setHoverMonth(m)}
-                    onMouseLeave={() => setHoverMonth(null)}
-                    className={[
-                      'px-3.5 py-1.5 rounded-full text-xs font-semibold transition-all select-none border',
-                      active
-                        ? 'bg-[#003DA6] text-white border-[#003DA6] shadow-sm'
-                        : inRange || preview
-                        ? 'bg-[#003DA6]/10 text-[#003DA6] border-[#003DA6]/20'
-                        : 'bg-background text-muted-foreground border-gray-200 hover:bg-gray-50 hover:text-foreground',
-                    ].join(' ')}
-                  >
-                    {new Date(m).toLocaleDateString('en-GB', { month: 'short', year: '2-digit' })}
-                  </button>
-                )
-              })}
-            </div>
+            <MonthChipGroup
+              months={months}
+              rangeFrom={rangeFrom}
+              rangeTo={rangeTo}
+              hoverMonth={hoverMonth}
+              onChipClick={handleChipClick}
+              onMouseEnter={setHoverMonth}
+              onMouseLeave={() => setHoverMonth(null)}
+            />
 
             <div className="w-px h-6 bg-border hidden lg:block" />
 
@@ -457,13 +398,14 @@ export default function ProductsClient() {
             )}
           </div>
 
-          {rangeFrom && (
-            <p className="text-xs text-muted-foreground mt-3">
-              Selected range: <span className="font-semibold text-foreground">{activeRangeLabel}</span>
-            </p>
-          )}
-          {fetchErr && (
-            <p className="text-xs text-red-500 mt-2">Failed to load filtered data: {fetchErr}</p>
+          <p className="text-xs text-muted-foreground mt-3">
+            {rangeFrom
+              ? <>Showing: <span className="font-medium text-foreground">{activeRangeLabel}</span></>
+              : <>Showing: <span className="font-medium text-foreground">all available periods</span> — select month chips to filter by period</>
+            }
+          </p>
+          {error && (
+            <p className="text-xs text-red-500 mt-2">Failed to load data: {String(error)}</p>
           )}
         </CardContent>
       </Card>
@@ -471,13 +413,17 @@ export default function ProductsClient() {
       {/* ── KPI Cards ─────────────────────────────────────────────────────── */}
       <KpiGrid cols={4}>
         <KpiCard title="Total Telesales Revenue" value={fmtBaht(data.total_sales)}
-          subtitle={`${formatNumber(data.total_orders)} orders total`} icon={TrendingUp} />
+          subtitle={`${formatNumber(data.total_orders)} orders total`} icon={TrendingUp}
+          tooltip="Total HOC Unilever revenue across all products for the selected filters. Includes both converted and not-converted orders." />
         <KpiCard title="Avg Order Value" value={fmtBaht(data.avg_order_value)}
-          subtitle="Per telesales order" icon={ShoppingCart} />
+          subtitle="Per telesales order" icon={ShoppingCart}
+          tooltip="Total Revenue ÷ Total Orders. Reflects average basket value per transaction for the selected period." />
         <KpiCard title="Total Qty Sold" value={formatNumber(data.total_qty)}
-          subtitle="Units across all SKUs" icon={BarChart2} />
+          subtitle="Units across all SKUs" icon={BarChart2}
+          tooltip="Total unit quantity sold across all HOC Unilever SKUs in the selected period. Useful for comparing product velocity." />
         <KpiCard title="Active SKUs" value={formatNumber(data.total_skus)}
-          subtitle="Distinct products with sales" icon={Package} />
+          subtitle="Distinct products with sales" icon={Package}
+          tooltip="Number of distinct product SKUs that had at least one sale in the selected period and filters." />
       </KpiGrid>
 
       {/* ── Brand Revenue Trend ───────────────────────────────────────────── */}
@@ -492,13 +438,27 @@ export default function ProductsClient() {
           <ResponsiveContainer width="100%" height={300}>
             <LineChart data={trendData} margin={{ top: 10, right: 10, left: 10, bottom: 0 }}>
               <CartesianGrid strokeDasharray="3 3" vertical={false} className="stroke-muted" />
-              <XAxis dataKey="month_label" tickLine={false} axisLine={false} tickMargin={8} className={CHART_AXIS_CLS} />
-              <YAxis tickLine={false} axisLine={false} tickMargin={8} className={CHART_AXIS_CLS}
+              <XAxis dataKey="month_label" tickLine={false} axisLine={false} tickMargin={8} fontSize={11} />
+              <YAxis tickLine={false} axisLine={false} tickMargin={8} fontSize={11}
                 tickFormatter={v => `฿${(v / 1000).toFixed(0)}k`} width={60} />
               <Tooltip
-                contentStyle={CHART_TOOLTIP_STYLE}
-                labelClassName="text-xs font-bold"
-                formatter={(value: any, name: string) => [formatTHB(Number(value)), name]}
+                content={({ active, payload, label }) => {
+                  if (!active || !payload?.length) return null
+                  return (
+                    <div className="rounded-lg border border-border/50 bg-background p-3 text-xs shadow-xl space-y-1.5 min-w-[12rem]">
+                      <div className="font-semibold text-muted-foreground text-[10px] uppercase tracking-wider">{label}</div>
+                      {payload.map((p: any) => (
+                        <div key={p.dataKey} className="flex items-center justify-between gap-4">
+                          <div className="flex items-center gap-1.5 text-muted-foreground">
+                            <span className="h-2 w-2 rounded-full" style={{ backgroundColor: p.color }} />
+                            <span>{p.name}</span>
+                          </div>
+                          <span className="font-semibold tabular-nums text-foreground">{formatTHB(Number(p.value))}</span>
+                        </div>
+                      ))}
+                    </div>
+                  )
+                }}
               />
               <Legend wrapperStyle={{ fontSize: '11px', paddingTop: '8px' }} />
               {top5.filter(b => b !== 'Other').map((brand, i) => (
@@ -535,7 +495,7 @@ export default function ProductsClient() {
           <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-4">
             <TabsList>
               <TabsTrigger value="products">Top SKUs</TabsTrigger>
-              <TabsTrigger value="new_vs_retention">New vs Retention</TabsTrigger>
+              <TabsTrigger value="new_vs_retention">New vs Repeat</TabsTrigger>
               <TabsTrigger value="brands">By Brand</TabsTrigger>
             </TabsList>
 
@@ -559,7 +519,7 @@ export default function ProductsClient() {
                 </div>
                 <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
                   <Users className="h-3.5 w-3.5 text-teal-600" />
-                  <span><span className="font-semibold text-teal-600">Retention Driver</span> — retention ≥ 70%</span>
+                  <span><span className="font-semibold text-teal-600">Repeat Driver</span> — repeat ≥ 70%</span>
                 </div>
                 <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
                   <span className="font-semibold text-muted-foreground">Mixed</span>
@@ -580,7 +540,7 @@ export default function ProductsClient() {
                     <SelectContent>
                       <SelectItem value="all">All Segments</SelectItem>
                       <SelectItem value="hook_new">New Customer Driver</SelectItem>
-                      <SelectItem value="pull_old">Retention Driver</SelectItem>
+                      <SelectItem value="pull_old">Repeat Driver</SelectItem>
                       <SelectItem value="mixed">Mixed</SelectItem>
                     </SelectContent>
                   </Select>

@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { withAdmin } from '@/lib/auth'
 import { query, queryOne } from '@/lib/db'
+import { setCacheHeader } from '@/lib/query'
 
 export const dynamic = 'force-dynamic'
 
@@ -17,6 +18,7 @@ export async function GET() {
           SELECT mmid,
             CASE
               WHEN COUNT(*) FILTER (
+                -- Thai DB values: no-answer variants / phone off or unreachable
                 WHERE call_status NOT LIKE 'ไม่รับสาย%'
                   AND call_status IS DISTINCT FROM 'ปิดเครื่อง/ติดต่อไม่ได้'
               ) > 0 THEN 'reached'
@@ -30,14 +32,14 @@ export async function GET() {
           SELECT mmid,
             COUNT(DISTINCT order_number) FILTER (WHERE customer_type IN ('new_customer','retention')) AS hoc_orders,
             BOOL_OR(customer_type IN ('new_customer','retention')) AS is_converted
-          FROM mart_telesales_orders
+          FROM sales_hoc_orders
           GROUP BY mmid
         )
         SELECT
-          COUNT(*)                                                                     AS total,
-          COUNT(*) FILTER (WHERE COALESCE(cs.contact_status,'not_called') != 'not_called') AS contacted,
-          COUNT(*) FILTER (WHERE os.is_converted)                                    AS converted,
-          COALESCE(SUM(COALESCE(os.hoc_orders, 0)), 0)                              AS total_orders
+          COUNT(*)                                                                          AS total,
+          COUNT(*) FILTER (WHERE cs.contact_status IS NOT NULL)                           AS contacted,
+          COUNT(*) FILTER (WHERE os.is_converted)                                         AS converted,
+          COALESCE(SUM(os.hoc_orders) FILTER (WHERE os.is_converted), 0)                 AS total_orders
         FROM leads l
         LEFT JOIN cs ON cs.mmid = l.mmid
         LEFT JOIN os ON os.mmid = l.mmid
@@ -48,7 +50,7 @@ export async function GET() {
       ),
 
       query<{ dynamic_cmg: string }>(
-        `SELECT DISTINCT dynamic_cmg FROM mart_telesales_orders WHERE dynamic_cmg IS NOT NULL ORDER BY dynamic_cmg`
+        `SELECT DISTINCT dynamic_cmg FROM sales_hoc_orders WHERE dynamic_cmg IS NOT NULL ORDER BY dynamic_cmg`
       ),
 
       query<{ agent: string }>(
@@ -70,7 +72,7 @@ export async function GET() {
         agents: agents.map(r => r.agent),
       },
     })
-    res.headers.set('Cache-Control', 'public, s-maxage=300, stale-while-revalidate=600')
+    setCacheHeader(res, 'MEDIUM')
     return res
   })
 }

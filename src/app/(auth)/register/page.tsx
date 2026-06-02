@@ -19,7 +19,8 @@ export default function RegisterPage() {
     }
   }, [isAuthLoaded, isSignedIn, router])
 
-  const [name,       setName]       = useState('')
+  const [firstName,  setFirstName]  = useState('')
+  const [lastName,   setLastName]   = useState('')
   const [email,      setEmail]      = useState('')
   const [inviteCode, setInviteCode] = useState('')
   const [error,      setError]      = useState('')
@@ -33,7 +34,7 @@ export default function RegisterPage() {
       const res  = await fetch('/api/auth/register', {
         method:  'POST',
         headers: { 'Content-Type': 'application/json' },
-        body:    JSON.stringify({ name, email, inviteCode }),
+        body:    JSON.stringify({ firstName, lastName, email, inviteCode }),
       })
       const data = await res.json()
       if (!res.ok) { setError(data.error ?? 'Registration failed'); return }
@@ -69,16 +70,30 @@ export default function RegisterPage() {
                 <p className="text-sm text-destructive text-center">{error}</p>
               )}
 
-              <Field>
-                <FieldLabel htmlFor="name">Name</FieldLabel>
-                <Input
-                  id="name"
-                  type="text"
-                  value={name}
-                  onChange={e => setName(e.target.value)}
-                  placeholder="Your full name"
-                />
-              </Field>
+              <div className="grid grid-cols-2 gap-3">
+                <Field>
+                  <FieldLabel htmlFor="first-name">First name</FieldLabel>
+                  <Input
+                    id="first-name"
+                    type="text"
+                    value={firstName}
+                    onChange={e => setFirstName(e.target.value)}
+                    placeholder="First"
+                    autoComplete="given-name"
+                  />
+                </Field>
+                <Field>
+                  <FieldLabel htmlFor="last-name">Last name</FieldLabel>
+                  <Input
+                    id="last-name"
+                    type="text"
+                    value={lastName}
+                    onChange={e => setLastName(e.target.value)}
+                    placeholder="Last"
+                    autoComplete="family-name"
+                  />
+                </Field>
+              </div>
 
               <Field>
                 <FieldLabel htmlFor="email">
@@ -91,6 +106,7 @@ export default function RegisterPage() {
                   value={email}
                   onChange={e => setEmail(e.target.value)}
                   placeholder="you@example.com"
+                  autoComplete="email"
                 />
               </Field>
 

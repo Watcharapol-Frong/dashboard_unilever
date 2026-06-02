@@ -15,6 +15,7 @@ import {
   SidebarMenuSub,
   SidebarMenuSubButton,
   SidebarMenuSubItem,
+  useSidebar,
 } from "@/components/ui/sidebar"
 
 type LucideIcon = ComponentType<{ className?: string }>
@@ -29,10 +30,20 @@ interface NavItem {
 function NavGroup({ item, pathname }: { item: NavItem; pathname: string }) {
   const hasActive = item.items?.some(sub => pathname === sub.url) ?? false
   const [open, setOpen] = useState(hasActive)
+  const { state, setOpen: setSidebarOpen } = useSidebar()
+
+  function handleClick() {
+    if (state === 'collapsed') {
+      setSidebarOpen(true)
+      setOpen(true)
+    } else {
+      setOpen(o => !o)
+    }
+  }
 
   return (
     <SidebarMenuItem>
-      <SidebarMenuButton tooltip={item.title} onClick={() => setOpen(o => !o)}>
+      <SidebarMenuButton tooltip={item.title} onClick={handleClick}>
         {item.icon && <item.icon />}
         <span>{item.title}</span>
         <ChevronRightIcon

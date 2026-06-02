@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { withAuth } from '@/lib/auth'
 import { query, queryOne } from '@/lib/db'
+import { push as qpush, addDateRange, addFilter, setCacheHeader } from '@/lib/query'
 
 export const dynamic = 'force-dynamic'
 
@@ -16,13 +17,16 @@ function buildProductWhere(
   const conditions: string[] = []
   const params: any[] = []
 
-  if (startDate) { params.push(startDate); conditions.push(`m.order_date >= $${params.length}::date`) }
-  if (endDate)   { params.push(endDate);   conditions.push(`m.order_date <= $${params.length}::date`) }
-  if (brands.length > 0)      { params.push(brands);      conditions.push(`p.brands = ANY($${params.length})`) }
-  if (className.length > 0)   { params.push(className);   conditions.push(`p.class_name = ANY($${params.length})`) }
-  if (seniorBuyer.length > 0) { params.push(seniorBuyer); conditions.push(`p.senior_buyer_name = ANY($${params.length})`) }
-  if (buyer.length > 0)       { params.push(buyer);       conditions.push(`p.buyer_name = ANY($${params.length})`) }
-  if (subclass.length > 0)    { params.push(subclass);    conditions.push(`p.subclass = ANY($${params.length})`) }
+  addDateRange(params, conditions, startDate, endDate, 'm.order_date')
+  addFilter(params, conditions, brands, 'm.brands')
+  addFilter(params, conditions, className, 'm.class_name')
+  if (seniorBuyer.length > 0) {
+    conditions.push(`m.prod_num IN (SELECT prod_num FROM products WHERE senior_buyer_name = ANY(${qpush(params, seniorBuyer)}))`)
+  }
+  if (buyer.length > 0) {
+    conditions.push(`m.prod_num IN (SELECT prod_num FROM products WHERE buyer_name = ANY(${qpush(params, buyer)}))`)
+  }
+  addFilter(params, conditions, subclass, 'm.subclass')
 
   return { where: conditions.length ? 'AND ' + conditions.join(' AND ') : '', params }
 }
@@ -42,7 +46,7 @@ export async function GET(request: Request) {
       brands, className, seniorBuyer, buyer, subclass, startDate, endDate,
     )
 
-    const [kpiRow, productRows, brandRows, brandTrendRows] = await Promise.all([
+    const [kpiRow, productRows, brandRows, monthsRaw, brandTrendRows] = await Promise.all([
       // ── KPI totals ───────────────────────────────────────────────────────
       queryOne<{
         total_sales: string
@@ -55,7 +59,7 @@ export async function GET(request: Request) {
           COALESCE(SUM(m.sales_qty), 0)::text         AS total_qty,
           COUNT(DISTINCT m.prod_num)::text            AS total_skus,
           COUNT(DISTINCT m.order_number)::text        AS total_orders
-        FROM mart_telesales_orders m
+        FROM sales_hoc_orders m
         LEFT JOIN products p ON m.prod_num = p.prod_num
         WHERE true ${extraWhere}
       `, filterParams),
@@ -77,22 +81,22 @@ export async function GET(request: Request) {
       }>(`
         SELECT
           m.prod_num,
-          p.brands,
-          p.product_name_th,
-          p.product_name_en,
-          p.class_name,
-          p.subclass,
+          m.brands,
+          m.product_name_th,
+          m.product_name_en,
+          m.class_name,
+          m.subclass,
           p.senior_buyer_name,
           p.buyer_name,
           SUM(m.sales_qty)::text                                                            AS total_qty,
           SUM(m.sales_in_vat)::text                                                        AS total_sales,
           COUNT(DISTINCT m.mmid) FILTER (WHERE m.customer_type = 'new_customer')::text     AS new_customers,
           COUNT(DISTINCT m.mmid) FILTER (WHERE m.customer_type = 'retention')::text        AS retention_customers
-        FROM mart_telesales_orders m
+        FROM sales_hoc_orders m
         LEFT JOIN products p ON m.prod_num = p.prod_num
         WHERE true ${extraWhere}
-        GROUP BY m.prod_num, p.brands, p.product_name_th, p.product_name_en,
-                 p.class_name, p.subclass, p.senior_buyer_name, p.buyer_name
+        GROUP BY m.prod_num, m.brands, m.product_name_th, m.product_name_en,
+                 m.class_name, m.subclass, p.senior_buyer_name, p.buyer_name
         ORDER BY SUM(m.sales_in_vat) DESC
       `, filterParams),
 
@@ -106,18 +110,22 @@ export async function GET(request: Request) {
         product_count: string
       }>(`
         SELECT
-          COALESCE(p.brands, 'Unknown')                                                   AS brands,
-          SUM(m.sales_in_vat)::text                                                       AS total_sales,
+          COALESCE(m.brands, 'Unknown')                                                    AS brands,
+          SUM(m.sales_in_vat)::text                                                        AS total_sales,
           COALESCE(SUM(CASE WHEN m.channel = 'online'  THEN m.sales_in_vat END), 0)::text AS online_sales,
           COALESCE(SUM(CASE WHEN m.channel = 'offline' THEN m.sales_in_vat END), 0)::text AS offline_sales,
-          SUM(m.sales_qty)::text                                                           AS total_qty,
-          COUNT(DISTINCT m.prod_num)::text                                                 AS product_count
-        FROM mart_telesales_orders m
-        LEFT JOIN products p ON m.prod_num = p.prod_num
+          SUM(m.sales_qty)::text                                                            AS total_qty,
+          COUNT(DISTINCT m.prod_num)::text                                                  AS product_count
+        FROM sales_hoc_orders m
         WHERE true ${extraWhere}
-        GROUP BY COALESCE(p.brands, 'Unknown')
+        GROUP BY COALESCE(m.brands, 'Unknown')
         ORDER BY SUM(m.sales_in_vat) DESC
       `, filterParams),
+
+      // ── Available months (unfiltered, for range chips) ──────────────────
+      query<{ month: string }>(`
+        SELECT DISTINCT month::text AS month FROM sales_hoc_orders ORDER BY month
+      `),
 
       // ── Brand revenue trend — top 3 brands × month + Other ─────────────
       query<{
@@ -127,9 +135,8 @@ export async function GET(request: Request) {
         total_sales: string
       }>(`
         WITH top3 AS (
-          SELECT COALESCE(p.brands, 'Unknown') AS brands
-          FROM mart_telesales_orders m
-          LEFT JOIN products p ON m.prod_num = p.prod_num
+          SELECT COALESCE(m.brands, 'Unknown') AS brands
+          FROM sales_hoc_orders m
           WHERE true ${extraWhere}
           GROUP BY 1
           ORDER BY SUM(m.sales_in_vat) DESC
@@ -139,19 +146,18 @@ export async function GET(request: Request) {
           m.month::text                                                                AS month,
           MAX(m.month_label) || ' ' || EXTRACT(YEAR FROM MAX(m.order_date))::text     AS month_label,
           CASE
-            WHEN COALESCE(p.brands, 'Unknown') IN (SELECT brands FROM top3)
-            THEN COALESCE(p.brands, 'Unknown')
+            WHEN COALESCE(m.brands, 'Unknown') IN (SELECT brands FROM top3)
+            THEN COALESCE(m.brands, 'Unknown')
             ELSE 'Other'
           END                                                                          AS brands,
           SUM(m.sales_in_vat)::text                                                   AS total_sales
-        FROM mart_telesales_orders m
-        LEFT JOIN products p ON m.prod_num = p.prod_num
+        FROM sales_hoc_orders m
         WHERE true ${extraWhere}
         GROUP BY
           m.month,
           CASE
-            WHEN COALESCE(p.brands, 'Unknown') IN (SELECT brands FROM top3)
-            THEN COALESCE(p.brands, 'Unknown')
+            WHEN COALESCE(m.brands, 'Unknown') IN (SELECT brands FROM top3)
+            THEN COALESCE(m.brands, 'Unknown')
             ELSE 'Other'
           END
         ORDER BY m.month
@@ -229,9 +235,10 @@ export async function GET(request: Request) {
         total_skus:      totalSkus,
         total_orders:    totalOrders,
         avg_order_value: totalOrders > 0 ? totalSales / totalOrders : 0,
+        months: monthsRaw.map(r => r.month),
       },
     })
-    res.headers.set('Cache-Control', 'public, s-maxage=300, stale-while-revalidate=600')
+    setCacheHeader(res, 'MEDIUM')
     return res
   })
 }

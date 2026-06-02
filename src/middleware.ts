@@ -11,15 +11,30 @@ const isProtectedRoute = createRouteMatcher([
 
 const isAdminOnlyRoute = createRouteMatcher([
   '/leads(.*)', '/data-hub(.*)', '/exports(.*)',
-  '/api/data/upload/(.*)', '/api/data/dashboard(.*)', '/api/data/refresh-mart/(.*)', '/api/data/export/(.*)',
+  '/api/data/upload/(.*)', '/api/data/dashboard(.*)',
+  '/api/data/refresh-mart/(.*)', '/api/data/export/(.*)',
+  '/api/data/template/(.*)',
 ])
 
 export default clerkMiddleware(async (auth, request) => {
-  if (isProtectedRoute(request)) await auth.protect()
+  // ── Step 1: Resolve auth state once — avoids two round-trips to Clerk ────────
+  const { userId, sessionClaims, redirectToSignIn } = await auth()
 
+  // ── Step 2: Authenticated gate — fail-safe: return early, no fall-through ───
+  if (isProtectedRoute(request) && !userId) {
+    // API callers get a machine-readable 401; browsers get redirected to sign-in
+    if (request.nextUrl.pathname.startsWith('/api/')) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    }
+    return redirectToSignIn()
+  }
+
+  // ── Step 3: Admin gate — explicit early return on every failure path ─────────
   if (isAdminOnlyRoute(request)) {
-    const { sessionClaims } = await auth()
-    const role = sessionClaims?.publicMetadata?.role
+    // Type-assert publicMetadata so role access is safe in strict TypeScript
+    const meta = sessionClaims?.publicMetadata as { role?: string } | undefined
+    const role  = meta?.role
+
     if (role !== 'admin') {
       if (request.nextUrl.pathname.startsWith('/api/')) {
         return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
@@ -27,6 +42,7 @@ export default clerkMiddleware(async (auth, request) => {
       return NextResponse.redirect(new URL('/overview', request.url))
     }
   }
+  // Execution reaching here means: authenticated (if required) + authorized.
 })
 
 export const config = {

@@ -14,16 +14,12 @@ import { DataTable } from '@/components/ui/data-table'
 import { PageLoading, PageEmpty } from '@/components/dashboard/PageState'
 import { DateRangePicker } from '@/components/dashboard/DateRangePicker'
 import { useDashboardSWR } from '@/hooks/useDashboardSWR'
-import { CHART_AXIS_CLS, CHART_TOOLTIP_STYLE } from '@/lib/chart-utils'
+import { useMonthRange, lastDayOfMonth } from '@/hooks/useMonthRange'
+import { MonthChipGroup } from '@/components/dashboard/MonthChipGroup'
 import { formatNumber, formatPct, colorRate } from '@/lib/formatters'
 import { columns } from '../columns'
 import { Calendar, Phone, PhoneCall, UserCheck, Users } from 'lucide-react'
 import { TelesalesFunnelChart } from './TelesalesFunnelChart'
-
-function lastDayOfMonth(isoDate: string) {
-  const [y, m] = isoDate.split('-').map(Number)
-  return new Date(y, m, 0).toISOString().split('T')[0]
-}
 
 interface AgentPerformance {
   agent: string
@@ -48,6 +44,8 @@ interface TelesalesData {
     reached: number
     not_reached: number
     total_converted: number
+    new_converted: number
+    repeat_converted: number
     call_status_breakdown: Record<string, number>
   }
   by_agent: AgentPerformance[]
@@ -60,27 +58,51 @@ interface TelesalesData {
   }
 }
 
-// ── Status Colors mapping for Thai statuses ──────────────────────────────────
+// Maps Thai DB call_status values to English display labels for charts/tooltips.
+// Keys must match the exact strings stored in the telesales_calls.call_status column.
+const CALL_STATUS_LABELS: Record<string, string> = {
+  'สั่งซื้อสินค้าเรียบร้อย':                          'Order Placed',
+  'สั่งสินค้าอื่นๆ':                                 'Other Order',
+  'เสนอราคาแล้ว อยู่ระหว่างรอการยืนยันคำสั่งซื้อ':    'Quote Sent — Awaiting Confirmation',
+  'นัดหมายติดต่อกลับ':                               'Callback Scheduled',
+  'ไม่สะดวกคุย':                                    'Busy / Not Available',
+  'ไม่รับสาย 1':                                    'No Answer (1st)',
+  'ไม่รับสาย 2':                                    'No Answer (2nd)',
+  'ไม่รับสาย 3':                                    'No Answer (3rd)',
+  'ไม่รับสาย':                                      'No Answer',
+  'ไม่รับสาย/สายว่างแต่ไม่รับ':                       'No Answer / Ringing',
+  'ยังไม่ต้องการสินค้า':                              'Not Interested',
+  'ปิดเครื่อง/ติดต่อไม่ได้':                          'Phone Off / Unreachable',
+  'สายไม่ว่าง':                                     'Line Busy',
+  'เบอร์ผิด/ไม่มีสัญญาน':                            'Wrong Number / No Signal',
+  'สายว่างไม่มีคนรับ':                               'No Answer (Ring)',
+  'เบอร์บ้านไม่มีคนรับ':                             'Home Phone Unanswered',
+}
 
+function getStatusLabel(thaiStatus: string): string {
+  return CALL_STATUS_LABELS[thaiStatus] ?? thaiStatus
+}
+
+// Colors keyed by English label (after translation via CALL_STATUS_LABELS).
 const STATUS_COLORS: Record<string, string> = {
-  'สั่งซื้อสินค้าเรียบร้อย': '#10B981',                 // Green
-  'สั่งสินค้าอื่นๆ': '#84CC16',                       // Lime
-  'เสนอราคาแล้ว อยู่ระหว่างรอการยืนยันคำสั่งซื้อ': '#14B8A6', // Teal
-  'นัดหมายติดต่อกลับ': '#F59E0B',                   // Amber
-  'ไม่สะดวกคุย': '#3b82f6',                       // Blue
-  'ไม่รับสาย 1': '#a78bfa',                       // Purple light
-  'ไม่รับสาย 2': '#8b5cf6',                       // Purple medium
-  'ไม่รับสาย 3': '#6d28d9',                       // Purple dark
-  'ไม่รับสาย': '#6366f1',                         // Indigo
-  'ไม่รับสาย/สายว่างแต่ไม่รับ': '#6366f1',          // Indigo
-  'ยังไม่ต้องการสินค้า': '#94a3b8',                    // Slate
-  'ปิดเครื่อง/ติดต่อไม่ได้': '#ef4444',               // Red
-  'สายไม่ว่าง': '#ec4899',                         // Pink
-  'เบอร์ผิด/ไม่มีสัญญาน': '#f43f5e',                   // Rose
-  'สายว่างไม่มีคนรับ': '#475569',                    // Slate dark
-  'เบอร์บ้านไม่มีคนรับ': '#cbd5e1',                  // Slate lighter
-  'อื่นๆ': '#64748b',                             // Slate dark for "other"
-  'Unspecified': '#64748b',
+  'Order Placed':                          '#10B981', // green
+  'Other Order':                           '#84CC16', // lime
+  'Quote Sent — Awaiting Confirmation':    '#14B8A6', // teal
+  'Callback Scheduled':                    '#F59E0B', // amber
+  'Busy / Not Available':                  '#3b82f6', // blue
+  'No Answer (1st)':                       '#a78bfa', // purple light
+  'No Answer (2nd)':                       '#8b5cf6', // purple medium
+  'No Answer (3rd)':                       '#6d28d9', // purple dark
+  'No Answer':                             '#6366f1', // indigo
+  'No Answer / Ringing':                   '#6366f1', // indigo
+  'Not Interested':                        '#94a3b8', // slate
+  'Phone Off / Unreachable':               '#ef4444', // red
+  'Line Busy':                             '#ec4899', // pink
+  'Wrong Number / No Signal':              '#f43f5e', // rose
+  'No Answer (Ring)':                      '#475569', // slate dark
+  'Home Phone Unanswered':                 '#cbd5e1', // slate lighter
+  'Other':                                 '#64748b', // slate
+  'Unspecified':                           '#64748b', // slate
 }
 
 function getStatusColor(status: string, index: number): string {
@@ -93,14 +115,7 @@ function getStatusColor(status: string, index: number): string {
   return palette[index % palette.length]
 }
 
-interface TooltipPayloadItem {
-  value: string | number
-  name: string
-  color: string
-  payload: Record<string, string | number>
-}
-
-const CustomTooltip = ({ active, payload, label }: { active?: boolean; payload?: TooltipPayloadItem[]; label?: string }) => {
+const CustomTooltip = ({ active, payload, label }: { active?: boolean; payload?: any[]; label?: string }) => {
   if (active && payload && payload.length) {
     return (
       <div className="bg-background border border-border p-3 rounded-lg shadow-md space-y-1.5 text-xs">
@@ -133,9 +148,10 @@ const CustomTooltip = ({ active, payload, label }: { active?: boolean; payload?:
 
 export default function TelesalesClient() {
   // Range chip state
-  const [rangeFrom,   setRangeFrom]   = useState<string | null>(null)
-  const [rangeTo,     setRangeTo]     = useState<string | null>(null)
-  const [hoverMonth,  setHoverMonth]  = useState<string | null>(null)
+  const {
+    rangeFrom, rangeTo, hoverMonth, setHoverMonth,
+    handleChipClick: baseHandleChipClick, clearRange,
+  } = useMonthRange()
 
   // Trend interval state
   const [interval,    setInterval]    = useState<'custom' | 'monthly'>('monthly')
@@ -143,22 +159,14 @@ export default function TelesalesClient() {
   const [customEnd,   setCustomEnd]   = useState('2026-05-31')
 
   // Dimension filters
-  const [channel,     setChannel]     = useState<string[]>([])
-  const [cmg,         setCmg]         = useState<string[]>([])
-  const [agent,       setAgent]       = useState<string[]>([])
+  const [channel, setChannel] = useState<string[]>([])
+  const [cmg,     setCmg]     = useState<string[]>([])
+  const [agent,   setAgent]   = useState<string[]>([])
 
   // Chip click handler
   const handleChipClick = (m: string) => {
     if (interval === 'custom') setInterval('monthly')
-    if (!rangeFrom || (rangeFrom && rangeTo)) {
-      setRangeFrom(m); setRangeTo(null)
-    } else if (m === rangeFrom) {
-      setRangeFrom(null); setRangeTo(null)
-    } else if (m < rangeFrom) {
-      setRangeFrom(m); setRangeTo(rangeFrom)
-    } else {
-      setRangeTo(m)
-    }
+    baseHandleChipClick(m)
   }
 
   const durationDays = useMemo(() => {
@@ -174,15 +182,15 @@ export default function TelesalesClient() {
 
   const apiUrl = useMemo(() => {
     const p = new URLSearchParams()
-    if (effectiveStart) p.set('startDate', effectiveStart)
-    if (effectiveEnd)   p.set('endDate',   effectiveEnd)
-    if (channel.length > 0) p.set('channel', channel.join(','))
-    if (cmg.length > 0)     p.set('cmg', cmg.join(','))
-    if (agent.length > 0)   p.set('agent', agent.join(','))
+    if (effectiveStart)      p.set('startDate', effectiveStart)
+    if (effectiveEnd)        p.set('endDate',   effectiveEnd)
+    if (channel.length > 0)  p.set('channel',   channel.join(','))
+    if (cmg.length > 0)      p.set('cmg',       cmg.join(','))
+    if (agent.length > 0)    p.set('agent',     agent.join(','))
     return `/api/data/telesales?${p.toString()}`
   }, [effectiveStart, effectiveEnd, channel, cmg, agent])
 
-  const { data, isLoading } = useDashboardSWR<TelesalesData>(apiUrl)
+  const { data, isLoading, isValidating } = useDashboardSWR<TelesalesData>(apiUrl)
 
   const trendData = useMemo(() => {
     if (!data?.by_period) return []
@@ -198,28 +206,26 @@ export default function TelesalesClient() {
       return { data: [], statuses: [] }
     }
 
-    // 1. Determine top 4 call statuses by overall count (in Thai)
+    // 1. Determine top 4 call statuses by overall count, then translate to English labels
     const overallBreakdown = data.summary.call_status_breakdown
     const sortedStatuses = Object.entries(overallBreakdown)
       .sort((a, b) => b[1] - a[1])
       .map(([status]) => status)
 
-    const top4Statuses = sortedStatuses.slice(0, 4)
+    const top4Statuses = sortedStatuses.slice(0, 4) // Thai DB values for matching
     const hasOthers = sortedStatuses.length > 4
 
-    // Unique statuses to render as bars (exactly 5 if others exist)
-    const uniqueStatuses = [...top4Statuses]
-    if (hasOthers) {
-      uniqueStatuses.push('อื่นๆ')
-    }
+    // Build display labels (English) for the top 4 + optional "Other" bucket
+    const uniqueStatuses = top4Statuses.map(getStatusLabel)
+    if (hasOthers) uniqueStatuses.push('Other')
 
-    // 2. Group by tier
+    // 2. Group by tier, using English labels as chart data keys
     const tierMap: Record<string, Record<string, number>> = {}
     data.by_tier_status.forEach(item => {
       const tier = item.tier || 'Unspecified'
       const status = item.call_status || 'Unspecified'
       const isTop4 = top4Statuses.includes(status)
-      const mappedStatus = isTop4 ? status : 'อื่นๆ'
+      const mappedStatus = isTop4 ? getStatusLabel(status) : 'Other'
 
       if (!tierMap[tier]) {
         tierMap[tier] = {}
@@ -267,15 +273,26 @@ export default function TelesalesClient() {
   }, [chartData])
 
   if (isLoading && !data) return <PageLoading />
-  if (!data || data.summary.total_calls === 0) {
+  if (!data || data.months.length === 0) {
     return <PageEmpty message="No telesales data available" hint="Please upload telesales data and build mart." />
   }
 
+  const totalConvertedDisplay = (data.summary.new_converted ?? 0) + (data.summary.repeat_converted ?? 0)
   const reachRate = data.summary.total_calls > 0 ? data.summary.reached / data.summary.total_calls : 0
-  const conversionRate = data.summary.reached > 0 ? data.summary.total_converted / data.summary.reached : 0
+  const conversionRate = data.summary.total_calls > 0 ? data.summary.total_converted / data.summary.total_calls : 0
 
   const hasFilter = channel.length > 0 || cmg.length > 0 || agent.length > 0
   const hasRange = !!(rangeFrom || (interval === 'custom' && (customStart !== '2026-05-01' || customEnd !== '2026-05-31')))
+
+  const displayRangeLabel = (() => {
+    if (rangeFrom) {
+      const fromLabel = new Date(rangeFrom).toLocaleDateString('en-GB', { month: 'short', year: 'numeric' })
+      if (!rangeTo) return fromLabel
+      return `${fromLabel} – ${new Date(rangeTo).toLocaleDateString('en-GB', { month: 'short', year: 'numeric' })}`
+    }
+    if (interval === 'custom') return `${customStart} – ${customEnd}`
+    return null
+  })()
 
   return (
     <div className="space-y-6">
@@ -326,14 +343,12 @@ export default function TelesalesClient() {
                   to={interval === 'custom' ? customEnd : ''}
                   onFromChange={(start) => {
                     setCustomStart(start)
-                    setRangeFrom(null)
-                    setRangeTo(null)
+                    clearRange()
                     setInterval('custom')
                   }}
                   onToChange={(end) => {
                     setCustomEnd(end)
-                    setRangeFrom(null)
-                    setRangeTo(null)
+                    clearRange()
                     setInterval('custom')
                   }}
                 />
@@ -359,10 +374,13 @@ export default function TelesalesClient() {
               />
 
               <MultiSelect
-                label="All CMG"
+                label="All Segments"
                 value={cmg}
                 onChange={setCmg}
-                options={(data?.options?.cmg || []).map(v => ({ value: v, label: v }))}
+                options={[
+                  ...(data?.options?.cmg || []).map(v => ({ value: v, label: v })),
+                  { value: '__no_segment__', label: 'No Segment' },
+                ]}
                 width="w-[150px]"
               />
 
@@ -380,8 +398,7 @@ export default function TelesalesClient() {
                     setChannel([])
                     setCmg([])
                     setAgent([])
-                    setRangeFrom(null)
-                    setRangeTo(null)
+                    clearRange()
                     setInterval('monthly')
                     setCustomStart('2026-05-01')
                     setCustomEnd('2026-05-31')
@@ -393,6 +410,13 @@ export default function TelesalesClient() {
               )}
             </div>
           </div>
+
+          <p className="text-xs text-muted-foreground mt-3">
+            {displayRangeLabel
+              ? <>Showing: <span className="font-medium text-foreground">{displayRangeLabel}</span></>
+              : <>Showing: <span className="font-medium text-foreground">all available periods</span> — select month chips to filter by period</>
+            }
+          </p>
         </CardContent>
       </Card>
 
@@ -402,6 +426,7 @@ export default function TelesalesClient() {
           value={formatNumber(data.summary.total_leads)}
           subtitle="Total target leads in database"
           icon={Users}
+          tooltip="Total unique customers in the telesales lead pool — all MMIDs assigned for calling, regardless of call outcome."
         />
         <KpiCard
           title="Connected Rate"
@@ -409,19 +434,22 @@ export default function TelesalesClient() {
           subtitle={`Connected: ${formatNumber(data.summary.reached)} / Total: ${formatNumber(data.summary.total_calls)}`}
           valueClassName={colorRate(reachRate)}
           icon={PhoneCall}
+          tooltip="Unique customers reached ÷ Unique customers called. 'Connected' = at least one call where the customer answered (excludes: no answer, switched off, unavailable)."
         />
         <KpiCard
           title="Conversion Rate"
           value={formatPct(conversionRate)}
-          subtitle={`Converted: ${formatNumber(data.summary.total_converted)} / Connected: ${formatNumber(data.summary.reached)}`}
+          subtitle={`Converted: ${formatNumber(data.summary.total_converted)} / Total: ${formatNumber(data.summary.total_calls)}`}
           valueClassName={colorRate(conversionRate, [0.15, 0.08])}
           icon={UserCheck}
+          tooltip="Unique converted customers ÷ Unique customers called (Total). Includes customers who ordered without answering, so the denominator is the full target scope — not just those who picked up."
         />
         <KpiCard
           title="Orders (Conversion)"
-          value={formatNumber(data.summary.total_converted)}
-          subtitle="Total successful orders placed"
+          value={formatNumber(totalConvertedDisplay)}
+          subtitle={`New: ${formatNumber(data.summary.new_converted ?? 0)} · Repeat: ${formatNumber(data.summary.repeat_converted ?? 0)}`}
           icon={Phone}
+          tooltip="Total conversions = New customers + Repeat customers. Counted separately so a customer with both a new and a repeat order contributes to each."
         />
       </KpiGrid>
 
@@ -438,10 +466,28 @@ export default function TelesalesClient() {
                 <stop offset="95%" stopColor="#10b981" stopOpacity={0}/>
               </linearGradient>
             </defs>
-            <CartesianGrid strokeDasharray="3 3" vertical={false} className="stroke-muted" />
-            <XAxis dataKey="name" tickLine={false} axisLine={false} tickMargin={8} className={CHART_AXIS_CLS} />
-            <YAxis tickLine={false} axisLine={false} tickMargin={8} className={CHART_AXIS_CLS} />
-            <Tooltip contentStyle={CHART_TOOLTIP_STYLE} labelClassName="text-xs font-bold" />
+            <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="rgba(144,164,174,0.3)" />
+            <XAxis dataKey="name" tickLine={false} axisLine={false} tickMargin={8} fontSize={11} />
+            <YAxis tickLine={false} axisLine={false} tickMargin={8} fontSize={11} />
+            <Tooltip
+              content={({ active, payload, label }) => {
+                if (!active || !payload?.length) return null
+                return (
+                  <div className="rounded-lg border border-border/50 bg-background p-3 text-xs shadow-xl space-y-1.5 min-w-[10rem]">
+                    <div className="font-semibold text-muted-foreground text-[10px] uppercase tracking-wider">{label}</div>
+                    {payload.map(p => (
+                      <div key={p.dataKey} className="flex items-center justify-between gap-4">
+                        <div className="flex items-center gap-1.5 text-muted-foreground">
+                          <span className="h-2 w-2 rounded-full" style={{ backgroundColor: p.color }} />
+                          <span>{p.name}</span>
+                        </div>
+                        <span className="font-semibold tabular-nums text-foreground">{formatNumber(Number(p.value))}</span>
+                      </div>
+                    ))}
+                  </div>
+                )
+              }}
+            />
             <Area type="monotone" dataKey="Calls" stroke="#3b82f6" fillOpacity={1} fill="url(#colorCalls)" strokeWidth={2} />
             <Area type="monotone" dataKey="Conversion" stroke="#10b981" fillOpacity={1} fill="url(#colorConverted)" strokeWidth={2} />
           </AreaChart>
@@ -449,25 +495,25 @@ export default function TelesalesClient() {
 
         <ChartCard title="Call Statuses" height={chartHeight} className="lg:col-span-3">
           <BarChart data={chartData} height={chartHeight - 40} layout="vertical" margin={{ top: 5, right: 20, left: 20, bottom: 5 }}>
-            <CartesianGrid strokeDasharray="3 3" horizontal={false} className="stroke-muted" />
+            <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="rgba(144,164,174,0.3)" />
             <XAxis
               type="number"
               domain={[0, 100]}
               tickFormatter={(val) => `${Math.round(val)}%`}
               tickLine={false}
               axisLine={false}
-              className={CHART_AXIS_CLS}
+              fontSize={11}
             />
             <YAxis
               dataKey="tier"
               type="category"
               tickLine={false}
               axisLine={false}
-              className={CHART_AXIS_CLS}
+              fontSize={11}
               width={160}
               interval={0}
             />
-            <Tooltip content={<CustomTooltip />} />
+            <Tooltip content={props => <CustomTooltip {...props} />} />
             <Legend verticalAlign="bottom" height={36} wrapperStyle={{ fontSize: '12px', marginTop: '10px' }} />
             {uniqueStatuses.map((status, index) => (
               <Bar
@@ -509,6 +555,7 @@ export default function TelesalesClient() {
           <DataTable columns={columns} data={data.by_agent} />
         </CardContent>
       </Card>
+
     </div>
   )
 }

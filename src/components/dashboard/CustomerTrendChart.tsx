@@ -5,9 +5,9 @@ import { ComposedChart, Bar, XAxis, YAxis, CartesianGrid } from 'recharts'
 import { ChartContainer, ChartTooltip, type ChartConfig } from '@/components/ui/chart'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
 import { Skeleton } from '@/components/ui/skeleton'
 import { cn } from '@/lib/utils'
-import { DateRangePicker } from '@/components/dashboard/DateRangePicker'
 import { useDashboardSWR } from '@/hooks/useDashboardSWR'
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -21,38 +21,25 @@ type TrendRow = {
   retention_not_converted: number
 }
 
-type Interval = 'monthly' | 'weekly' | 'custom'
+type Interval = 'monthly' | 'weekly' | 'daily'
 type Conversion = 'all' | 'converted' | 'not_converted'
 
 // ── Chart Config ──────────────────────────────────────────────────────────────
 
 const chartConfig = {
   new_customer:               { label: 'New Customer',              color: '#10b981' },
-  retention:                  { label: 'Retention',                 color: '#0d9488' },
+  retention:                  { label: 'Repeat',                    color: '#0d9488' },
   first_order_not_converted:  { label: 'First Order (Not Conv.)',   color: '#3b82f6' },
-  retention_not_converted:    { label: 'Retention (Not Conv.)',     color: '#94a3b8' },
+  retention_not_converted:    { label: 'Repeat (Not Conv.)',        color: '#94a3b8' },
 } satisfies ChartConfig
 
 const BAR_SIZE: Record<string, number> = { daily: 10, weekly: 22, monthly: 44 }
 
-// ── Bar label renderer ────────────────────────────────────────────────────────
-
-const renderBarLabel = (color: string) => (props: any) => {
-  const { x, y, width, height, value } = props
-  if (!value || value < 1) return null
-  const formatted = value >= 1000 ? `${(value / 1000).toFixed(0)}K` : String(value)
-  return (
-    <text
-      x={x + width / 2}
-      y={y + height / 2}
-      fill={color}
-      textAnchor="middle"
-      dominantBaseline="middle"
-      className="text-[9px] font-extrabold select-none pointer-events-none"
-    >
-      {formatted}
-    </text>
-  )
+const SERIES_META: Record<string, { color: string; label: string }> = {
+  new_customer:               { color: '#10b981', label: 'New Customer' },
+  retention:                  { color: '#0d9488', label: 'Repeat' },
+  first_order_not_converted:  { color: '#3b82f6', label: 'First Order (Not Conv.)' },
+  retention_not_converted:    { color: '#94a3b8', label: 'Repeat (Not Conv.)' },
 }
 
 // ── Tooltip ───────────────────────────────────────────────────────────────────
@@ -66,13 +53,9 @@ function TrendTooltip({ active, payload, label, visibleSeries }: {
   if (!active || !payload?.length) return null
   const d = payload[0].payload as TrendRow
 
-  const allRows: { key: keyof TrendRow; color: string; label: string }[] = [
-    { key: 'new_customer',              color: '#10b981', label: 'New Customer' },
-    { key: 'retention',                 color: '#0d9488', label: 'Retention' },
-    { key: 'first_order_not_converted', color: '#3b82f6', label: 'First Order (Not Conv.)' },
-    { key: 'retention_not_converted',   color: '#94a3b8', label: 'Retention (Not Conv.)' },
-  ]
-  const rows = allRows.filter(r => visibleSeries.includes(r.key))
+  const rows = visibleSeries
+    .map(key => ({ key: key as keyof TrendRow, ...SERIES_META[key] }))
+    .filter(r => r.color)
 
   const total = rows.reduce((sum, r) => sum + (Number(d[r.key]) || 0), 0)
 
@@ -100,118 +83,189 @@ function TrendTooltip({ active, payload, label, visibleSeries }: {
   )
 }
 
+// ── Legend Dot ────────────────────────────────────────────────────────────────
+
+function LegendDot({ color, label }: { color: string; label: string }) {
+  return (
+    <div className="flex items-center gap-1.5">
+      <span className="w-2.5 h-2.5 rounded-full border border-black/5 shrink-0" style={{ backgroundColor: color }} />
+      <span className="text-xs text-muted-foreground font-medium">{label}</span>
+    </div>
+  )
+}
+
+// ── Legend Tooltip descriptions ───────────────────────────────────────────────
+
+const LEGEND_TIPS: Record<string, { label: string; tip: string }> = {
+  new_customer: {
+    label: 'New',
+    tip: 'First-time customers who ordered within the attribution window.',
+  },
+  retention: {
+    label: 'Repeat',
+    tip: 'Returning customers who reordered within the attribution window.',
+  },
+  first_order_not_converted: {
+    label: 'First (Not Conv.)',
+    tip: 'First-time customers whose order fell outside the attribution window.',
+  },
+  retention_not_converted: {
+    label: 'Repeat (Not Conv.)',
+    tip: 'Returning customers whose reorder fell outside the attribution window.',
+  },
+}
+
+const INTERVAL_TIPS: Record<string, string> = {
+  monthly: 'Group data by calendar month',
+  weekly:  'Group data by ISO week (Mon–Sun)',
+  daily:   'Show daily data — follows the date range selected in the main filter above',
+}
+
+const CONVERSION_TIPS: Record<Conversion, string> = {
+  all:           'Showing all customer types — both converted and not converted.',
+  converted:     'Customers who ordered within the attribution window (New + Retention).',
+  not_converted: 'Customers who were called but did not order within the attribution window.',
+}
+
+// ── Series order ──────────────────────────────────────────────────────────────
+
+const ALL_SERIES: Record<Conversion, string[]> = {
+  converted:     ['new_customer', 'retention'],
+  not_converted: ['first_order_not_converted', 'retention_not_converted'],
+  all:           ['new_customer', 'retention', 'first_order_not_converted', 'retention_not_converted'],
+}
+
 // ── Main Component ────────────────────────────────────────────────────────────
 
-export function CustomerTrendChart() {
+interface CustomerTrendChartProps {
+  filterCmg?: string[]
+  filterChannel?: string
+  startDate?: string | null
+  endDate?: string | null
+}
+
+export function CustomerTrendChart({
+  filterCmg = [],
+  filterChannel = 'all',
+  startDate,
+  endDate,
+}: CustomerTrendChartProps) {
   const [interval, setInterval] = useState<Interval>('monthly')
-  const [customStart, setCustomStart] = useState('2026-02-01')
-  const [customEnd, setCustomEnd] = useState('2026-05-31')
   const [conversion, setConversion] = useState<Conversion>('all')
 
-  const durationDays = useMemo(() => {
-    if (interval !== 'custom' || !customStart || !customEnd) return 0
-    return Math.ceil(
-      Math.abs(new Date(customEnd).getTime() - new Date(customStart).getTime()) / 86_400_000
-    )
-  }, [interval, customStart, customEnd])
-
-  const calculatedInterval = useMemo<'daily' | 'weekly' | 'monthly'>(() => {
-    if (interval !== 'custom') return interval
-    return durationDays <= 32 ? 'daily' : 'weekly'
-  }, [interval, durationDays])
-
   const apiUrl = useMemo(() => {
-    let url = `/api/data/telesales/customer-trend?interval=${calculatedInterval}`
-    if (interval === 'custom') {
-      if (customStart) url += `&startDate=${customStart}`
-      if (customEnd)   url += `&endDate=${customEnd}`
-    }
-    return url
-  }, [calculatedInterval, interval, customStart, customEnd])
+    const params = new URLSearchParams({ interval })
+    if (startDate) params.set('startDate', startDate)
+    if (endDate)   params.set('endDate',   endDate)
+    if (filterCmg.length > 0)    params.set('cmg',     filterCmg.join(','))
+    if (filterChannel !== 'all') params.set('channel', filterChannel)
+    return `/api/data/telesales/customer-trend?${params.toString()}`
+  }, [interval, filterCmg, filterChannel, startDate, endDate])
 
-  const { data = [], isLoading } = useDashboardSWR<TrendRow[]>(apiUrl)
+  const { data = [], isLoading, isValidating } = useDashboardSWR<TrendRow[]>(apiUrl)
 
-  const visibleSeries = useMemo<string[]>(() => {
-    if (conversion === 'converted')     return ['new_customer', 'retention']
-    if (conversion === 'not_converted') return ['first_order_not_converted', 'retention_not_converted']
-    return ['new_customer', 'retention', 'first_order_not_converted', 'retention_not_converted']
-  }, [conversion])
-
-  const barSize = BAR_SIZE[calculatedInterval] ?? BAR_SIZE.monthly
+  const visibleSeries = ALL_SERIES[conversion]
+  const topSeries     = visibleSeries[visibleSeries.length - 1]
+  const barSize       = BAR_SIZE[interval] ?? BAR_SIZE.monthly
 
   return (
     <Card className="w-full py-6 gap-8 shadow-xs border">
       <CardHeader className="flex sm:flex-row flex-col justify-between sm:items-start items-start gap-4 px-6 pb-2">
+
+        {/* Title */}
         <div className="flex flex-col gap-1">
-          <CardTitle className="text-lg font-medium">New & Reactivated Customers Trend</CardTitle>
+          <div className="flex items-center gap-2">
+            <CardTitle className="text-lg font-medium">New &amp; Reactivated Customers Trend</CardTitle>
+            {isValidating && !isLoading && (
+              <span className="text-[10px] font-medium text-muted-foreground bg-muted px-2 py-0.5 rounded-full animate-pulse">
+                Updating…
+              </span>
+            )}
+          </div>
           <span className="text-xs text-muted-foreground font-medium">
             Customer acquisition and retention breakdown — converted vs. not converted, by period.
           </span>
         </div>
 
+        {/* Controls */}
         <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3 flex-wrap">
+
           {/* Conversion filter */}
-          <Select value={conversion} onValueChange={v => setConversion(v as Conversion)}>
-            <SelectTrigger className="h-7 text-xs w-[150px]">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">All Customers</SelectItem>
-              <SelectItem value="converted">Converted Only</SelectItem>
-              <SelectItem value="not_converted">Not Converted</SelectItem>
-            </SelectContent>
-          </Select>
+          <TooltipProvider delayDuration={300}>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <div>
+                  <Select value={conversion} onValueChange={v => setConversion(v as Conversion)}>
+                    <SelectTrigger className="h-7 text-xs w-[150px]">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">All Customers</SelectItem>
+                      <SelectItem value="converted">Converted Only</SelectItem>
+                      <SelectItem value="not_converted">Not Converted</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              </TooltipTrigger>
+              <TooltipContent side="bottom" className="max-w-[220px] text-xs">
+                {CONVERSION_TIPS[conversion]}
+              </TooltipContent>
+            </Tooltip>
+          </TooltipProvider>
 
           {/* Interval tabs */}
-          <div className="flex items-center bg-gray-100/80 p-0.5 rounded-lg border border-gray-200">
-            {(['monthly', 'weekly', 'custom'] as const).map(v => (
-              <button
-                key={v}
-                onClick={() => setInterval(v)}
-                className={cn(
-                  'px-3 py-1 rounded-md text-xs font-bold transition-all duration-200 capitalize',
-                  interval === v
-                    ? 'bg-white text-[#003DA6] shadow-xs'
-                    : 'text-muted-foreground hover:text-foreground'
-                )}
-              >
-                {v.charAt(0).toUpperCase() + v.slice(1)}
-              </button>
-            ))}
-          </div>
-
-          {/* Custom date picker */}
-          {interval === 'custom' && (
-            <div className="flex items-center gap-2 animate-in fade-in slide-in-from-left-2 duration-200">
-              <DateRangePicker
-                from={customStart}
-                to={customEnd}
-                onFromChange={setCustomStart}
-                onToChange={setCustomEnd}
-              />
-              {durationDays > 0 && (
-                <span className="text-[9px] bg-blue-50 text-[#003DA6] px-1.5 py-0.5 rounded font-bold uppercase">
-                  {calculatedInterval} · {durationDays}d
-                </span>
-              )}
+          <TooltipProvider delayDuration={300}>
+            <div className="flex items-center bg-gray-100/80 p-0.5 rounded-lg border border-gray-200">
+              {(['monthly', 'weekly', 'daily'] as const).map(v => (
+                <Tooltip key={v}>
+                  <TooltipTrigger asChild>
+                    <button
+                      onClick={() => setInterval(v)}
+                      className={cn(
+                        'px-3 py-1 rounded-md text-xs font-bold transition-all duration-200 capitalize',
+                        interval === v
+                          ? 'bg-white text-[#003DA6] shadow-xs'
+                          : 'text-muted-foreground hover:text-foreground'
+                      )}
+                    >
+                      {v.charAt(0).toUpperCase() + v.slice(1)}
+                    </button>
+                  </TooltipTrigger>
+                  <TooltipContent side="bottom" className="text-xs">{INTERVAL_TIPS[v]}</TooltipContent>
+                </Tooltip>
+              ))}
             </div>
+          </TooltipProvider>
+
+          {/* Daily hint — show when no date range is selected */}
+          {interval === 'daily' && !startDate && (
+            <span className="text-[10px] text-muted-foreground bg-amber-50 border border-amber-200 px-2 py-0.5 rounded-full">
+              Select a month range above for focused daily view
+            </span>
           )}
 
           {/* Legend */}
-          <div className="flex items-center gap-3 flex-wrap">
-            {visibleSeries.includes('new_customer') && (
-              <LegendDot color="#10b981" label="New" />
-            )}
-            {visibleSeries.includes('retention') && (
-              <LegendDot color="#0d9488" label="Retention" />
-            )}
-            {visibleSeries.includes('first_order_not_converted') && (
-              <LegendDot color="#3b82f6" label="First (Not Conv.)" />
-            )}
-            {visibleSeries.includes('retention_not_converted') && (
-              <LegendDot color="#94a3b8" label="Repeat (Not Conv.)" />
-            )}
-          </div>
+          <TooltipProvider delayDuration={300}>
+            <div className="flex items-center gap-3 flex-wrap">
+              {visibleSeries.map(key => {
+                const meta = LEGEND_TIPS[key]
+                if (!meta) return null
+                return (
+                  <Tooltip key={key}>
+                    <TooltipTrigger asChild>
+                      <div>
+                        <LegendDot color={SERIES_META[key].color} label={meta.label} />
+                      </div>
+                    </TooltipTrigger>
+                    <TooltipContent side="bottom" className="max-w-[200px] text-xs">
+                      {meta.tip}
+                    </TooltipContent>
+                  </Tooltip>
+                )
+              })}
+            </div>
+          </TooltipProvider>
+
         </div>
       </CardHeader>
 
@@ -232,43 +286,22 @@ export function CustomerTrendChart() {
               />
               <ChartTooltip
                 cursor={false}
-                content={props => (
-                  <TrendTooltip {...props} visibleSeries={visibleSeries} />
-                )}
+                content={props => <TrendTooltip {...props} visibleSeries={visibleSeries} />}
               />
-              {visibleSeries.includes('new_customer') && (
-                <Bar dataKey="new_customer" fill="#10b981" stackId="t" barSize={barSize} />
-              )}
-              {visibleSeries.includes('retention') && (
-                <Bar dataKey="retention" fill="#0d9488" stackId="t" barSize={barSize} />
-              )}
-              {visibleSeries.includes('first_order_not_converted') && (
-                <Bar dataKey="first_order_not_converted" fill="#3b82f6" stackId="t" barSize={barSize} />
-              )}
-              {visibleSeries.includes('retention_not_converted') && (
+              {visibleSeries.map(key => (
                 <Bar
-                  dataKey="retention_not_converted"
-                  fill="#94a3b8"
+                  key={key}
+                  dataKey={key}
+                  fill={SERIES_META[key].color}
                   stackId="t"
                   barSize={barSize}
-                  radius={[4, 4, 0, 0]}
+                  radius={key === topSeries ? [4, 4, 0, 0] : [0, 0, 0, 0]}
                 />
-              )}
+              ))}
             </ComposedChart>
           </ChartContainer>
         )}
       </CardContent>
     </Card>
-  )
-}
-
-// ── Legend dot helper ─────────────────────────────────────────────────────────
-
-function LegendDot({ color, label }: { color: string; label: string }) {
-  return (
-    <div className="flex items-center gap-1.5">
-      <span className="w-2.5 h-2.5 rounded-full border border-black/5 shrink-0" style={{ backgroundColor: color }} />
-      <span className="text-xs text-muted-foreground font-medium">{label}</span>
-    </div>
   )
 }

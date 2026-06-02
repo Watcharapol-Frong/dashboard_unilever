@@ -1,7 +1,7 @@
 'use client'
 
 import { useMemo, useState } from 'react'
-import { ComposedChart, Bar, Line, XAxis, YAxis, CartesianGrid, Tooltip } from 'recharts'
+import { ComposedChart, Bar, Line, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip } from 'recharts'
 import { Card, CardContent } from '@/components/ui/card'
 import { KpiCard } from '@/components/dashboard/KpiCard'
 import { KpiGrid } from '@/components/dashboard/KpiGrid'
@@ -10,10 +10,12 @@ import { DataTable } from '@/components/ui/data-table'
 import { PageLoading, PageEmpty } from '@/components/dashboard/PageState'
 import { useDashboardSWR } from '@/hooks/useDashboardSWR'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
-import { CHART_AXIS_CLS, CHART_TOOLTIP_STYLE } from '@/lib/chart-utils'
 import { formatTHB, formatPeriodLabel, colorAchievement, colorRoi } from '@/lib/formatters'
-import { PiggyBank, TrendingUp } from 'lucide-react'
+import { PiggyBank, TrendingUp, Info } from 'lucide-react'
 import { ColumnDef } from '@tanstack/react-table'
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
+
+const DISTRIBUTOR_EXCLUDED_FROM = '2025-05-01'
 
 interface IncentiveTier {
   tier: number
@@ -35,7 +37,7 @@ interface MonthlySummary {
   total_expense: number
   roi: number
   achievement_ratio: number
-  hoc_sales: number
+  incentive_hoc_sales: number
   sales_target: number
   incentive_per_head: number
 }
@@ -63,11 +65,37 @@ const summaryColumns: ColumnDef<MonthlySummary>[] = [
   {
     accessorKey: 'month',
     header: 'Month',
-    cell: ({ row }) => formatPeriodLabel(row.original.month, 'month'),
+    cell: ({ row }) => {
+      const isExcluded = row.original.month.slice(0, 7) >= '2026-05'
+      return (
+        <div className="flex items-center gap-1.5">
+          <span>{formatPeriodLabel(row.original.month, 'month')}</span>
+          {isExcluded && (
+            <TooltipProvider>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Info className="h-3.5 w-3.5 text-amber-500 cursor-default shrink-0" />
+                </TooltipTrigger>
+                <TooltipContent side="right" className="max-w-[260px] text-xs">
+                  DISTRIBUTOR CMG is excluded from HOC Sales, Achievement %, Incentive, and ROI calculations from May 2025 onwards.
+                </TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
+          )}
+        </div>
+      )
+    },
+  },
+  {
+    accessorKey: 'incentive_hoc_sales',
+    header: 'HOC Sales',
+    cell: ({ row }) => (
+      <div className="text-right font-medium">{formatTHB(row.original.incentive_hoc_sales)}</div>
+    ),
   },
   {
     accessorKey: 'achievement_ratio',
-    header: 'Sales Achievement',
+    header: 'Achievement',
     cell: ({ row }) => (
       <span className={`font-semibold transition-colors ${colorAchievement(row.original.achievement_ratio)}`}>
         {row.original.achievement_ratio.toFixed(1)}%
@@ -76,17 +104,12 @@ const summaryColumns: ColumnDef<MonthlySummary>[] = [
   },
   {
     accessorKey: 'incentive_per_head',
-    header: 'Rate / Head',
+    header: 'Incentive / Head',
     cell: ({ row }) => (
-      <div className="text-right font-medium text-muted-foreground">
+      <div className="text-right font-medium">
         {row.original.incentive_per_head > 0 ? `${formatTHB(row.original.incentive_per_head)}/head` : '—'}
       </div>
     ),
-  },
-  {
-    accessorKey: 'total_incentive',
-    header: 'Total Incentives Paid',
-    cell: ({ row }) => <div className="text-right font-medium">{formatTHB(row.original.total_incentive)}</div>,
   },
   {
     accessorKey: 'roi',
@@ -107,7 +130,7 @@ export default function IncentivesClient() {
     if (!data?.monthly_summary) return []
     return [...data.monthly_summary].reverse().map(m => ({
       name: new Date(m.month).toLocaleDateString('en-GB', { month: 'short', year: 'numeric' }),
-      Incentive: m.total_incentive,
+      IncentivePerHead: m.incentive_per_head,
       ROI: m.roi,
     }))
   }, [data])
@@ -117,19 +140,23 @@ export default function IncentivesClient() {
     return <PageEmpty message="No incentive data available" hint="Please upload agent headcounts, costs, targets & incentives data and rebuild mart." />
   }
 
-  const totalIncentive = data.monthly_summary.reduce((sum, m) => sum + m.total_incentive, 0)
-  const totalExpense   = data.monthly_summary.reduce((sum, m) => sum + m.total_expense,   0)
-  const totalSales     = data.monthly_summary.reduce((sum, m) => sum + m.hoc_sales,       0)
+  const totalExpense   = data.monthly_summary.reduce((sum, m) => sum + m.total_expense,         0)
+  const totalSales     = data.monthly_summary.reduce((sum, m) => sum + m.incentive_hoc_sales,   0)
+  const totalTarget    = data.monthly_summary.reduce((sum, m) => sum + m.sales_target,           0)
   const grandRoi       = totalExpense > 0 ? totalSales / totalExpense : 0
+  const grandAchieve   = totalTarget  > 0 ? (totalSales / totalTarget) * 100 : 0
+  // Most recent month (API returns DESC order) — shows the current applicable incentive per head
+  const latestPerHead  = data.monthly_summary[0]?.incentive_per_head ?? 0
 
   return (
     <div className="space-y-6">
       <KpiGrid cols={2}>
         <KpiCard
-          title="Total Incentives Paid"
-          value={formatTHB(totalIncentive)}
-          subtitle="Agent performance bonus"
+          title="Incentive Per Head"
+          value={latestPerHead > 0 ? formatTHB(latestPerHead) : '—'}
+          subtitle="Latest month · per agent"
           icon={PiggyBank}
+          tooltip={`HOC Sales: ${formatTHB(totalSales)}\nTarget: ${formatTHB(totalTarget)}\nAchievement: ${grandAchieve.toFixed(1)}%\n\nIncentive rate per agent head for the most recent month — determined by the achievement tier (FOOD RETAILER + HORECA sales vs target). Earlier months may have a different rate.`}
         />
         <KpiCard
           title="Overall Program ROI"
@@ -137,19 +164,40 @@ export default function IncentivesClient() {
           subtitle="Unilever HOC sales / Expense"
           valueClassName={colorRoi(grandRoi)}
           icon={TrendingUp}
+          tooltip="HOC Sales ÷ Total Program Expense across all displayed months. Total Expense = incentives + agent salaries + supervisor salaries. A value of 2.0x means every ฿1 spent returns ฿2 in HOC sales."
         />
       </KpiGrid>
 
-      <ChartCard title="Monthly Incentives vs Program ROI" height={300}>
+      <ChartCard title="Monthly Incentives Per Head" height={300}>
         <ComposedChart data={chartData} margin={{ top: 10, right: 10, left: 10, bottom: 0 }}>
-          <CartesianGrid strokeDasharray="3 3" vertical={false} className="stroke-muted" />
-          <XAxis dataKey="name" tickLine={false} axisLine={false} tickMargin={8} className={CHART_AXIS_CLS} />
-          <YAxis yAxisId="incentive" tickLine={false} axisLine={false} tickMargin={8} className={CHART_AXIS_CLS}
-            tickFormatter={v => `฿${(v / 1000).toFixed(0)}k`} />
-          <YAxis yAxisId="roi" orientation="right" tickLine={false} axisLine={false} tickMargin={8} className={CHART_AXIS_CLS}
+          <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="rgba(144,164,174,0.3)" />
+          <XAxis dataKey="name" tickLine={false} axisLine={false} tickMargin={8} fontSize={11} />
+          <YAxis yAxisId="incentive" tickLine={false} axisLine={false} tickMargin={8} fontSize={11}
+            tickFormatter={v => formatTHB(v)} width={80} />
+          <YAxis yAxisId="roi" orientation="right" tickLine={false} axisLine={false} tickMargin={8} fontSize={11}
             tickFormatter={v => `${v}x`} />
-          <Tooltip contentStyle={CHART_TOOLTIP_STYLE} labelClassName="text-xs font-bold" />
-          <Bar yAxisId="incentive" dataKey="Incentive" name="Total Incentives Paid" fill="#003DA6" radius={[4, 4, 0, 0]} barSize={24} />
+          <RechartsTooltip
+            content={({ active, payload, label }) => {
+              if (!active || !payload?.length) return null
+              return (
+                <div className="rounded-lg border border-border/50 bg-background p-3 text-xs shadow-xl space-y-1.5 min-w-[12rem]">
+                  <div className="font-semibold text-muted-foreground text-[10px] uppercase tracking-wider">{label}</div>
+                  {payload.map(p => (
+                    <div key={p.dataKey} className="flex items-center justify-between gap-4">
+                      <div className="flex items-center gap-1.5 text-muted-foreground">
+                        <span className="h-2 w-2 rounded-full" style={{ backgroundColor: p.color }} />
+                        <span>{p.name}</span>
+                      </div>
+                      <span className="font-semibold tabular-nums text-foreground">
+                        {p.dataKey === 'ROI' ? `${Number(p.value).toFixed(2)}x` : formatTHB(Number(p.value))}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              )
+            }}
+          />
+          <Bar yAxisId="incentive" dataKey="IncentivePerHead" name="Incentive Per Head" fill="#003DA6" radius={[4, 4, 0, 0]} barSize={24} />
           <Line yAxisId="roi" type="monotone" dataKey="ROI" name="ROI (Multiplier)" stroke="#EE2737" strokeWidth={3} dot={{ r: 4 }} />
         </ComposedChart>
       </ChartCard>
