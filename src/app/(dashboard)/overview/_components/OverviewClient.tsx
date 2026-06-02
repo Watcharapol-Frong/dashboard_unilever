@@ -13,7 +13,7 @@ import { MonthChipGroup } from '@/components/dashboard/MonthChipGroup'
 
 import { useDashboardSWR } from '@/hooks/useDashboardSWR'
 import { useMonthRange } from '@/hooks/useMonthRange'
-import { fmtBaht, colorAchievement, colorRoi } from '@/lib/formatters'
+import { fmtBaht, colorAchievement, colorRoi, formatTHB } from '@/lib/formatters'
 import { type OverviewRow } from './columns'
 import {
   TrendingUp, Target, Users, UserPlus, PhoneCall,
@@ -127,6 +127,19 @@ export default function OverviewClient() {
 
   const kpi = useMemo(() => aggregate(mappedFiltered, filterChannel), [mappedFiltered, filterChannel])
 
+  // Total calls for the selected date range, ignoring CMG filter (calls can't be CMG-attributed)
+  const dateOnlyKpi = useMemo(() => {
+    const effectiveTo = rangeTo ?? (rangeFrom ? hoverMonth : null)
+    const dateRows = rows.filter(r => {
+      if (rangeFrom) {
+        if (!effectiveTo) return r.month === rangeFrom
+        if (r.month < rangeFrom || r.month > effectiveTo) return false
+      }
+      return true
+    })
+    return aggregate(dateRows, filterChannel)
+  }, [rows, rangeFrom, rangeTo, hoverMonth, filterChannel])
+
   // ROI uses month-level data regardless of CMG filter (costs are not CMG-specific)
   const roiKpi = useMemo(() => {
     const effectiveTo = rangeTo ?? (rangeFrom ? hoverMonth : null)
@@ -224,7 +237,7 @@ export default function OverviewClient() {
           value={fmtBaht(kpi.hoc_sales)}
           subtitle={`Target ${fmtBaht(kpi.sales_target)}`}
           icon={TrendingUp}
-          tooltip="Revenue from HOC Unilever products ordered within the attribution window (converted customers only). Excludes not-converted orders."
+          tooltip={`HOC Sales: ${formatTHB(kpi.hoc_sales)}\nTarget: ${formatTHB(kpi.sales_target)}\nAchievement: ${kpi.achievement.toFixed(1)}%\n\nRevenue from HOC Unilever products ordered within the attribution window (converted customers only). Excludes not-converted orders.`}
         />
         <KpiCard
           title="Achievement"
@@ -250,12 +263,10 @@ export default function OverviewClient() {
         />
         <KpiCard
           title="Total Calls"
-          value={kpi.total_calls.toLocaleString()}
-          subtitle={`Reached ${kpi.reached.toLocaleString()}`}
+          value={dateOnlyKpi.total_calls.toLocaleString()}
+          subtitle={`Converted: ${kpi.ordered.toLocaleString()}`}
           icon={PhoneCall}
-          tooltip={filterCmg.length > 0
-            ? "Counts calls to customers with at least one order in the selected CMG. Customers with no orders cannot be assigned a CMG."
-            : "Total unique customers called by the telesales team. 'Reached' excludes unreachable statuses (no answer, switched off, unavailable)."}
+          tooltip={`Total calls for the selected date range — not affected by CMG filter (calls cannot be CMG-attributed).\n\nConverted count changes with CMG filter: customers who ordered within the attribution window for the selected CMG(s).`}
         />
         <KpiCard
           title="Program ROI"

@@ -9,7 +9,7 @@ import {
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { cn } from '@/lib/utils'
-import { fmtBaht, fmt } from '@/lib/formatters'
+import { fmtBaht, fmt, formatTHB } from '@/lib/formatters'
 import { CustomerTrendChart } from '@/components/dashboard/CustomerTrendChart'
 
 // ── Chart Config ──────────────────────────────────────────────────────────────
@@ -49,7 +49,7 @@ function SalesTooltip({ active, payload, label, filterChannel = 'all' }: SalesTo
       <div className="font-semibold text-muted-foreground text-[10px] uppercase tracking-wider">{label}</div>
       <div className="space-y-0.5">
         <div className="text-[10px] text-muted-foreground">{salesLabel}</div>
-        <div className="text-base font-bold text-foreground">{fmtBaht(totalSales)}</div>
+        <div className="text-base font-bold text-foreground">{formatTHB(totalSales)}</div>
       </div>
       {filterChannel === 'all' && (
         <div className="space-y-1.5 pt-1">
@@ -58,14 +58,14 @@ function SalesTooltip({ active, payload, label, filterChannel = 'all' }: SalesTo
               <span className="h-2 w-2 rounded-full border border-black/5" style={{ backgroundColor: salesChartConfig.online_sales.color }} />
               <span>Online Sales</span>
             </div>
-            <span className="font-semibold tabular-nums text-foreground">{fmtBaht(onlineSales)}</span>
+            <span className="font-semibold tabular-nums text-foreground">{formatTHB(onlineSales)}</span>
           </div>
           <div className="flex items-center justify-between gap-4">
             <div className="flex items-center gap-1.5 text-muted-foreground">
               <span className="h-2 w-2 rounded-full border border-black/5" style={{ backgroundColor: salesChartConfig.offline_sales.color }} />
               <span>Offline Sales</span>
             </div>
-            <span className="font-semibold tabular-nums text-foreground">{fmtBaht(offlineSales)}</span>
+            <span className="font-semibold tabular-nums text-foreground">{formatTHB(offlineSales)}</span>
           </div>
         </div>
       )}
@@ -76,7 +76,7 @@ function SalesTooltip({ active, payload, label, filterChannel = 'all' }: SalesTo
             <span className="h-2 w-2 rounded-full border border-gray-300" style={{ backgroundColor: salesChartConfig.sales_target.color }} />
             <span>Target</span>
           </div>
-          <span className="font-semibold tabular-nums text-foreground">{target > 0 ? fmtBaht(target) : '—'}</span>
+          <span className="font-semibold tabular-nums text-foreground">{target > 0 ? formatTHB(target) : '—'}</span>
         </div>
         <div className="flex items-center justify-between gap-4">
           <div className="flex items-center gap-1.5 text-muted-foreground">
@@ -141,7 +141,7 @@ export function OverviewChart({
             <CardTitle className="text-lg font-medium">HOC Sales vs Target Trend</CardTitle>
             <div className="flex items-center gap-2 flex-wrap">
               <h3 className="text-3xl font-semibold text-card-foreground">
-                {fmtBaht(kpi.hoc_sales)}
+                {formatTHB(kpi.hoc_sales)}
               </h3>
               <Badge
                 className={cn(
@@ -155,7 +155,7 @@ export function OverviewChart({
                 {kpi.achievement.toFixed(1)}%
               </Badge>
               <span className="text-xs text-muted-foreground">
-                of target ({fmtBaht(kpi.sales_target)})
+                of target ({formatTHB(kpi.sales_target)})
               </span>
             </div>
           </div>
@@ -195,7 +195,7 @@ export function OverviewChart({
             <ComposedChart data={byMonth} margin={{ left: 10, right: 10, top: 10, bottom: 0 }}>
               <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="rgba(144, 164, 174, 0.3)" />
               <XAxis dataKey="month_label" tickLine={false} tickMargin={10} axisLine={false} fontSize={12} />
-              <YAxis yAxisId="sales" tickFormatter={fmt} tickLine={false} axisLine={false} tickMargin={10} fontSize={12} width={50} />
+              <YAxis yAxisId="sales" tickFormatter={v => formatTHB(v)} tickLine={false} axisLine={false} tickMargin={10} fontSize={11} width={100} />
               <YAxis yAxisId="pct" orientation="right" tickFormatter={v => `${v}%`} tickLine={false} axisLine={false} tickMargin={10} fontSize={12} width={40} />
               <ChartTooltip
                 cursor={false}
