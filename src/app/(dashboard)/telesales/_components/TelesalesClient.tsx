@@ -377,7 +377,10 @@ export default function TelesalesClient() {
                 label="All Segments"
                 value={cmg}
                 onChange={setCmg}
-                options={(data?.options?.cmg || []).map(v => ({ value: v, label: v }))}
+                options={[
+                  ...(data?.options?.cmg || []).map(v => ({ value: v, label: v })),
+                  { value: '__no_segment__', label: 'No Segment' },
+                ]}
                 width="w-[150px]"
               />
 

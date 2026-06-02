@@ -47,7 +47,6 @@ export function MultiSelect({ label, value, onChange, options, width = 'w-36' }:
             >
               <Checkbox
                 checked={value.includes(o.value)}
-                onCheckedChange={() => toggle(o.value)}
                 className="pointer-events-none"
               />
               <span className="text-sm leading-none">{o.label}</span>
