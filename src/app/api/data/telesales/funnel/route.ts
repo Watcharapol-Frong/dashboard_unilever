@@ -243,7 +243,9 @@ export async function GET(request: Request) {
     }
 
     const res = NextResponse.json({ ok: true, data: { nodes, links, summary } })
-    setCacheHeader(res, 'MEDIUM')
+    // Cache funnel for 10 min — it's expensive to compute (GROUP BY all mmids + engagement classification)
+    // Users get instant cached response on repeat filters, stale data for 20 min
+    setCacheHeader(res, 'FUNNEL')
     return res
   })
 }
