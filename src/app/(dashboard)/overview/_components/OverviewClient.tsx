@@ -193,7 +193,7 @@ export default function OverviewClient() {
             <div className="w-px h-6 bg-border hidden lg:block" />
 
             <MultiSelect
-              label="Customer Segmentation"
+              label="All Segments"
               value={filterCmg}
               onChange={setFilterCmg}
               options={cmgOptions.map(v => ({ value: v, label: v }))}
@@ -245,7 +245,7 @@ export default function OverviewClient() {
           subtitle={kpi.achievement >= 100 ? 'Target reached ✓' : 'Below target'}
           valueClassName={colorAchievement(kpi.achievement)}
           icon={Target}
-          tooltip="HOC Sales as a percentage of the monthly sales target. Calculated per CMG and summed across the selected period."
+          tooltip="HOC Sales as a percentage of the monthly sales target. Calculated per segment and summed across the selected period."
         />
         <KpiCard
           title="New Customers"
@@ -266,7 +266,7 @@ export default function OverviewClient() {
           value={dateOnlyKpi.total_calls.toLocaleString()}
           subtitle={`Converted: ${kpi.ordered.toLocaleString()}`}
           icon={PhoneCall}
-          tooltip={`Total calls for the selected date range — not affected by CMG filter (calls cannot be CMG-attributed).\n\nConverted count changes with CMG filter: customers who ordered within the attribution window for the selected CMG(s).`}
+          tooltip={`Total calls for the selected date range — not affected by segment filter (calls cannot be segment-attributed).\n\nConverted count changes with segment filter: customers who ordered within the attribution window for the selected segment(s).`}
         />
         <KpiCard
           title="Program ROI"
@@ -274,7 +274,7 @@ export default function OverviewClient() {
           subtitle="Sales / Expense multiplier"
           valueClassName={colorRoi(roiKpi.roi)}
           icon={Calculator}
-          tooltip="HOC Sales ÷ Total Program Expense (incentives + agent costs). Always month-level — not affected by CMG filter because costs are shared across all CMGs."
+          tooltip="HOC Sales ÷ Total Program Expense (incentives + agent costs). Always month-level — not affected by segment filter because costs are shared across all segments."
         />
       </KpiGrid>
 

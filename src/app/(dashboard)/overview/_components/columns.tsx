@@ -41,7 +41,7 @@ export const overviewColumns: ColumnDef<OverviewRow>[] = [
   },
   {
     accessorKey: "dynamic_cmg",
-    header: ({ column }) => <DataTableColumnHeader column={column} title="CMG" />,
+    header: ({ column }) => <DataTableColumnHeader column={column} title="Segment" />,
     cell: ({ row }) => (
       <span className="text-xs text-muted-foreground">{row.original.dynamic_cmg}</span>
     ),
@@ -100,7 +100,7 @@ export const overviewColumns: ColumnDef<OverviewRow>[] = [
   {
     accessorKey: "retention",
     header: ({ column }) => (
-      <DataTableColumnHeader column={column} title="Retention" className="justify-end" />
+      <DataTableColumnHeader column={column} title="Repeat" className="justify-end" />
     ),
     cell: ({ row }) => (
       <div className="text-right tabular-nums text-sm">{row.original.retention}</div>

@@ -37,10 +37,10 @@ export async function GET() {
       WITH channel_metrics AS (
         SELECT
           month, dynamic_cmg,
-          COALESCE(SUM(sales_in_vat) FILTER (WHERE channel = 'online'), 0)                                  AS online_sales,
-          COALESCE(SUM(sales_in_vat) FILTER (WHERE channel = 'offline'), 0)                                 AS offline_sales,
-          COUNT(DISTINCT order_number) FILTER (WHERE channel = 'online')                                    AS online_orders,
-          COUNT(DISTINCT order_number) FILTER (WHERE channel = 'offline')                                   AS offline_orders,
+          COALESCE(SUM(sales_in_vat) FILTER (WHERE channel = 'online'  AND customer_type IN ('new_customer', 'retention')), 0) AS online_sales,
+          COALESCE(SUM(sales_in_vat) FILTER (WHERE channel = 'offline' AND customer_type IN ('new_customer', 'retention')), 0) AS offline_sales,
+          COUNT(DISTINCT order_number) FILTER (WHERE channel = 'online'  AND customer_type IN ('new_customer', 'retention')) AS online_orders,
+          COUNT(DISTINCT order_number) FILTER (WHERE channel = 'offline' AND customer_type IN ('new_customer', 'retention')) AS offline_orders,
           COUNT(DISTINCT mmid) FILTER (WHERE channel = 'online'  AND customer_type = 'new_customer')        AS online_new_customers,
           COUNT(DISTINCT mmid) FILTER (WHERE channel = 'offline' AND customer_type = 'new_customer')        AS offline_new_customers,
           COUNT(DISTINCT mmid) FILTER (WHERE channel = 'online'  AND customer_type = 'retention')           AS online_retention,

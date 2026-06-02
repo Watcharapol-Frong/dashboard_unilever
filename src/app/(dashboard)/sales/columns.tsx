@@ -30,7 +30,7 @@ export const columns: ColumnDef<RecentOrder>[] = [
   },
   {
     accessorKey: "dynamic_cmg",
-    header: "CMG",
+    header: "Segment",
     cell: ({ row }) => row.original.dynamic_cmg ?? "-",
   },
   {

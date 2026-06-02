@@ -97,15 +97,15 @@ function AllUsersContent() {
         <AccordionContent>
           <SectionLabel>KPI Cards</SectionLabel>
           <Term label="HOC Sales">Total Unilever HOC order value (online + offline) from telesales-attributed customers within the selected period.</Term>
-          <Term label="Achievement %">HOC Sales ÷ Sales Target × 100. Only FOOD RETAILER and HORECA CMGs count from May 2026 onwards.</Term>
+          <Term label="Achievement %">HOC Sales ÷ Sales Target × 100. Only FOOD RETAILER and HORECA segments count from May 2026 onwards.</Term>
           <Term label="Total Leads">Number of MMIDs assigned to the telesales team.</Term>
           <Term label="New Customers">MMIDs whose first-ever HOC order fell within the attribution window.</Term>
-          <Term label="Retention">MMIDs with a repeat HOC order within the attribution window.</Term>
+          <Term label="Repeat">MMIDs with a repeat HOC order within the attribution window.</Term>
           <Term label="Program ROI">Incentive-eligible HOC Sales ÷ Total Program Expense (incentives + agent costs + supervisor costs).</Term>
 
           <SectionLabel>Filters</SectionLabel>
           <Term label="Month chips">Click one month to select it; click another to set an end range. Click the same month again to deselect.</Term>
-          <Term label="CMG">Filter all charts and KPIs to a specific customer management group.</Term>
+          <Term label="Customer Segment">Filter all charts and KPIs to a specific customer segment (FOOD RETAILER, HORECA, END USER, etc.).</Term>
           <Term label="Channel">Online / Offline split for the Sales vs Target chart bars.</Term>
         </AccordionContent>
       </AccordionItem>
@@ -152,12 +152,12 @@ function AllUsersContent() {
         </AccordionTrigger>
         <AccordionContent>
           <SectionLabel>Charts</SectionLabel>
-          <Term label="HOC Sales vs Target">Monthly bar chart comparing actual HOC sales against the target per CMG. Bars are stacked by channel (online/offline).</Term>
+          <Term label="HOC Sales vs Target">Monthly bar chart comparing actual HOC sales against the target per segment. Bars are stacked by channel (online/offline).</Term>
           <Term label="Period comparison">Current period vs previous period — absolute and % change shown on each KPI card.</Term>
 
           <SectionLabel>Key values</SectionLabel>
-          <Term label="HOC Sales">All telesales-attributed orders (new_customer + retention) within the selected date range.</Term>
-          <Term label="Sales Target">Monthly targets uploaded per CMG via Data Hub → Targets file.</Term>
+          <Term label="HOC Sales">All telesales-attributed orders (new_customer + repeat) within the selected date range.</Term>
+          <Term label="Sales Target">Monthly targets uploaded per segment via Data Hub → Targets file.</Term>
           <Formula>Achievement % = HOC Sales ÷ Sales Target × 100</Formula>
         </AccordionContent>
       </AccordionItem>
@@ -267,7 +267,7 @@ function AdminContent() {
             <li><span className="font-semibold text-foreground">Telesales Calls</span> — requires MMIDs from Leads</li>
             <li><span className="font-semibold text-foreground">Online Sales</span> — requires prod_num from Products</li>
             <li><span className="font-semibold text-foreground">Offline Sales</span> — requires prod_num from Products</li>
-            <li><span className="font-semibold text-foreground">Targets</span> — monthly targets per CMG</li>
+            <li><span className="font-semibold text-foreground">Targets</span> — monthly targets per segment</li>
             <li><span className="font-semibold text-foreground">Costs</span> — monthly cost per head</li>
             <li><span className="font-semibold text-foreground">Agent Headcount</span> — monthly FTE counts</li>
             <li><span className="font-semibold text-foreground">Incentive Tiers</span> — tier → rate mapping</li>
@@ -304,7 +304,7 @@ function AdminContent() {
           <SectionLabel>What rebuild does</SectionLabel>
           <ol className="text-xs text-muted-foreground space-y-1 list-decimal list-inside">
             <li>Drops and recreates <code>mart_telesales_orders</code> — assigns customer_type to every order</li>
-            <li>Drops and recreates <code>mart_performance_cmg</code> — CMG-level KPIs per month</li>
+            <li>Drops and recreates <code>mart_performance_cmg</code> — segment-level KPIs per month</li>
             <li>Drops and recreates <code>mart_performance_month</code> — month-level incentive, cost, ROI</li>
           </ol>
         </AccordionContent>
@@ -320,7 +320,7 @@ function AdminContent() {
           <UploadTable rows={[
             { col: "mmid",               type: "TEXT", note: "Unique customer ID — primary key" },
             { col: "tier",               type: "TEXT", note: "e.g. Gold, Silver, Bronze" },
-            { col: "lead_customers",     type: "TEXT", note: "CMG bucket assigned to this lead" },
+            { col: "lead_customers",     type: "TEXT", note: "Customer segment assigned to this lead" },
             { col: "senior_buyer_name",  type: "TEXT", note: "Senior buyer name (optional)" },
           ]} />
         </AccordionContent>

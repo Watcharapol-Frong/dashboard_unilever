@@ -374,7 +374,7 @@ export default function TelesalesClient() {
               />
 
               <MultiSelect
-                label="All CMG"
+                label="All Segments"
                 value={cmg}
                 onChange={setCmg}
                 options={(data?.options?.cmg || []).map(v => ({ value: v, label: v }))}

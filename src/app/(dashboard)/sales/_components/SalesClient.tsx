@@ -219,7 +219,7 @@ export default function SalesClient() {
                 width="w-[130px]"
               />
               <MultiSelect
-                label="All CMG"
+                label="All Segments"
                 value={cmg}
                 onChange={setCmg}
                 options={options.cmg.map(v => ({ value: v, label: v }))}
@@ -304,7 +304,7 @@ export default function SalesClient() {
           tooltip="Unique first-time HOC buyers for the displayed period — includes both converted (within attribution window) and first-order-not-converted."
         />
         <KpiCard
-          title="Retention Customers"
+          title="Repeat Customers"
           value={kpi.retention_customers.toLocaleString()}
           subtitle={kpiPeriodLabel ? `${kpiPeriodLabel} · repeat buyers` : 'Repeat telesales buyers'}
           icon={Users}

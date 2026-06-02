@@ -188,7 +188,7 @@ export default function LeadsClient() {
               ]}
             />
             <MultiSelect
-              label="All CMG"
+              label="All Segments"
               value={filterCmg}
               onChange={setFilterCmg}
               options={cmgs.map(v => ({ value: v, label: v }))}

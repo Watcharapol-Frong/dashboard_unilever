@@ -64,7 +64,7 @@ export const leadsColumns: ColumnDef<Lead>[] = [
   },
   {
     accessorKey: "dynamic_cmg",
-    header: ({ column }) => <DataTableColumnHeader column={column} title="CMG" />,
+    header: ({ column }) => <DataTableColumnHeader column={column} title="Segment" />,
     cell: ({ row }) => (
       <span className="text-xs text-muted-foreground">
         {row.original.dynamic_cmg ?? <span className="text-muted-foreground/40">—</span>}
