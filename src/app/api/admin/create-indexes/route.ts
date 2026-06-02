@@ -1,15 +1,11 @@
 import { NextResponse } from 'next/server'
-import { withAuth } from '@/lib/auth'
-import { queryOne } from '@/lib/db'
+import { withAdmin } from '@/lib/auth'
+import { query } from '@/lib/db'
 
 export const dynamic = 'force-dynamic'
 
 export async function POST(request: Request) {
-  return withAuth(async (_user, isAdmin) => {
-    if (!isAdmin) {
-      return NextResponse.json({ ok: false, error: 'Admin only' }, { status: 403 })
-    }
-
+  return withAdmin(async () => {
     const indexes = [
       {
         name: 'idx_telesales_calls_mmid_status_date',
@@ -35,7 +31,7 @@ export async function POST(request: Request) {
 
     for (const idx of indexes) {
       try {
-        await queryOne<{ }>(idx.sql, [])
+        await query<{ }>(`${idx.sql}`, [])
         results.push({
           name: idx.name,
           desc: idx.desc,
@@ -60,3 +56,4 @@ export async function POST(request: Request) {
     }, { status: allSuccess ? 200 : 206 })
   })
 }
+

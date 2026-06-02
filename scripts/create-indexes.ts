@@ -28,7 +28,7 @@ async function createIndexes() {
     try {
       console.log(`⏳ ${idx.name}`)
       console.log(`   ${idx.desc}`)
-      await query<{}>(idx.sql, [])
+      await query(`${idx.sql}`, [])
       console.log(`   ✅ Success\n`)
     } catch (err: any) {
       console.log(`   ❌ Error: ${err.message}\n`)
