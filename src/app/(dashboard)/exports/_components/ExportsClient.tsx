@@ -240,7 +240,7 @@ export default function ExportsClient() {
             ) : (
               <Select value={filterCmg} onValueChange={setFilterCmg}>
                 <SelectTrigger className="h-8 w-36 text-xs">
-                  <SelectValue placeholder="All CMGs" />
+                  <SelectValue placeholder="All Segments" />
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="all">All CMGs</SelectItem>
@@ -272,9 +272,9 @@ export default function ExportsClient() {
                 <SelectContent>
                   <SelectItem value="all">All types</SelectItem>
                   <SelectItem value="new_customer">New Customer</SelectItem>
-                  <SelectItem value="retention">Retention</SelectItem>
+                  <SelectItem value="retention">Repeat</SelectItem>
                   <SelectItem value="first_order_not_converted">First Order (Not Conv.)</SelectItem>
-                  <SelectItem value="retention_not_converted">Retention (Not Conv.)</SelectItem>
+                  <SelectItem value="retention_not_converted">Repeat (Not Conv.)</SelectItem>
                 </SelectContent>
               </Select>
             )}

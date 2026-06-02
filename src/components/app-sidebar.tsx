@@ -1,6 +1,7 @@
 "use client"
 
 import * as React from "react"
+import Link from "next/link"
 import { usePathname } from "next/navigation"
 import { useUser } from "@clerk/nextjs"
 import {
@@ -99,9 +100,9 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
               tooltip="Unilever Project"
               className="data-[slot=sidebar-menu-button]:p-1.5!"
             >
-              <a href="/overview">
+              <Link href="/overview">
                 <span className="text-base font-semibold">Unilever Project</span>
-              </a>
+              </Link>
             </SidebarMenuButton>
           </SidebarMenuItem>
         </SidebarMenu>

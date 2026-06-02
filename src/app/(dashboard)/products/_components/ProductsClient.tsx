@@ -124,7 +124,7 @@ const newVsRetentionColumns: ColumnDef<ExtProductRow>[] = [
   {
     accessorKey: 'retention_customers',
     header: ({ column }) => (
-      <DataTableColumnHeader column={column} title="Retention" className="justify-end" />
+      <DataTableColumnHeader column={column} title="Repeat" className="justify-end" />
     ),
     cell: ({ row }) => (
       <div className="text-right font-semibold text-teal-600">
@@ -163,7 +163,7 @@ const newVsRetentionColumns: ColumnDef<ExtProductRow>[] = [
       )
       if (seg === 'pull_old') return (
         <span className="inline-flex items-center gap-1 text-xs font-semibold text-teal-600">
-          <Users className="h-3 w-3" /> Retention Driver
+          <Users className="h-3 w-3" /> Repeat Driver
         </span>
       )
       return <span className="text-xs text-muted-foreground font-medium">Mixed</span>
@@ -495,7 +495,7 @@ export default function ProductsClient() {
           <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-4">
             <TabsList>
               <TabsTrigger value="products">Top SKUs</TabsTrigger>
-              <TabsTrigger value="new_vs_retention">New vs Retention</TabsTrigger>
+              <TabsTrigger value="new_vs_retention">New vs Repeat</TabsTrigger>
               <TabsTrigger value="brands">By Brand</TabsTrigger>
             </TabsList>
 
@@ -519,7 +519,7 @@ export default function ProductsClient() {
                 </div>
                 <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
                   <Users className="h-3.5 w-3.5 text-teal-600" />
-                  <span><span className="font-semibold text-teal-600">Retention Driver</span> — retention ≥ 70%</span>
+                  <span><span className="font-semibold text-teal-600">Repeat Driver</span> — repeat ≥ 70%</span>
                 </div>
                 <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
                   <span className="font-semibold text-muted-foreground">Mixed</span>
@@ -540,7 +540,7 @@ export default function ProductsClient() {
                     <SelectContent>
                       <SelectItem value="all">All Segments</SelectItem>
                       <SelectItem value="hook_new">New Customer Driver</SelectItem>
-                      <SelectItem value="pull_old">Retention Driver</SelectItem>
+                      <SelectItem value="pull_old">Repeat Driver</SelectItem>
                       <SelectItem value="mixed">Mixed</SelectItem>
                     </SelectContent>
                   </Select>

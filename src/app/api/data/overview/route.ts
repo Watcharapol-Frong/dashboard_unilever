@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server'
 import { withAuth } from '@/lib/auth'
-import { query } from '@/lib/db'
+import { query, queryOne } from '@/lib/db'
 import { setCacheHeader } from '@/lib/query'
 
 export const dynamic = 'force-dynamic'
@@ -37,10 +37,10 @@ export async function GET() {
       WITH channel_metrics AS (
         SELECT
           month, dynamic_cmg,
-          COALESCE(SUM(sales_in_vat) FILTER (WHERE channel = 'online'), 0)                                  AS online_sales,
-          COALESCE(SUM(sales_in_vat) FILTER (WHERE channel = 'offline'), 0)                                 AS offline_sales,
-          COUNT(DISTINCT order_number) FILTER (WHERE channel = 'online')                                    AS online_orders,
-          COUNT(DISTINCT order_number) FILTER (WHERE channel = 'offline')                                   AS offline_orders,
+          COALESCE(SUM(sales_in_vat) FILTER (WHERE channel = 'online'  AND customer_type IN ('new_customer', 'retention')), 0) AS online_sales,
+          COALESCE(SUM(sales_in_vat) FILTER (WHERE channel = 'offline' AND customer_type IN ('new_customer', 'retention')), 0) AS offline_sales,
+          COUNT(DISTINCT order_number) FILTER (WHERE channel = 'online'  AND customer_type IN ('new_customer', 'retention')) AS online_orders,
+          COUNT(DISTINCT order_number) FILTER (WHERE channel = 'offline' AND customer_type IN ('new_customer', 'retention')) AS offline_orders,
           COUNT(DISTINCT mmid) FILTER (WHERE channel = 'online'  AND customer_type = 'new_customer')        AS online_new_customers,
           COUNT(DISTINCT mmid) FILTER (WHERE channel = 'offline' AND customer_type = 'new_customer')        AS offline_new_customers,
           COUNT(DISTINCT mmid) FILTER (WHERE channel = 'online'  AND customer_type = 'retention')           AS online_retention,
@@ -87,6 +87,11 @@ export async function GET() {
       throw err
     })
 
+    const callsRow = await queryOne<{ total_calls: string }>(
+      `SELECT COUNT(DISTINCT mmid)::text AS total_calls
+       FROM telesales_calls WHERE first_connected_date IS NOT NULL`
+    )
+
     const data = rows.map((r: any) => ({
       month:             r.month,
       month_label:       r.month_label,
@@ -116,7 +121,13 @@ export async function GET() {
       offline_retention: Number(r.offline_retention ?? 0),
     }))
 
-    const res = NextResponse.json({ ok: true, data })
+    const res = NextResponse.json({
+      ok: true,
+      data: {
+        rows: data,
+        all_time_calls: Number(callsRow?.total_calls ?? 0),
+      },
+    })
     setCacheHeader(res, 'MEDIUM')
     return res
   })

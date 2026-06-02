@@ -188,7 +188,7 @@ export default function LeadsClient() {
               ]}
             />
             <MultiSelect
-              label="All CMG"
+              label="All Segments"
               value={filterCmg}
               onChange={setFilterCmg}
               options={cmgs.map(v => ({ value: v, label: v }))}
@@ -213,7 +213,7 @@ export default function LeadsClient() {
           searchValue={search}
           onSearchChange={(v) => { setSearch(v); setPage(1) }}
           searchPlaceholder="Search MMID or name..."
-          manualPagination
+          defaultPageSize={20}
         />
       </div>
 

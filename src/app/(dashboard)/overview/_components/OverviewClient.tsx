@@ -12,8 +12,8 @@ import { PageLoading, PageEmpty } from '@/components/dashboard/PageState'
 import { MonthChipGroup } from '@/components/dashboard/MonthChipGroup'
 
 import { useDashboardSWR } from '@/hooks/useDashboardSWR'
-import { useMonthRange } from '@/hooks/useMonthRange'
-import { fmtBaht, colorAchievement, colorRoi } from '@/lib/formatters'
+import { useMonthRange, lastDayOfMonth } from '@/hooks/useMonthRange'
+import { fmtBaht, colorAchievement, colorRoi, formatTHB } from '@/lib/formatters'
 import { type OverviewRow } from './columns'
 import {
   TrendingUp, Target, Users, UserPlus, PhoneCall,
@@ -73,8 +73,15 @@ function aggregate(rows: OverviewRow[], filterChannel = 'all'): Agg {
   }
 }
 
+interface OverviewData {
+  rows: OverviewRow[]
+  all_time_calls: number
+}
+
 export default function OverviewClient() {
-  const { data: rows = [], isLoading } = useDashboardSWR<OverviewRow[]>('/api/data/overview')
+  const { data, isLoading } = useDashboardSWR<OverviewData>('/api/data/overview')
+  const rows         = data?.rows         ?? []
+  const allTimeCalls = data?.all_time_calls ?? 0
 
   const months     = useMemo(() => [...new Set(rows.map(r => r.month))].sort(), [rows])
   const cmgOptions = useMemo(() => [...new Set(rows.map(r => r.dynamic_cmg))].sort(), [rows])
@@ -126,6 +133,19 @@ export default function OverviewClient() {
   }, [filtered, filterChannel])
 
   const kpi = useMemo(() => aggregate(mappedFiltered, filterChannel), [mappedFiltered, filterChannel])
+
+  // Call stats from telesales_calls directly — accurate COUNT DISTINCT (not limited to ordered MMIDs)
+  const callsApiUrl = useMemo(() => {
+    const p = new URLSearchParams()
+    if (rangeFrom) {
+      p.set('startDate', rangeFrom)
+      p.set('endDate', lastDayOfMonth(rangeTo ?? rangeFrom))
+    }
+    if (filterCmg.length > 0) p.set('cmg', filterCmg.join(','))
+    return `/api/data/overview/calls?${p.toString()}`
+  }, [rangeFrom, rangeTo, filterCmg])
+
+  const { data: callStats } = useDashboardSWR<{ total_calls: number; converted: number }>(callsApiUrl)
 
   // ROI uses month-level data regardless of CMG filter (costs are not CMG-specific)
   const roiKpi = useMemo(() => {
@@ -180,7 +200,7 @@ export default function OverviewClient() {
             <div className="w-px h-6 bg-border hidden lg:block" />
 
             <MultiSelect
-              label="Customer Segmentation"
+              label="All Segments"
               value={filterCmg}
               onChange={setFilterCmg}
               options={cmgOptions.map(v => ({ value: v, label: v }))}
@@ -224,7 +244,7 @@ export default function OverviewClient() {
           value={fmtBaht(kpi.hoc_sales)}
           subtitle={`Target ${fmtBaht(kpi.sales_target)}`}
           icon={TrendingUp}
-          tooltip="Revenue from HOC Unilever products ordered within the attribution window (converted customers only). Excludes not-converted orders."
+          tooltip={`HOC Sales: ${formatTHB(kpi.hoc_sales)}\nTarget: ${formatTHB(kpi.sales_target)}\nAchievement: ${kpi.achievement.toFixed(1)}%\n\nRevenue from HOC Unilever products ordered within the attribution window (converted customers only). Excludes not-converted orders.`}
         />
         <KpiCard
           title="Achievement"
@@ -232,7 +252,7 @@ export default function OverviewClient() {
           subtitle={kpi.achievement >= 100 ? 'Target reached ✓' : 'Below target'}
           valueClassName={colorAchievement(kpi.achievement)}
           icon={Target}
-          tooltip="HOC Sales as a percentage of the monthly sales target. Calculated per CMG and summed across the selected period."
+          tooltip="HOC Sales as a percentage of the monthly sales target. Calculated per segment and summed across the selected period."
         />
         <KpiCard
           title="New Customers"
@@ -250,12 +270,10 @@ export default function OverviewClient() {
         />
         <KpiCard
           title="Total Calls"
-          value={kpi.total_calls.toLocaleString()}
-          subtitle={`Reached ${kpi.reached.toLocaleString()}`}
+          value={(callStats?.total_calls ?? allTimeCalls).toLocaleString()}
+          subtitle={`New + Repeat: ${(kpi.new_customers + kpi.retention).toLocaleString()}`}
           icon={PhoneCall}
-          tooltip={filterCmg.length > 0
-            ? "Counts calls to customers with at least one order in the selected CMG. Customers with no orders cannot be assigned a CMG."
-            : "Total unique customers called by the telesales team. 'Reached' excludes unreachable statuses (no answer, switched off, unavailable)."}
+          tooltip={`Unique customers called (1 per MMID) — updates with date range filter only. Calls are not segment-attributable so the value does not change with segment filter.\n\nNew + Repeat (subtitle) = the same values as the New Customers and Repeat Customers cards — responds to both date range and segment filter.`}
         />
         <KpiCard
           title="Program ROI"
@@ -263,7 +281,7 @@ export default function OverviewClient() {
           subtitle="Sales / Expense multiplier"
           valueClassName={colorRoi(roiKpi.roi)}
           icon={Calculator}
-          tooltip="HOC Sales ÷ Total Program Expense (incentives + agent costs). Always month-level — not affected by CMG filter because costs are shared across all CMGs."
+          tooltip="HOC Sales ÷ Total Program Expense (incentives + agent costs). Always month-level — not affected by segment filter because costs are shared across all segments."
         />
       </KpiGrid>
 

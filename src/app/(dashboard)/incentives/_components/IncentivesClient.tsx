@@ -130,7 +130,7 @@ export default function IncentivesClient() {
     if (!data?.monthly_summary) return []
     return [...data.monthly_summary].reverse().map(m => ({
       name: new Date(m.month).toLocaleDateString('en-GB', { month: 'short', year: 'numeric' }),
-      Incentive: m.total_incentive,
+      IncentivePerHead: m.incentive_per_head,
       ROI: m.roi,
     }))
   }, [data])
@@ -140,20 +140,23 @@ export default function IncentivesClient() {
     return <PageEmpty message="No incentive data available" hint="Please upload agent headcounts, costs, targets & incentives data and rebuild mart." />
   }
 
-  const totalIncentive = data.monthly_summary.reduce((sum, m) => sum + m.total_incentive,      0)
   const totalExpense   = data.monthly_summary.reduce((sum, m) => sum + m.total_expense,         0)
   const totalSales     = data.monthly_summary.reduce((sum, m) => sum + m.incentive_hoc_sales,   0)
+  const totalTarget    = data.monthly_summary.reduce((sum, m) => sum + m.sales_target,           0)
   const grandRoi       = totalExpense > 0 ? totalSales / totalExpense : 0
+  const grandAchieve   = totalTarget  > 0 ? (totalSales / totalTarget) * 100 : 0
+  // Most recent month (API returns DESC order) — shows the current applicable incentive per head
+  const latestPerHead  = data.monthly_summary[0]?.incentive_per_head ?? 0
 
   return (
     <div className="space-y-6">
       <KpiGrid cols={2}>
         <KpiCard
-          title="Total Incentives Paid"
-          value={formatTHB(totalIncentive)}
-          subtitle="Agent performance bonus"
+          title="Incentive Per Head"
+          value={latestPerHead > 0 ? formatTHB(latestPerHead) : '—'}
+          subtitle="Latest month · per agent"
           icon={PiggyBank}
-          tooltip="Total incentive payout to agents — calculated as agent headcount × incentive rate per head. Rate is determined by the monthly achievement tier (FOOD RETAILER + HORECA sales vs target)."
+          tooltip={`HOC Sales: ${formatTHB(totalSales)}\nTarget: ${formatTHB(totalTarget)}\nAchievement: ${grandAchieve.toFixed(1)}%\n\nIncentive rate per agent head for the most recent month — determined by the achievement tier (FOOD RETAILER + HORECA sales vs target). Earlier months may have a different rate.`}
         />
         <KpiCard
           title="Overall Program ROI"
@@ -165,12 +168,12 @@ export default function IncentivesClient() {
         />
       </KpiGrid>
 
-      <ChartCard title="Monthly Incentives vs Program ROI" height={300}>
+      <ChartCard title="Monthly Incentives Per Head" height={300}>
         <ComposedChart data={chartData} margin={{ top: 10, right: 10, left: 10, bottom: 0 }}>
           <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="rgba(144,164,174,0.3)" />
           <XAxis dataKey="name" tickLine={false} axisLine={false} tickMargin={8} fontSize={11} />
           <YAxis yAxisId="incentive" tickLine={false} axisLine={false} tickMargin={8} fontSize={11}
-            tickFormatter={v => `฿${(v / 1000).toFixed(0)}k`} />
+            tickFormatter={v => formatTHB(v)} width={80} />
           <YAxis yAxisId="roi" orientation="right" tickLine={false} axisLine={false} tickMargin={8} fontSize={11}
             tickFormatter={v => `${v}x`} />
           <RechartsTooltip
@@ -194,7 +197,7 @@ export default function IncentivesClient() {
               )
             }}
           />
-          <Bar yAxisId="incentive" dataKey="Incentive" name="Total Incentives Paid" fill="#003DA6" radius={[4, 4, 0, 0]} barSize={24} />
+          <Bar yAxisId="incentive" dataKey="IncentivePerHead" name="Incentive Per Head" fill="#003DA6" radius={[4, 4, 0, 0]} barSize={24} />
           <Line yAxisId="roi" type="monotone" dataKey="ROI" name="ROI (Multiplier)" stroke="#EE2737" strokeWidth={3} dot={{ r: 4 }} />
         </ComposedChart>
       </ChartCard>

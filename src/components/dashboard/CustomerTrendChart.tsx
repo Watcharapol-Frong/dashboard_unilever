@@ -28,18 +28,18 @@ type Conversion = 'all' | 'converted' | 'not_converted'
 
 const chartConfig = {
   new_customer:               { label: 'New Customer',              color: '#10b981' },
-  retention:                  { label: 'Retention',                 color: '#0d9488' },
+  retention:                  { label: 'Repeat',                    color: '#0d9488' },
   first_order_not_converted:  { label: 'First Order (Not Conv.)',   color: '#3b82f6' },
-  retention_not_converted:    { label: 'Retention (Not Conv.)',     color: '#94a3b8' },
+  retention_not_converted:    { label: 'Repeat (Not Conv.)',        color: '#94a3b8' },
 } satisfies ChartConfig
 
 const BAR_SIZE: Record<string, number> = { daily: 10, weekly: 22, monthly: 44 }
 
 const SERIES_META: Record<string, { color: string; label: string }> = {
   new_customer:               { color: '#10b981', label: 'New Customer' },
-  retention:                  { color: '#0d9488', label: 'Retention' },
+  retention:                  { color: '#0d9488', label: 'Repeat' },
   first_order_not_converted:  { color: '#3b82f6', label: 'First Order (Not Conv.)' },
-  retention_not_converted:    { color: '#94a3b8', label: 'Retention (Not Conv.)' },
+  retention_not_converted:    { color: '#94a3b8', label: 'Repeat (Not Conv.)' },
 }
 
 // ── Tooltip ───────────────────────────────────────────────────────────────────
@@ -102,7 +102,7 @@ const LEGEND_TIPS: Record<string, { label: string; tip: string }> = {
     tip: 'First-time customers who ordered within the attribution window.',
   },
   retention: {
-    label: 'Retention',
+    label: 'Repeat',
     tip: 'Returning customers who reordered within the attribution window.',
   },
   first_order_not_converted: {

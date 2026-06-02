@@ -130,7 +130,7 @@ export default function OrdersClient() {
                 width="w-[130px]"
               />
               <MultiSelect
-                label="All CMG"
+                label="All Segments"
                 value={cmg}
                 onChange={setCmg}
                 options={options.cmg.map(v => ({ value: v, label: v }))}
