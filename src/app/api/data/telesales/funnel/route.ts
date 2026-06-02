@@ -33,22 +33,25 @@ export async function GET(request: Request) {
     let channelParamIdx: number | null = null
     let cmgParamIdx: number | null = null
 
-    if (channel.length > 0 || cmg.length > 0) {
-      const subConditions: string[] = []
-      if (channel.length > 0) {
-        params.push(channel)
-        channelParamIdx = params.length
-        subConditions.push(`channel = ANY($${channelParamIdx})`)
-      }
-      if (cmg.length > 0) {
-        params.push(cmg)
+    if (channel.length > 0) {
+      params.push(channel)
+      channelParamIdx = params.length
+      conditions.push(`mmid IN (SELECT DISTINCT mmid FROM sales_hoc_orders WHERE channel = ANY($${channelParamIdx}))`)
+    }
+    if (cmg.length > 0) {
+      const NO_SEG    = '__no_segment__'
+      const realCmg   = cmg.filter(c => c !== NO_SEG)
+      const inclNoSeg = cmg.includes(NO_SEG)
+      const noSegSql  = `mmid NOT IN (SELECT DISTINCT mmid FROM mart_telesales_orders WHERE primary_cmg IS NOT NULL)`
+
+      if (realCmg.length > 0) {
+        params.push(realCmg)
         cmgParamIdx = params.length
-        subConditions.push(`dynamic_cmg = ANY($${cmgParamIdx})`)
+        const inSql = `mmid IN (SELECT DISTINCT mmid FROM mart_telesales_orders WHERE primary_cmg = ANY($${cmgParamIdx}))`
+        conditions.push(inclNoSeg ? `(${inSql} OR ${noSegSql})` : inSql)
+      } else if (inclNoSeg) {
+        conditions.push(noSegSql)
       }
-      conditions.push(`mmid IN (
-        SELECT DISTINCT mmid FROM sales_hoc_orders
-        WHERE ${subConditions.join(' AND ')}
-      )`)
     }
 
     const whereClause = 'WHERE ' + conditions.join(' AND ')
