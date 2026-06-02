@@ -73,8 +73,15 @@ function aggregate(rows: OverviewRow[], filterChannel = 'all'): Agg {
   }
 }
 
+interface OverviewData {
+  rows: OverviewRow[]
+  all_time_calls: number
+}
+
 export default function OverviewClient() {
-  const { data: rows = [], isLoading } = useDashboardSWR<OverviewRow[]>('/api/data/overview')
+  const { data, isLoading } = useDashboardSWR<OverviewData>('/api/data/overview')
+  const rows         = data?.rows         ?? []
+  const allTimeCalls = data?.all_time_calls ?? 0
 
   const months     = useMemo(() => [...new Set(rows.map(r => r.month))].sort(), [rows])
   const cmgOptions = useMemo(() => [...new Set(rows.map(r => r.dynamic_cmg))].sort(), [rows])
@@ -263,10 +270,10 @@ export default function OverviewClient() {
         />
         <KpiCard
           title="Total Calls"
-          value={dateOnlyKpi.total_calls.toLocaleString()}
+          value={rangeFrom ? dateOnlyKpi.total_calls.toLocaleString() : allTimeCalls.toLocaleString()}
           subtitle={`Converted: ${kpi.ordered.toLocaleString()}`}
           icon={PhoneCall}
-          tooltip={`Total calls for the selected date range — not affected by segment filter (calls cannot be segment-attributed).\n\nConverted count changes with segment filter: customers who ordered within the attribution window for the selected segment(s).`}
+          tooltip={`Unique customers called (1 per MMID). Without date filter shows all-time total.\n\nConverted count responds to both date range and segment filter — customers who placed an order within the attribution window.`}
         />
         <KpiCard
           title="Program ROI"
