@@ -42,7 +42,7 @@ function buildFilters(
   }
   if (channel.length > 0 || cmg.length > 0) {
     // Channel filter: use sales_hoc_orders (HOC orders)
-    // CMG filter: use mart_telesales_orders.primary_cmg (covers all called mmids)
+    // CMG filter: use telesales_calls.lead_customers (covers ALL called MMIDs, not just converters)
     if (channel.length > 0) {
       const i = push(channel)
       bare.push(`mmid IN (SELECT DISTINCT mmid FROM sales_hoc_orders WHERE channel = ANY($${i}))`)
@@ -51,9 +51,10 @@ function buildFilters(
     }
     if (cmg.length > 0) {
       const i = push(cmg)
-      bare.push(`mmid IN (SELECT DISTINCT mmid FROM mart_telesales_orders WHERE primary_cmg = ANY($${i}))`)
-      prefixed.push(`tc.mmid IN (SELECT DISTINCT mmid FROM mart_telesales_orders WHERE primary_cmg = ANY($${i}))`)
-      orderConds.push(`dynamic_cmg = ANY($${i})`)
+      // Use telesales_calls.lead_customers — covers ALL called MMIDs, not just those who ordered
+      bare.push(`lead_customers = ANY($${i})`)
+      prefixed.push(`tc.lead_customers = ANY($${i})`)
+      orderConds.push(`mmid IN (SELECT DISTINCT mmid FROM telesales_calls WHERE lead_customers = ANY($${i}))`)
     }
   }
 
@@ -178,8 +179,8 @@ export async function GET(request: Request) {
         FROM telesales_calls WHERE first_connected_date IS NOT NULL ORDER BY month
       `),
       query<{ cmg: string }>(`
-        SELECT DISTINCT primary_cmg AS cmg FROM mart_telesales_orders
-        WHERE primary_cmg IS NOT NULL ORDER BY primary_cmg
+        SELECT DISTINCT lead_customers AS cmg FROM telesales_calls
+        WHERE lead_customers IS NOT NULL ORDER BY lead_customers
       `),
       query<{ agent: string }>(`
         SELECT DISTINCT agent FROM telesales_calls WHERE agent IS NOT NULL ORDER BY agent

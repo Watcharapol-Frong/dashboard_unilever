@@ -34,29 +34,26 @@ export async function GET(request: Request) {
     let cmgParamIdx: number | null = null
 
     if (channel.length > 0 || cmg.length > 0) {
-      const subConditions: string[] = []
       if (channel.length > 0) {
         params.push(channel)
         channelParamIdx = params.length
-        subConditions.push(`channel = ANY($${channelParamIdx})`)
+        conditions.push(`mmid IN (SELECT DISTINCT mmid FROM sales_hoc_orders WHERE channel = ANY($${channelParamIdx}))`)
       }
       if (cmg.length > 0) {
         params.push(cmg)
         cmgParamIdx = params.length
-        subConditions.push(`dynamic_cmg = ANY($${cmgParamIdx})`)
+        // Use lead_customers on telesales_calls — covers ALL called MMIDs, not just converters
+        conditions.push(`lead_customers = ANY($${cmgParamIdx})`)
       }
-      conditions.push(`mmid IN (
-        SELECT DISTINCT mmid FROM sales_hoc_orders
-        WHERE ${subConditions.join(' AND ')}
-      )`)
     }
 
     const whereClause = 'WHERE ' + conditions.join(' AND ')
 
-    // mart_telesales_orders channel/cmg filter
+    // sales_hoc_orders extra conditions for conversions CTE
+    // channel: filter by order channel; cmg: filter by lead_customers (consistent with call filter above)
     const orderExtraConditions: string[] = []
     if (channelParamIdx !== null) orderExtraConditions.push(`channel = ANY($${channelParamIdx})`)
-    if (cmgParamIdx !== null)     orderExtraConditions.push(`dynamic_cmg = ANY($${cmgParamIdx})`)
+    if (cmgParamIdx !== null)     orderExtraConditions.push(`mmid IN (SELECT DISTINCT mmid FROM telesales_calls WHERE lead_customers = ANY($${cmgParamIdx}))`)
     const orderExtra = orderExtraConditions.length ? 'AND ' + orderExtraConditions.join(' AND ') : ''
 
     const row = await queryOne<{
