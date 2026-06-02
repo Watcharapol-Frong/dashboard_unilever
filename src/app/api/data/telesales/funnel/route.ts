@@ -42,7 +42,7 @@ export async function GET(request: Request) {
       const NO_SEG    = '__no_segment__'
       const realCmg   = cmg.filter(c => c !== NO_SEG)
       const inclNoSeg = cmg.includes(NO_SEG)
-      const noSegSql  = `mmid IN (SELECT DISTINCT mmid FROM mart_telesales_orders WHERE primary_cmg IS NULL)`
+      const noSegSql  = `mmid NOT IN (SELECT DISTINCT mmid FROM mart_telesales_orders WHERE primary_cmg IS NOT NULL)`
 
       if (realCmg.length > 0) {
         params.push(realCmg)
