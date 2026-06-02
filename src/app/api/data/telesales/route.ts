@@ -53,8 +53,9 @@ function buildFilters(
       const NO_SEG    = '__no_segment__'
       const realCmg   = cmg.filter(c => c !== NO_SEG)
       const inclNoSeg = cmg.includes(NO_SEG)
-      const noSegSql  = `mmid NOT IN (SELECT DISTINCT mmid FROM mart_telesales_orders WHERE primary_cmg IS NOT NULL)`
-      const noSegSqlTc = `tc.mmid NOT IN (SELECT DISTINCT mmid FROM mart_telesales_orders WHERE primary_cmg IS NOT NULL)`
+      // Use NOT EXISTS for better performance than NOT IN subquery
+      const noSegSql  = `NOT EXISTS (SELECT 1 FROM mart_telesales_orders WHERE mmid = telesales_calls.mmid AND primary_cmg IS NOT NULL)`
+      const noSegSqlTc = `NOT EXISTS (SELECT 1 FROM mart_telesales_orders WHERE mmid = tc.mmid AND primary_cmg IS NOT NULL)`
 
       if (realCmg.length > 0) {
         const i = push(realCmg)
