@@ -271,9 +271,9 @@ export default function OverviewClient() {
         <KpiCard
           title="Total Calls"
           value={(callStats?.total_calls ?? allTimeCalls).toLocaleString()}
-          subtitle={`Converted: ${(callStats?.converted ?? 0).toLocaleString()}`}
+          subtitle={`New + Repeat: ${(kpi.new_customers + kpi.retention).toLocaleString()}`}
           icon={PhoneCall}
-          tooltip="Unique customers called (1 per MMID) — from telesales_calls directly. Updates with date range filter. Converted = called MMIDs who placed a HOC order within the attribution window; responds to both date range and segment filter."
+          tooltip={`Unique customers called (1 per MMID) — updates with date range filter only. Calls are not segment-attributable so the value does not change with segment filter.\n\nNew + Repeat (subtitle) = the same values as the New Customers and Repeat Customers cards — responds to both date range and segment filter.`}
         />
         <KpiCard
           title="Program ROI"
