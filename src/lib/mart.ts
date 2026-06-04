@@ -295,12 +295,12 @@ export async function buildMartPerformance(attributionDays = 14): Promise<number
       GROUP BY 1
     ),
     month_sales AS (
-      -- Before May 2025: all CMGs count toward incentive (DISTRIBUTOR included)
-      -- From May 2025:   DISTRIBUTOR excluded; only FOOD RETAILER + HORECA count
+      -- Before May 2026: all CMGs count toward incentive (DISTRIBUTOR included)
+      -- From May 2026:   DISTRIBUTOR excluded; FOOD RETAILER + HORECA + END USER count
       SELECT month,
         SUM(hoc_sales) FILTER (
           WHERE month < '2026-05-01'
-             OR dynamic_cmg IN ('FOOD RETAILER', 'HORECA')
+             OR dynamic_cmg IN ('FOOD RETAILER', 'HORECA', 'END USER')
         )              AS incentive_hoc_sales,
         SUM(hoc_sales) AS total_hoc_sales
       FROM mart_performance_cmg
@@ -314,7 +314,7 @@ export async function buildMartPerformance(attributionDays = 14): Promise<number
              ELSE 0 END AS achievement_ratio
       FROM month_sales ms
       LEFT JOIN targets tg ON tg.month = ms.month
-        AND (ms.month < '2026-05-01' OR tg.dynamic_cmg IN ('FOOD RETAILER', 'HORECA'))
+        AND (ms.month < '2026-05-01' OR tg.dynamic_cmg IN ('FOOD RETAILER', 'HORECA', 'END USER'))
       GROUP BY ms.month, ms.incentive_hoc_sales
     ),
     month_incentive AS (

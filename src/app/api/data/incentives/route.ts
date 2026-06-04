@@ -59,19 +59,19 @@ export async function GET() {
         m.total_expense::text                                                          AS total_expense,
         m.roi::text                                                                    AS roi,
         (CASE WHEN SUM(c.sales_target) FILTER (
-                WHERE m.month < '2026-05-01' OR c.dynamic_cmg IN ('FOOD RETAILER', 'HORECA')
+                WHERE m.month < '2026-05-01' OR c.dynamic_cmg IN ('FOOD RETAILER', 'HORECA', 'END USER')
               ) > 0
               THEN SUM(c.hoc_sales)    FILTER (
-                WHERE m.month < '2026-05-01' OR c.dynamic_cmg IN ('FOOD RETAILER', 'HORECA')
+                WHERE m.month < '2026-05-01' OR c.dynamic_cmg IN ('FOOD RETAILER', 'HORECA', 'END USER')
               ) / SUM(c.sales_target)  FILTER (
-                WHERE m.month < '2026-05-01' OR c.dynamic_cmg IN ('FOOD RETAILER', 'HORECA')
+                WHERE m.month < '2026-05-01' OR c.dynamic_cmg IN ('FOOD RETAILER', 'HORECA', 'END USER')
               )
               ELSE 0 END)::text                                                        AS achievement_ratio,
         SUM(c.hoc_sales)    FILTER (
-          WHERE m.month < '2026-05-01' OR c.dynamic_cmg IN ('FOOD RETAILER', 'HORECA')
+          WHERE m.month < '2026-05-01' OR c.dynamic_cmg IN ('FOOD RETAILER', 'HORECA', 'END USER')
         )::text                                                                        AS incentive_hoc_sales,
         SUM(c.sales_target) FILTER (
-          WHERE m.month < '2026-05-01' OR c.dynamic_cmg IN ('FOOD RETAILER', 'HORECA')
+          WHERE m.month < '2026-05-01' OR c.dynamic_cmg IN ('FOOD RETAILER', 'HORECA', 'END USER')
         )::text                                                                        AS sales_target,
         m.incentive_per_head::text                                                     AS incentive_per_head
       FROM mart_performance_month m
