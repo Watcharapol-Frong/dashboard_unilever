@@ -44,11 +44,12 @@ function buildWhere(
 
 async function fetchKpis(where: string, params: any[]) {
   return queryOne<{
-    total_sales: string; online_sales: string; offline_sales: string
+    total_sales: string; hoc_sales: string; online_sales: string; offline_sales: string
     total_orders: string; new_customers: string; retention_customers: string; total_qty: string
   }>(`
     SELECT
       COALESCE(SUM(sales_in_vat), 0)::text                                                       AS total_sales,
+      COALESCE(SUM(sales_in_vat) FILTER (WHERE customer_type IN ('new_customer','retention')), 0)::text AS hoc_sales,
       COALESCE(SUM(CASE WHEN channel='online'  THEN sales_in_vat ELSE 0 END), 0)::text           AS online_sales,
       COALESCE(SUM(CASE WHEN channel='offline' THEN sales_in_vat ELSE 0 END), 0)::text           AS offline_sales,
       COUNT(DISTINCT order_number)::text                                                          AS total_orders,
@@ -66,13 +67,14 @@ async function fetchLastTwoPeriods(interval: Interval, where: string, params: an
   const lbl = labelExpr(interval)
   return query<{
     period: string; period_label: string
-    total_sales: string; online_sales: string; offline_sales: string
+    total_sales: string; hoc_sales: string; online_sales: string; offline_sales: string
     total_orders: string; new_customers: string; retention_customers: string; total_qty: string
   }>(`
     SELECT
       (${grp})::text AS period,
       ${lbl} AS period_label,
       COALESCE(SUM(sales_in_vat), 0)::text                                                       AS total_sales,
+      COALESCE(SUM(sales_in_vat) FILTER (WHERE customer_type IN ('new_customer','retention')), 0)::text AS hoc_sales,
       COALESCE(SUM(CASE WHEN channel='online'  THEN sales_in_vat ELSE 0 END), 0)::text           AS online_sales,
       COALESCE(SUM(CASE WHEN channel='offline' THEN sales_in_vat ELSE 0 END), 0)::text           AS offline_sales,
       COUNT(DISTINCT order_number)::text                                                          AS total_orders,
@@ -224,7 +226,7 @@ export async function GET(request: Request) {
 
     // ── Parse current KPI ─────────────────────────────────────────────────────
     type KpiRow = {
-      total_sales: number; online_sales: number; offline_sales: number
+      total_sales: number; hoc_sales: number; online_sales: number; offline_sales: number
       total_orders: number; new_customers: number; retention_customers: number; total_qty: number
     }
 
@@ -236,6 +238,7 @@ export async function GET(request: Request) {
       const kp = currKpiOrNull as Awaited<ReturnType<typeof fetchKpis>>
       c = {
         total_sales:         Number(kp?.total_sales         ?? 0),
+        hoc_sales:           Number(kp?.hoc_sales           ?? 0),
         online_sales:        Number(kp?.online_sales        ?? 0),
         offline_sales:       Number(kp?.offline_sales       ?? 0),
         total_orders:        Number(kp?.total_orders        ?? 0),
@@ -248,6 +251,7 @@ export async function GET(request: Request) {
       const r0 = rows.length > 0 ? rows[0] : null
       c = {
         total_sales:         Number(r0?.total_sales         ?? 0),
+        hoc_sales:           Number(r0?.hoc_sales           ?? 0),
         online_sales:        Number(r0?.online_sales        ?? 0),
         offline_sales:       Number(r0?.offline_sales       ?? 0),
         total_orders:        Number(r0?.total_orders        ?? 0),
@@ -313,6 +317,9 @@ export async function GET(request: Request) {
           comparison_label:        comparisonLabel,
           current_period_label:    currentPeriodLabel,
           previous_period_label:   previousPeriodLabel,
+          // hoc_sales is always converted-only (new_customer + retention) regardless of conversion filter
+          // This matches Overview's HOC Sales for the same date range and CMG filter
+          hoc_sales:               c.hoc_sales,
         },
         by_period: periodsRaw.map(r => ({
           period:       r.period,
