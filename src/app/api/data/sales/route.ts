@@ -52,8 +52,8 @@ async function fetchKpis(where: string, params: any[]) {
       COALESCE(SUM(CASE WHEN channel='online'  THEN sales_in_vat ELSE 0 END), 0)::text           AS online_sales,
       COALESCE(SUM(CASE WHEN channel='offline' THEN sales_in_vat ELSE 0 END), 0)::text           AS offline_sales,
       COUNT(DISTINCT order_number)::text                                                          AS total_orders,
-      COUNT(DISTINCT mmid) FILTER (WHERE customer_type IN ('new_customer','first_order_not_converted'))::text AS new_customers,
-      COUNT(DISTINCT mmid) FILTER (WHERE customer_type IN ('retention','retention_not_converted'))::text       AS retention_customers,
+      COUNT(DISTINCT mmid) FILTER (WHERE customer_type = 'new_customer')::text                   AS new_customers,
+      COUNT(DISTINCT mmid) FILTER (WHERE customer_type = 'retention')::text                      AS retention_customers,
       COALESCE(SUM(sales_qty), 0)::text                                                          AS total_qty
     FROM sales_hoc_orders
     ${where}
@@ -76,8 +76,8 @@ async function fetchLastTwoPeriods(interval: Interval, where: string, params: an
       COALESCE(SUM(CASE WHEN channel='online'  THEN sales_in_vat ELSE 0 END), 0)::text           AS online_sales,
       COALESCE(SUM(CASE WHEN channel='offline' THEN sales_in_vat ELSE 0 END), 0)::text           AS offline_sales,
       COUNT(DISTINCT order_number)::text                                                          AS total_orders,
-      COUNT(DISTINCT mmid) FILTER (WHERE customer_type IN ('new_customer','first_order_not_converted'))::text AS new_customers,
-      COUNT(DISTINCT mmid) FILTER (WHERE customer_type IN ('retention','retention_not_converted'))::text       AS retention_customers,
+      COUNT(DISTINCT mmid) FILTER (WHERE customer_type = 'new_customer')::text                   AS new_customers,
+      COUNT(DISTINCT mmid) FILTER (WHERE customer_type = 'retention')::text                      AS retention_customers,
       COALESCE(SUM(sales_qty), 0)::text                                                          AS total_qty
     FROM sales_hoc_orders
     ${where}

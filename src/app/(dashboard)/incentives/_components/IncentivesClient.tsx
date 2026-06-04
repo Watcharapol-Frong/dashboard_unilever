@@ -77,7 +77,7 @@ const summaryColumns: ColumnDef<MonthlySummary>[] = [
                   <Info className="h-3.5 w-3.5 text-amber-500 cursor-default shrink-0" />
                 </TooltipTrigger>
                 <TooltipContent side="right" className="max-w-[260px] text-xs">
-                  DISTRIBUTOR CMG is excluded from HOC Sales, Achievement %, Incentive, and ROI calculations from May 2025 onwards.
+                  DISTRIBUTOR CMG is excluded from HOC Sales, Achievement %, Incentive, and ROI calculations from May 2026 onwards. FOOD RETAILER, HORECA, and END USER are included.
                 </TooltipContent>
               </Tooltip>
             </TooltipProvider>

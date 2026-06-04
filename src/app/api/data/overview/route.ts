@@ -59,8 +59,8 @@ export async function GET() {
         c.retention,
         c.hoc_orders,
         c.hoc_sales,
-        -- incentive-eligible sales: before May 2025 all CMGs count; from May DISTRIBUTOR excluded
-        CASE WHEN c.month < '2026-05-01' OR c.dynamic_cmg IN ('FOOD RETAILER', 'HORECA')
+        -- incentive-eligible sales: before May 2026 all CMGs count; from May DISTRIBUTOR excluded
+        CASE WHEN c.month < '2026-05-01' OR c.dynamic_cmg IN ('FOOD RETAILER', 'HORECA', 'END USER')
              THEN c.hoc_sales ELSE 0
         END AS incentive_hoc_sales,
         c.sales_target,
