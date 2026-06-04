@@ -17,8 +17,8 @@ import { DateRangePicker } from '@/components/dashboard/DateRangePicker'
 import { useDashboardSWR } from '@/hooks/useDashboardSWR'
 import { useMonthRange, lastDayOfMonth } from '@/hooks/useMonthRange'
 import { MonthChipGroup } from '@/components/dashboard/MonthChipGroup'
-import { fmtBaht, fmt, formatTHB } from '@/lib/formatters'
-import { TrendingUp, UserPlus, Users, CreditCard, Calendar, Target } from 'lucide-react'
+import { fmtBaht, fmt } from '@/lib/formatters'
+import { TrendingUp, UserPlus, Users, CreditCard, Calendar } from 'lucide-react'
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -272,23 +272,16 @@ export default function SalesClient() {
       </Card>
 
       {/* ── KPI Cards ─────────────────────────────────────────────────────── */}
-      <KpiGrid cols={3}>
+      <KpiGrid cols={4}>
         <KpiCard
-          title="HOC Sales (Converted)"
-          value={fmtBaht(kpi.hoc_sales)}
-          subtitle={`= Overview HOC Sales · ${formatTHB(kpi.hoc_sales)}`}
-          icon={Target}
-          tooltip="HOC Unilever revenue from converted orders only (new_customer + retention, within attribution window). This number matches Overview's HOC Sales when the same date range and CMG filter are applied."
-        />
-        <KpiCard
-          title="Total Sales (All Orders)"
+          title="Total Sales"
           value={fmtBaht(kpi.total_sales)}
           subtitle={kpiPeriodLabel ? `${kpiPeriodLabel} · ${fmt(kpi.total_qty)} units` : `${fmt(kpi.total_qty)} units sold`}
           icon={TrendingUp}
           comparison={kpi.cmp_total_sales ?? undefined}
           comparisonLabel={kpi.comparison_label ?? undefined}
           comparisonTooltip={cmpTooltip}
-          tooltip={`HOC Unilever revenue for the displayed period — respects the conversion filter above.\n• All Customers: converted + not-converted\n• Converted Only: matches HOC Sales (Converted) above\n• Not Converted: orders outside the attribution window`}
+          tooltip={`HOC Unilever revenue — follows the conversion filter above.\n• All Customers: converted + not-converted\n• Converted Only: matches Overview's HOC Sales (same date + CMG filter)\n• Not Converted: orders outside the attribution window`}
         />
         <KpiCard
           title="Avg Order Value"
@@ -298,10 +291,8 @@ export default function SalesClient() {
           comparison={kpi.cmp_avg_order_value ?? undefined}
           comparisonLabel={kpi.comparison_label ?? undefined}
           comparisonTooltip={cmpTooltip}
-          tooltip="Total Sales ÷ Total Orders for the displayed period. Respects the conversion filter."
+          tooltip="Total Sales ÷ Total Orders for the displayed period. Follows the conversion filter."
         />
-      </KpiGrid>
-      <KpiGrid cols={2}>
         <KpiCard
           title="New Customers"
           value={kpi.new_customers.toLocaleString()}
@@ -310,7 +301,7 @@ export default function SalesClient() {
           comparison={kpi.cmp_new_customers ?? undefined}
           comparisonLabel={kpi.comparison_label ?? undefined}
           comparisonTooltip={cmpTooltip}
-          tooltip="Unique first-time HOC buyers for the displayed period — includes both converted (within attribution window) and first-order-not-converted."
+          tooltip="Unique first-time HOC buyers — includes converted (within attribution window) and first-order-not-converted."
         />
         <KpiCard
           title="Repeat Customers"
@@ -320,7 +311,7 @@ export default function SalesClient() {
           comparison={kpi.cmp_retention_customers ?? undefined}
           comparisonLabel={kpi.comparison_label ?? undefined}
           comparisonTooltip={cmpTooltip}
-          tooltip="Unique repeat HOC buyers for the displayed period — includes both converted (within attribution window) and retention-not-converted."
+          tooltip="Unique repeat HOC buyers — includes converted (within attribution window) and retention-not-converted."
         />
       </KpiGrid>
 
