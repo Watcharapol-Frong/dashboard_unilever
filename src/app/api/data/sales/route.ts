@@ -159,7 +159,7 @@ export async function GET(request: Request) {
     }
 
     // ── Phase 2: Fetch all remaining data in parallel ─────────────────────────
-    const [currKpiOrNull, prevKpi, periodsRaw, optsRaw, monthsRaw] = await Promise.all([
+    const [currKpiOrNull, prevKpi, periodsRaw, cmgOptsRaw, agentOptsRaw, monthsRaw] = await Promise.all([
       // Current KPI: date-scoped when range provided; null when no range (use preloaded scope)
       hasDateRange
         ? fetchKpis(curr.where, curr.params)
@@ -192,12 +192,18 @@ export async function GET(request: Request) {
         ORDER BY ${grpBy}
       `, trendFilter.params),
 
-      // Filter options (unfiltered)
-      query<{ cmg: string; agent: string }>(`
-        SELECT DISTINCT dynamic_cmg AS cmg, agent
+      // Filter options — separate queries so CMG list is not limited to rows with non-null agents
+      query<{ cmg: string }>(`
+        SELECT DISTINCT dynamic_cmg AS cmg
         FROM sales_hoc_orders
-        WHERE dynamic_cmg IS NOT NULL AND agent IS NOT NULL
-        ORDER BY dynamic_cmg, agent
+        WHERE dynamic_cmg IS NOT NULL
+        ORDER BY dynamic_cmg
+      `),
+      query<{ agent: string }>(`
+        SELECT DISTINCT agent
+        FROM sales_hoc_orders
+        WHERE agent IS NOT NULL
+        ORDER BY agent
       `),
 
       // Available months for chips (unfiltered)
@@ -281,8 +287,8 @@ export async function GET(request: Request) {
           not_converted_offline: Number(r.not_converted_offline),
         })),
         options: {
-          cmg:    [...new Set(optsRaw.map(o => o.cmg))].filter(Boolean).sort(),
-          agents: [...new Set(optsRaw.map(o => o.agent))].filter(Boolean).sort(),
+          cmg:    cmgOptsRaw.map(o => o.cmg).filter(Boolean).sort(),
+          agents: agentOptsRaw.map(o => o.agent).filter(Boolean).sort(),
         },
         months: monthsRaw.map(r => r.month),
       },
