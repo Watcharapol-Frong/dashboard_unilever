@@ -96,7 +96,7 @@ export default function SalesClient() {
   const [channel,    setChannel]    = useState<string[]>([])
   const [cmg,        setCmg]        = useState<string[]>([])
   const [agent,      setAgent]      = useState<string[]>([])
-  const [conversion, setConversion] = useState<Conversion>('converted')
+  const [conversion, setConversion] = useState<Conversion>('all')
 
   const handleChipClick = (m: string) => {
     if (interval === 'custom') setInterval('monthly')
