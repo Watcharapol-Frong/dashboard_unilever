@@ -38,9 +38,7 @@ export async function GET() {
       ORDER BY COALESCE(c.month, h.month) DESC
     `)
 
-    // 3. Monthly Incentives & Performance Expenses
-    // mart_performance_month has one row per month (no duplication)
-    // mart_performance_cmg has CMG-specific sales/target — SUM to get month totals
+    // 3. Monthly Incentives & Performance Expenses (dynamic computation)
     const monthlySummary = await query<{
       month: string
       total_incentive: string
@@ -52,32 +50,66 @@ export async function GET() {
       sales_target: string
       incentive_per_head: string
     }>(`
+      WITH cmg_sales AS (
+        SELECT
+          m.month,
+          m.total_agent_cost,
+          SUM(c.hoc_sales) FILTER (
+            WHERE m.month < '2026-05-01' OR c.dynamic_cmg IN ('FOOD RETAILER', 'HORECA', 'END USER')
+          ) AS incentive_hoc_sales,
+          SUM(c.sales_target) FILTER (
+            WHERE m.month < '2026-05-01' OR c.dynamic_cmg IN ('FOOD RETAILER', 'HORECA', 'END USER')
+          ) AS sales_target
+        FROM mart_performance_month m
+        LEFT JOIN mart_performance_cmg c ON c.month = m.month
+        GROUP BY m.month, m.total_agent_cost
+      ),
+      achievement AS (
+        SELECT
+          month,
+          total_agent_cost,
+          incentive_hoc_sales,
+          sales_target,
+          CASE
+            WHEN COALESCE(sales_target, 0) > 0 THEN incentive_hoc_sales / sales_target
+            ELSE 0
+          END AS achievement_ratio
+        FROM cmg_sales
+      ),
+      incentive_lookup AS (
+        SELECT
+          a.month,
+          a.total_agent_cost,
+          a.incentive_hoc_sales,
+          a.sales_target,
+          a.achievement_ratio,
+          COALESCE((
+            SELECT i.incentive_per_head
+            FROM incentives i
+            WHERE i.tier <= a.achievement_ratio
+            ORDER BY i.tier DESC
+            LIMIT 1
+          ), 0) AS incentive_per_head,
+          COALESCE(ah.agent_count, 0) AS agent_count
+        FROM achievement a
+        LEFT JOIN agent_headcount ah ON ah.month = a.month
+      )
       SELECT
-        m.month::text,
-        m.total_incentive::text                                                        AS total_incentive,
-        m.total_agent_cost::text                                                       AS total_agent_cost,
-        m.total_expense::text                                                          AS total_expense,
-        m.roi::text                                                                    AS roi,
-        (CASE WHEN SUM(c.sales_target) FILTER (
-                WHERE m.month < '2026-05-01' OR c.dynamic_cmg IN ('FOOD RETAILER', 'HORECA', 'END USER')
-              ) > 0
-              THEN SUM(c.hoc_sales)    FILTER (
-                WHERE m.month < '2026-05-01' OR c.dynamic_cmg IN ('FOOD RETAILER', 'HORECA', 'END USER')
-              ) / SUM(c.sales_target)  FILTER (
-                WHERE m.month < '2026-05-01' OR c.dynamic_cmg IN ('FOOD RETAILER', 'HORECA', 'END USER')
-              )
-              ELSE 0 END)::text                                                        AS achievement_ratio,
-        SUM(c.hoc_sales)    FILTER (
-          WHERE m.month < '2026-05-01' OR c.dynamic_cmg IN ('FOOD RETAILER', 'HORECA', 'END USER')
-        )::text                                                                        AS incentive_hoc_sales,
-        SUM(c.sales_target) FILTER (
-          WHERE m.month < '2026-05-01' OR c.dynamic_cmg IN ('FOOD RETAILER', 'HORECA', 'END USER')
-        )::text                                                                        AS sales_target,
-        m.incentive_per_head::text                                                     AS incentive_per_head
-      FROM mart_performance_month m
-      LEFT JOIN mart_performance_cmg c ON c.month = m.month
-      GROUP BY m.month, m.total_incentive, m.total_agent_cost, m.total_expense, m.roi, m.incentive_per_head
-      ORDER BY m.month DESC
+        month::text,
+        (agent_count * incentive_per_head)::text                                       AS total_incentive,
+        total_agent_cost::text                                                          AS total_agent_cost,
+        (agent_count * incentive_per_head + COALESCE(total_agent_cost, 0))::text       AS total_expense,
+        (CASE
+          WHEN (agent_count * incentive_per_head + COALESCE(total_agent_cost, 0)) > 0
+          THEN incentive_hoc_sales / (agent_count * incentive_per_head + COALESCE(total_agent_cost, 0))
+          ELSE 0
+        END)::text                                                                      AS roi,
+        achievement_ratio::text,
+        incentive_per_head::text,
+        incentive_hoc_sales::text,
+        sales_target::text
+      FROM incentive_lookup
+      ORDER BY month DESC
     `).catch(() => [] as any[])
 
     const data = {
