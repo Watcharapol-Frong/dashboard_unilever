@@ -206,7 +206,7 @@ export default function OverviewClient() {
     {
       accessorKey: 'sales_total',
       header: () => <div className="text-right">HOC Sales</div>,
-      cell: ({ row }) => <div className="text-right tabular-nums text-sm font-medium">{fmtBaht(row.original.sales_total)}</div>,
+      cell: ({ row }) => <div className="text-right tabular-nums text-sm font-medium">{formatTHB(row.original.sales_total)}</div>,
     },
     {
       accessorKey: 'order_total',
