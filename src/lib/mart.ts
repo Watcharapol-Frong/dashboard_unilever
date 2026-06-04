@@ -201,19 +201,44 @@ export async function buildMartPerformance(attributionDays = 14): Promise<number
   `)
 
   // Build mart_performance_cmg — CMG-specific metrics (sales_hoc_orders + calls via primary_cmg)
+  // Customer counts (new_customers, retention) use primary_cmg so each mmid is counted in exactly
+  // one CMG row — prevents double-counting when users filter multiple CMGs in the Overview page.
+  // Sales amounts use dynamic_cmg (the order's actual segment tag).
   await query(`
-    WITH telesales_metrics AS (
+    WITH customer_metrics AS (
       SELECT
-        month, dynamic_cmg,
+        month, primary_cmg AS dynamic_cmg,
         COUNT(DISTINCT mmid) FILTER (WHERE customer_type IN ('new_customer','retention'))         AS ordered,
         COUNT(DISTINCT mmid) FILTER (WHERE customer_type = 'new_customer')                       AS new_customers,
         COUNT(DISTINCT mmid) FILTER (WHERE customer_type = 'retention')                          AS retention,
         COUNT(DISTINCT mmid) FILTER (WHERE customer_type = 'first_order_not_converted')          AS not_conv_new,
-        COUNT(DISTINCT mmid) FILTER (WHERE customer_type = 'retention_not_converted')            AS not_conv_retention,
+        COUNT(DISTINCT mmid) FILTER (WHERE customer_type = 'retention_not_converted')            AS not_conv_retention
+      FROM sales_hoc_orders
+      WHERE primary_cmg IS NOT NULL
+      GROUP BY month, primary_cmg
+    ),
+    sales_metrics AS (
+      SELECT
+        month, dynamic_cmg,
         COUNT(DISTINCT order_number) FILTER (WHERE customer_type IN ('new_customer','retention')) AS hoc_orders,
         COALESCE(SUM(sales_in_vat) FILTER (WHERE customer_type IN ('new_customer','retention')), 0) AS hoc_sales
       FROM sales_hoc_orders
       GROUP BY month, dynamic_cmg
+    ),
+    telesales_metrics AS (
+      SELECT
+        COALESCE(cm.month, sm.month)             AS month,
+        COALESCE(cm.dynamic_cmg, sm.dynamic_cmg) AS dynamic_cmg,
+        COALESCE(cm.ordered, 0)           AS ordered,
+        COALESCE(cm.new_customers, 0)     AS new_customers,
+        COALESCE(cm.retention, 0)         AS retention,
+        COALESCE(cm.not_conv_new, 0)      AS not_conv_new,
+        COALESCE(cm.not_conv_retention, 0) AS not_conv_retention,
+        COALESCE(sm.hoc_orders, 0)        AS hoc_orders,
+        COALESCE(sm.hoc_sales, 0)         AS hoc_sales
+      FROM customer_metrics cm
+      FULL OUTER JOIN sales_metrics sm
+        ON sm.month = cm.month AND sm.dynamic_cmg = cm.dynamic_cmg
     ),
     mmid_cmg AS (
       SELECT DISTINCT mmid, primary_cmg FROM mart_telesales_orders WHERE primary_cmg IS NOT NULL
