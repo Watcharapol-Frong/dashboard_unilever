@@ -17,6 +17,8 @@ import {
   SidebarMenuSubItem,
   useSidebar,
 } from "@/components/ui/sidebar"
+import { useLanguage } from "@/context/LanguageContext"
+import { t } from "@/lib/i18n"
 
 type LucideIcon = ComponentType<{ className?: string }>
 
@@ -70,10 +72,11 @@ function NavGroup({ item, pathname }: { item: NavItem; pathname: string }) {
 
 export function NavMain({ items }: { items: NavItem[] }) {
   const pathname = usePathname()
+  const { lang } = useLanguage()
 
   return (
     <SidebarGroup>
-      <SidebarGroupLabel>Platform</SidebarGroupLabel>
+      <SidebarGroupLabel>{t('nav.platform', lang)}</SidebarGroupLabel>
       <SidebarGroupContent className="flex flex-col gap-2">
         <SidebarMenu>
           {items.map((item) =>

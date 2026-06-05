@@ -8,11 +8,15 @@ import {
   DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
 import { SidebarMenu, SidebarMenuButton, SidebarMenuItem, useSidebar } from "@/components/ui/sidebar"
+import { useLanguage } from '@/context/LanguageContext'
+import { t } from '@/lib/i18n'
+import type { Lang } from '@/context/LanguageContext'
 
 export function NavUser() {
   const { isMobile }       = useSidebar()
   const { user, isLoaded } = useUser()
   const { signOut }        = useClerk()
+  const { lang, setLang }  = useLanguage()
 
   if (!isLoaded || !user) return null
 
@@ -68,9 +72,32 @@ export function NavUser() {
             {/* Role badge */}
             <DropdownMenuItem disabled className="opacity-100 cursor-default">
               {role === 'admin'
-                ? <><IconShield className="size-4 mr-2 text-[#003DA6]" /><span className="text-[#003DA6] font-semibold">Admin</span></>
-                : <><IconUser   className="size-4 mr-2 text-gray-500"  /><span className="text-gray-500">Viewer</span></>
+                ? <><IconShield className="size-4 mr-2 text-[#003DA6]" /><span className="text-[#003DA6] font-semibold">{t('user.admin', lang)}</span></>
+                : <><IconUser   className="size-4 mr-2 text-gray-500"  /><span className="text-gray-500">{t('user.viewer', lang)}</span></>
               }
+            </DropdownMenuItem>
+
+            <DropdownMenuSeparator />
+
+            {/* Language toggle */}
+            <DropdownMenuItem disabled className="opacity-100 cursor-default">
+              <span className="text-xs text-muted-foreground mr-2">{t('user.language', lang)}</span>
+              <div className="ml-auto flex items-center gap-1">
+                {(['en', 'th'] as Lang[]).map(l => (
+                  <button
+                    key={l}
+                    onClick={e => { e.stopPropagation(); setLang(l) }}
+                    className={[
+                      'px-2 py-0.5 rounded text-xs font-semibold transition-colors',
+                      lang === l
+                        ? 'bg-[#003DA6] text-white'
+                        : 'bg-muted text-muted-foreground hover:bg-accent hover:text-foreground',
+                    ].join(' ')}
+                  >
+                    {l.toUpperCase()}
+                  </button>
+                ))}
+              </div>
             </DropdownMenuItem>
 
             <DropdownMenuSeparator />
@@ -80,7 +107,7 @@ export function NavUser() {
               className="text-red-600 focus:text-red-600 focus:bg-red-50 cursor-pointer"
             >
               <IconLogout className="size-4 mr-2" />
-              Log out
+              {t('user.logout', lang)}
             </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>

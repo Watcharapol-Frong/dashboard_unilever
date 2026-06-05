@@ -12,6 +12,8 @@ import {
   SidebarMenuItem,
 } from "@/components/ui/sidebar"
 import { HelpSheet } from "@/components/dashboard/HelpSheet"
+import { useLanguage } from "@/context/LanguageContext"
+import { t } from "@/lib/i18n"
 
 type LucideIcon = ComponentType<{ className?: string }>
 
@@ -30,6 +32,7 @@ export function NavSecondary({
   const { user } = useUser()
   const isAdmin = user?.publicMetadata?.role === 'admin'
   const [helpOpen, setHelpOpen] = React.useState(false)
+  const { lang } = useLanguage()
 
   return (
     <>
@@ -37,7 +40,7 @@ export function NavSecondary({
         <SidebarGroupContent>
           <SidebarMenu>
             {items.map((item) => {
-              const isHelp = item.title === 'Get Help'
+              const isHelp = item.title === t('nav.getHelp', lang)
               return (
                 <SidebarMenuItem key={item.title}>
                   {isHelp ? (
@@ -60,7 +63,7 @@ export function NavSecondary({
         </SidebarGroupContent>
       </SidebarGroup>
 
-      <HelpSheet open={helpOpen} onOpenChange={setHelpOpen} isAdmin={isAdmin} />
+      <HelpSheet open={helpOpen} onOpenChange={setHelpOpen} isAdmin={isAdmin} lang={lang} />
     </>
   )
 }

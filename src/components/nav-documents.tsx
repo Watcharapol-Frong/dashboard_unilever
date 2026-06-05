@@ -10,6 +10,8 @@ import {
   SidebarMenuButton,
   SidebarMenuItem,
 } from "@/components/ui/sidebar"
+import { useLanguage } from "@/context/LanguageContext"
+import { t } from "@/lib/i18n"
 
 type LucideIcon = ComponentType<{ className?: string }>
 
@@ -24,10 +26,11 @@ export function NavDocuments({
   }[]
 }) {
   const pathname = usePathname()
+  const { lang } = useLanguage()
 
   return (
     <SidebarGroup>
-      <SidebarGroupLabel>Admin</SidebarGroupLabel>
+      <SidebarGroupLabel>{t('nav.admin', lang)}</SidebarGroupLabel>
       <SidebarMenu>
         {items.map((item) => (
           <SidebarMenuItem key={item.name} className={item.desktopOnly ? 'hidden lg:block' : undefined}>

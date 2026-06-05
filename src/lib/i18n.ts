@@ -1,0 +1,152 @@
+import type { Lang } from '@/context/LanguageContext'
+
+const dict: Record<string, Record<Lang, string>> = {
+  // ─── Navigation ────────────────────────────────────────────────────────────
+  'nav.platform':               { en: 'Platform',                     th: 'แพลตฟอร์ม' },
+  'nav.admin':                  { en: 'Admin',                        th: 'ผู้ดูแลระบบ' },
+  'nav.getHelp':                { en: 'Get Help',                     th: 'ช่วยเหลือ' },
+  'nav.overview':               { en: 'Overview',                     th: 'ภาพรวม' },
+  'nav.sales':                  { en: 'Sales',                        th: 'ยอดขาย' },
+  'nav.salesPerformance':       { en: 'Sales Performance',            th: 'ผลการขาย' },
+  'nav.orders':                 { en: 'Orders',                       th: 'คำสั่งซื้อ' },
+  'nav.telesales':              { en: 'Telesales',                    th: 'เทเลเซลส์' },
+  'nav.telesalesOverview':      { en: 'Telesales Overview',           th: 'ภาพรวมเทเลเซลส์' },
+  'nav.callLog':                { en: 'Call Log',                     th: 'ประวัติการโทร' },
+  'nav.products':               { en: 'Products',                     th: 'สินค้า' },
+  'nav.programs':               { en: 'Programs',                     th: 'โปรแกรม' },
+  'nav.incentives':             { en: 'Incentives & Bonuses',         th: 'รางวัลจูงใจ' },
+  'nav.leads':                  { en: 'Leads',                        th: 'รายชื่อลูกค้า' },
+  'nav.dataHub':                { en: 'Data Hub',                     th: 'ศูนย์ข้อมูล' },
+  'nav.exports':                { en: 'Exports',                      th: 'ส่งออกข้อมูล' },
+
+  // ─── User menu ─────────────────────────────────────────────────────────────
+  'user.admin':                 { en: 'Admin',                        th: 'ผู้ดูแลระบบ' },
+  'user.viewer':                { en: 'Viewer',                       th: 'ผู้ดูข้อมูล' },
+  'user.logout':                { en: 'Log out',                      th: 'ออกจากระบบ' },
+  'user.language':              { en: 'Language',                     th: 'ภาษา' },
+
+  // ─── TopBar ────────────────────────────────────────────────────────────────
+  'topbar.dashboard':           { en: 'Dashboard',                    th: 'แดชบอร์ด' },
+  'topbar.dataThrough':         { en: 'Data through',                 th: 'ข้อมูลถึงวันที่' },
+  'topbar.updated':             { en: 'updated',                      th: 'อัปเดต' },
+  'topbar.attribution':         { en: '{n}-day attribution',          th: 'attribution {n} วัน' },
+  'topbar.overview':            { en: 'Overview',                     th: 'ภาพรวม' },
+  'topbar.telesales':           { en: 'Telesales',                    th: 'เทเลเซลส์' },
+  'topbar.sales':               { en: 'Sales',                        th: 'ยอดขาย' },
+  'topbar.products':            { en: 'Products',                     th: 'สินค้า' },
+  'topbar.leads':               { en: 'Leads',                        th: 'รายชื่อลูกค้า' },
+  'topbar.incentives':          { en: 'Incentives',                   th: 'รางวัลจูงใจ' },
+  'topbar.dataHub':             { en: 'Data Hub',                     th: 'ศูนย์ข้อมูล' },
+  'topbar.exports':             { en: 'Exports',                      th: 'ส่งออกข้อมูล' },
+
+  // ─── Common UI ─────────────────────────────────────────────────────────────
+  'common.filterRange':         { en: 'Filter & Range Selection',     th: 'เลือกช่วงเวลาและตัวกรอง' },
+  'common.allSegments':         { en: 'All Segments',                 th: 'ทุกกลุ่ม' },
+  'common.allChannels':         { en: 'All Channels',                 th: 'ทุกช่องทาง' },
+  'common.allAgents':           { en: 'All Agents',                   th: 'ทุก Agent' },
+  'common.allCustomers':        { en: 'All Customers',                th: 'ลูกค้าทั้งหมด' },
+  'common.online':              { en: 'Online',                       th: 'ออนไลน์' },
+  'common.offline':             { en: 'Offline',                      th: 'ออฟไลน์' },
+  'common.onlineSales':         { en: 'Online Sales',                 th: 'ยอดขาย Online' },
+  'common.offlineSales':        { en: 'Offline Sales',                th: 'ยอดขาย Offline' },
+  'common.resetFilters':        { en: 'Reset Filters',                th: 'รีเซ็ตตัวกรอง' },
+  'common.resetAll':            { en: 'Reset All',                    th: 'รีเซ็ตทั้งหมด' },
+  'common.showing':             { en: 'Showing',                      th: 'แสดง' },
+  'common.allPeriods':          { en: 'all available periods',        th: 'ทุกช่วงเวลา' },
+  'common.selectChips':         { en: 'select month chips to filter by period', th: 'เลือก chip เดือนเพื่อกรองช่วงเวลา' },
+  'common.selected':            { en: 'Selected',                     th: 'ช่วงที่เลือก' },
+  'common.target':              { en: 'Target',                       th: 'เป้าหมาย' },
+  'common.total':               { en: 'Total',                        th: 'รวม' },
+  'common.orders':              { en: 'orders',                       th: 'คำสั่งซื้อ' },
+  'common.calls':               { en: 'Calls',                        th: 'การโทร' },
+  'common.agent':               { en: 'Agent',                        th: 'Agent' },
+  'common.updating':            { en: 'Updating…',                    th: 'กำลังอัปเดต…' },
+  'common.noData':              { en: 'No data available',            th: 'ไม่มีข้อมูล' },
+  'common.buildFirst':          { en: 'Please run Build Mart first',  th: 'กรุณา Build Mart ก่อน' },
+  'common.units':               { en: 'units',                        th: 'หน่วย' },
+  'common.convRate':            { en: 'Conv. Rate',                   th: 'อัตรา Conv.' },
+
+  // ─── Overview KPIs ─────────────────────────────────────────────────────────
+  'kpi.hocSales':               { en: 'HOC Sales',                    th: 'ยอดขาย HOC' },
+  'kpi.achievement':            { en: 'Achievement',                  th: 'ผลสำเร็จ' },
+  'kpi.targetReached':          { en: 'Target reached ✓',             th: 'ถึงเป้าหมาย ✓' },
+  'kpi.belowTarget':            { en: 'Below target',                 th: 'ต่ำกว่าเป้าหมาย' },
+  'kpi.newCustomers':           { en: 'New Customers',                th: 'ลูกค้าใหม่' },
+  'kpi.repeatCustomers':        { en: 'Repeat Customers',             th: 'ลูกค้าประจำ' },
+  'kpi.totalCalls':             { en: 'Total Calls',                  th: 'การโทรทั้งหมด' },
+  'kpi.connected':              { en: 'Connected',                    th: 'ติดต่อสำเร็จ' },
+  'kpi.programROI':             { en: 'Program ROI',                  th: 'ROI โปรแกรม' },
+  'kpi.newBuyers':              { en: 'Telesales new buyers',         th: 'ลูกค้าใหม่จากเทเลเซลส์' },
+  'kpi.repeatBuyers':           { en: 'Telesales repeat buyers',      th: 'ลูกค้าประจำจากเทเลเซลส์' },
+  'kpi.roiMultiplier':          { en: 'Sales / Expense multiplier',   th: 'อัตราส่วนยอดขาย/ค่าใช้จ่าย' },
+  'kpi.convertedNewBuyers':     { en: 'Converted new buyers',         th: 'ลูกค้าใหม่ที่ convert' },
+  'kpi.convertedRepeatBuyers':  { en: 'Converted repeat buyers',      th: 'ลูกค้าประจำที่ convert' },
+
+  // ─── Sales Page ────────────────────────────────────────────────────────────
+  'sales.totalSales':           { en: 'Total Sales',                  th: 'ยอดขายรวม' },
+  'sales.avgOrderValue':        { en: 'Avg Order Value',              th: 'มูลค่าสั่งซื้อเฉลี่ย' },
+  'sales.convertedOnly':        { en: 'Converted Only',               th: 'Converted เท่านั้น' },
+  'sales.notConverted':         { en: 'Not Converted',                th: 'ไม่ Converted' },
+  'sales.convertedOrdersOnly':  { en: 'Converted orders only',        th: 'เฉพาะคำสั่งซื้อที่ convert' },
+  'sales.notConvertedOrders':   { en: 'Not converted orders',         th: 'คำสั่งซื้อที่ไม่ convert' },
+  'sales.trend':                { en: 'Sales Trend',                  th: 'แนวโน้มยอดขาย' },
+  'sales.channelBreakdown':     { en: 'Channel Breakdown',            th: 'แยกตามช่องทาง' },
+  'sales.allOrders':            { en: 'All Orders',                   th: 'ทุกคำสั่งซื้อ' },
+  'sales.convertedOrders':      { en: 'Converted Orders',             th: 'คำสั่งซื้อที่ Convert' },
+  'sales.totalRevenue':         { en: 'Total Telesales Revenue',      th: 'รายได้รวมเทเลเซลส์' },
+  'sales.leaderboard':          { en: 'Agent Performance Leaderboard', th: 'อันดับผลงาน Agent' },
+  'sales.leaderboardSub':       { en: 'HOC converted sales by agent — responds to date range and segment filters above', th: 'ยอดขาย HOC ที่ convert โดย agent — ปรับตามช่วงวันและกลุ่มที่เลือก' },
+  'sales.latestAvailable':      { en: 'latest available',             th: 'ล่าสุดที่มีข้อมูล' },
+  'sales.selectToChange':       { en: 'select month chips to change period', th: 'เลือก chip เดือนเพื่อเปลี่ยนช่วง' },
+  'sales.noData':               { en: 'No telesales sales data available', th: 'ไม่มีข้อมูลยอดขายเทเลเซลส์' },
+
+  // ─── Telesales Page ────────────────────────────────────────────────────────
+  'telesales.totalLeads':       { en: 'Total Leads',                  th: 'รายชื่อทั้งหมด' },
+  'telesales.reached':          { en: 'Reached',                      th: 'ติดต่อได้' },
+  'telesales.ordered':          { en: 'Ordered',                      th: 'สั่งซื้อแล้ว' },
+  'telesales.reachRate':        { en: 'Reach Rate',                   th: 'อัตราการติดต่อ' },
+  'telesales.convRate':         { en: 'Conversion Rate',              th: 'อัตราการ Convert' },
+  'telesales.newCustomers':     { en: 'New Customers',                th: 'ลูกค้าใหม่' },
+  'telesales.repeatCustomers':  { en: 'Repeat Customers',             th: 'ลูกค้าประจำ' },
+  'telesales.callFunnel':       { en: 'Call Funnel',                  th: 'กรวยการโทร' },
+  'telesales.newVsRepeat':      { en: 'New vs Repeat Customers',      th: 'ลูกค้าใหม่ vs ลูกค้าประจำ' },
+  'telesales.noData':           { en: 'No telesales data available',  th: 'ไม่มีข้อมูลเทเลเซลส์' },
+
+  // ─── Leads Page ────────────────────────────────────────────────────────────
+  'leads.title':                { en: 'Leads',                        th: 'รายชื่อลูกค้า' },
+  'leads.search':               { en: 'Search MMID or name…',        th: 'ค้นหา MMID หรือชื่อ…' },
+  'leads.allTiers':             { en: 'All Tiers',                    th: 'ทุก Tier' },
+  'leads.allContacts':          { en: 'All Contacts',                 th: 'ทุกการติดต่อ' },
+  'leads.allConversions':       { en: 'All Conversions',              th: 'ทุกการ Convert' },
+  'leads.contacted':            { en: 'Contacted',                    th: 'ติดต่อแล้ว' },
+  'leads.notContacted':         { en: 'Not contacted',               th: 'ยังไม่ติดต่อ' },
+  'leads.converted':            { en: 'Converted',                   th: 'Convert แล้ว' },
+  'leads.notConverted':         { en: 'Not converted',               th: 'ยังไม่ Convert' },
+  'leads.noData':               { en: 'No leads found',               th: 'ไม่พบรายชื่อ' },
+
+  // ─── Products Page ─────────────────────────────────────────────────────────
+  'products.noData':            { en: 'No product data available',    th: 'ไม่มีข้อมูลสินค้า' },
+  'products.brand':             { en: 'Brand',                        th: 'แบรนด์' },
+  'products.class':             { en: 'Class',                        th: 'หมวดหมู่' },
+  'products.subclass':          { en: 'Subclass',                     th: 'หมวดหมู่ย่อย' },
+  'products.newVsRepeat':       { en: 'New vs Repeat',                th: 'ใหม่ vs ประจำ' },
+
+  // ─── Incentives Page ───────────────────────────────────────────────────────
+  'incentives.achievement':     { en: 'Achievement %',                th: 'ผลสำเร็จ %' },
+  'incentives.totalExpense':    { en: 'Total Expense',                th: 'ค่าใช้จ่ายรวม' },
+  'incentives.incentivePaid':   { en: 'Incentive Paid',               th: 'Incentive ที่จ่าย' },
+  'incentives.roi':             { en: 'ROI',                          th: 'ROI' },
+  'incentives.noData':          { en: 'No incentive data available',  th: 'ไม่มีข้อมูล incentive' },
+
+  // ─── Help Sheet ────────────────────────────────────────────────────────────
+  'help.title':                 { en: 'Help & User Guide',            th: 'คู่มือการใช้งาน' },
+  'help.subtitle':              { en: 'What each page shows and which date range it uses.', th: 'แต่ละหน้าดูข้อมูลอะไร และช่วงวันที่คำนวณจากอะไร' },
+  'help.pages':                 { en: 'Dashboard Pages',              th: 'หน้าต่าง ๆ ในแดชบอร์ด' },
+  'help.adminGuide':            { en: 'Admin Guide',                  th: 'คู่มือผู้ดูแลระบบ' },
+  'help.adminOnly':             { en: 'Admin only',                   th: 'เฉพาะผู้ดูแลระบบ' },
+  'help.adminDesc':             { en: 'Data upload requirements and mart rebuild instructions.', th: 'ข้อกำหนดการอัปโหลดข้อมูลและคำแนะนำการ Build Mart' },
+}
+
+export function t(key: string, lang: Lang): string {
+  return dict[key]?.[lang] ?? dict[key]?.['en'] ?? key
+}
