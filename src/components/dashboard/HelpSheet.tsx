@@ -82,6 +82,14 @@ function UploadTable({ rows }: { rows: { col: string; type: string; note: string
 
 // ─── Content sections ──────────────────────────────────────────────────────────
 
+function PageBadge({ children }: { children: React.ReactNode }) {
+  return (
+    <span className="inline-block bg-blue-50 text-[#003DA6] text-[10px] font-semibold px-2 py-0.5 rounded-full border border-blue-100">
+      {children}
+    </span>
+  )
+}
+
 function AllUsersContent() {
   return (
     <Accordion type="multiple" className="w-full">
@@ -94,51 +102,29 @@ function AllUsersContent() {
             Overview
           </span>
         </AccordionTrigger>
-        <AccordionContent>
-          <SectionLabel>KPI Cards</SectionLabel>
-          <Term label="HOC Sales">Total Unilever HOC order value (online + offline) from telesales-attributed customers within the selected period.</Term>
-          <Term label="Achievement %">HOC Sales ÷ Sales Target × 100. Only FOOD RETAILER and HORECA segments count from May 2026 onwards.</Term>
-          <Term label="Total Leads">Number of MMIDs assigned to the telesales team.</Term>
-          <Term label="New Customers">MMIDs whose first-ever HOC order fell within the attribution window.</Term>
-          <Term label="Repeat">MMIDs with a repeat HOC order within the attribution window.</Term>
-          <Term label="Program ROI">Incentive-eligible HOC Sales ÷ Total Program Expense (incentives + agent costs + supervisor costs).</Term>
-
-          <SectionLabel>Filters</SectionLabel>
-          <Term label="Month chips">Click one month to select it; click another to set an end range. Click the same month again to deselect.</Term>
-          <Term label="Customer Segment">Filter all charts and KPIs to a specific customer segment (FOOD RETAILER, HORECA, END USER, etc.).</Term>
-          <Term label="Channel">Online / Offline split for the Sales vs Target chart bars.</Term>
-        </AccordionContent>
-      </AccordionItem>
-
-      {/* Attribution Window */}
-      <AccordionItem value="attribution">
-        <AccordionTrigger>
-          <span className="flex items-center gap-2">
-            <Clock className="h-4 w-4 text-[#003DA6]" />
-            Attribution Window
-          </span>
-        </AccordionTrigger>
-        <AccordionContent>
-          <p className="text-muted-foreground mb-3">
-            The attribution window is the number of days after a customer&apos;s <strong>first connected date</strong> (first successful call) within which their HOC orders are credited to the telesales programme.
+        <AccordionContent className="space-y-3 text-sm text-muted-foreground">
+          <p>
+            หน้าภาพรวมโครงการทั้งหมด ดูได้ในคลิกเดียวว่าตอนนี้โครงการเป็นอย่างไร ยอดขาย HOC เทียบ Target ได้เท่าไหร่ ลูกค้าใหม่/ลูกค้าประจำมีกี่คน และ ROI ของโครงการ
           </p>
 
-          <SectionLabel>How it works</SectionLabel>
-          <Formula>
-            Order is attributed  IF  order_date ≤ first_connected_date + attribution_days
-          </Formula>
-
-          <SectionLabel>Customer types</SectionLabel>
-          <Term label="new_customer">First-ever HOC order AND within the attribution window — counts toward conversion KPIs.</Term>
-          <Term label="retention">Repeat HOC order AND within the attribution window — counts toward conversion KPIs.</Term>
-          <Term label="first_order_not_converted">First HOC order but outside the window — NOT counted in telesales KPIs.</Term>
-          <Term label="retention_not_converted">Repeat order but outside the window — NOT counted in telesales KPIs.</Term>
-
-          <SectionLabel>Impact</SectionLabel>
-          <p className="text-muted-foreground text-xs">
-            A shorter window (e.g. 7 days) attributes fewer orders → lower conversion counts. A longer window (e.g. 30 days) attributes more orders. The current window used is shown in the top bar: <span className="font-mono font-semibold">N-day attribution</span>.
+          <SectionLabel>ช่วงข้อมูลอ้างอิงจาก</SectionLabel>
+          <p>
+            <PageBadge>วันที่สั่งซื้อ (Order Date)</PageBadge>
+            {' '}ใช้เป็นหลัก — เลือก month chip เพื่อกรองช่วงเวลาที่ต้องการดู
           </p>
-          <Note>Changing the attribution window requires a mart rebuild. All historical conversion numbers will recalculate.</Note>
+
+          <SectionLabel>KPI แต่ละตัวหมายถึงอะไร</SectionLabel>
+          <Term label="HOC Sales">ยอดขายสินค้า Unilever HOC จากลูกค้าที่ทีม Telesales โทรหาและสั่งซื้อภายในช่วงที่กำหนด (online + offline รวมกัน)</Term>
+          <Term label="Achievement %">ยอดขายจริง ÷ เป้าหมาย × 100 — บอกว่าทำได้กี่ % ของ target</Term>
+          <Term label="New Customers">ลูกค้าที่ซื้อสินค้า HOC ครั้งแรก ภายหลังจากที่ทีม telesales โทรหา</Term>
+          <Term label="Repeat Customers">ลูกค้าที่เคยซื้อแล้ว และกลับมาซื้อซ้ำอีกครั้งภายในช่วงที่กำหนด</Term>
+          <Term label="Total Calls">จำนวนลูกค้าที่ถูกโทรหาในช่วงนั้น (นับจากบันทึกการโทร)</Term>
+          <Term label="Program ROI">ยอดขายที่นับได้ ÷ ค่าใช้จ่ายทั้งหมด (incentive + เงินเดือน agent + supervisor) — ถ้า ROI = 3x หมายความว่าทุก 1 บาทที่ลงทุนได้กลับมา 3 บาท</Term>
+
+          <SectionLabel>วิธีใช้ Filter</SectionLabel>
+          <Term label="Month chips">คลิก 1 เดือนเพื่อเลือก คลิกเดือนอื่นเพื่อเลือกช่วง (range) คลิกเดือนเดิมซ้ำเพื่อยกเลิก</Term>
+          <Term label="Segment">กรองเฉพาะกลุ่มลูกค้า เช่น FOOD RETAILER, HORECA, END USER</Term>
+          <Term label="Channel">กรอง Online หรือ Offline เพื่อแยกดูยอดขายแต่ละช่องทาง</Term>
         </AccordionContent>
       </AccordionItem>
 
@@ -150,15 +136,31 @@ function AllUsersContent() {
             Sales
           </span>
         </AccordionTrigger>
-        <AccordionContent>
-          <SectionLabel>Charts</SectionLabel>
-          <Term label="HOC Sales vs Target">Monthly bar chart comparing actual HOC sales against the target per segment. Bars are stacked by channel (online/offline).</Term>
-          <Term label="Period comparison">Current period vs previous period — absolute and % change shown on each KPI card.</Term>
+        <AccordionContent className="space-y-3 text-sm text-muted-foreground">
+          <p>
+            หน้าวิเคราะห์ยอดขาย HOC แบบละเอียด ดูได้ว่ายอดมาจาก online/offline เท่าไหร่ เทรนด์รายเดือนเป็นอย่างไร และ agent แต่ละคนทำผลงานได้แค่ไหน
+          </p>
 
-          <SectionLabel>Key values</SectionLabel>
-          <Term label="HOC Sales">All telesales-attributed orders (new_customer + repeat) within the selected date range.</Term>
-          <Term label="Sales Target">Monthly targets uploaded per segment via Data Hub → Targets file.</Term>
-          <Formula>Achievement % = HOC Sales ÷ Sales Target × 100</Formula>
+          <SectionLabel>ช่วงข้อมูลอ้างอิงจาก</SectionLabel>
+          <p>
+            <PageBadge>วันที่สั่งซื้อ (Order Date)</PageBadge>
+            {' '}— เลือก month chip หรือ date picker เพื่อกำหนดช่วงเวลา
+          </p>
+
+          <SectionLabel>KPI แต่ละตัวหมายถึงอะไร</SectionLabel>
+          <Term label="Total Sales">ยอดขายรวมทั้งหมดในช่วงที่เลือก ขึ้นอยู่กับ Filter Conversion ที่เลือก (All / Converted / Not Converted)</Term>
+          <Term label="Avg Order Value">ยอดขายเฉลี่ยต่อ 1 คำสั่งซื้อ</Term>
+          <Term label="New Customers">ลูกค้าใหม่ที่ซื้อสินค้า HOC ครั้งแรก (นับเฉพาะที่ convert แล้วเสมอ)</Term>
+          <Term label="Repeat Customers">ลูกค้าที่กลับมาซื้อซ้ำ (นับเฉพาะที่ convert แล้วเสมอ)</Term>
+
+          <SectionLabel>Filter Conversion</SectionLabel>
+          <Term label="All Customers">แสดงยอดขายทั้งหมด ทั้งที่ convert และยังไม่ convert</Term>
+          <Term label="Converted Only">เฉพาะยอดขายจากลูกค้าที่สั่งซื้อภายในช่วงเวลาที่นับ (attribution window)</Term>
+          <Term label="Not Converted">เฉพาะยอดขายจากลูกค้าที่สั่งซื้อนอกช่วงเวลาที่นับ</Term>
+
+          <SectionLabel>Agent Leaderboard</SectionLabel>
+          <p>จัดอันดับ agent ตามยอดขาย HOC ที่ convert ได้ — ตัดรายชื่อที่ยอดขาย = 0 ออกอัตโนมัติ Conv. Rate คำนวณจาก ลูกค้าที่ convert ÷ ลูกค้าทั้งหมดที่โทรหาในช่วงนั้น</p>
+          <Note>Agent Leaderboard ใช้ Segment filter ได้ แต่ Calls ไม่แยก Segment เพราะบันทึกการโทรไม่มีข้อมูล Segment</Note>
         </AccordionContent>
       </AccordionItem>
 
@@ -170,21 +172,25 @@ function AllUsersContent() {
             Telesales
           </span>
         </AccordionTrigger>
-        <AccordionContent>
-          <SectionLabel>Funnel</SectionLabel>
-          <Term label="Total Leads">All MMIDs with a first_connected_date assigned.</Term>
-          <Term label="Reached">MMIDs where call_status is NOT "No Answer" / "Phone Off / Unreachable".</Term>
-          <Term label="Ordered">MMIDs with at least one attributed HOC order (new_customer or retention).</Term>
+        <AccordionContent className="space-y-3 text-sm text-muted-foreground">
+          <p>
+            หน้าติดตามประสิทธิภาพการโทร ดูได้ว่าโทรหาลูกค้าไปกี่คน ติดต่อได้กี่คน และสุดท้ายมีกี่คนที่สั่งซื้อจริง
+          </p>
 
-          <SectionLabel>Rates</SectionLabel>
-          <Formula>Reach Rate = Reached ÷ Total Leads × 100</Formula>
-          <Formula>Conversion Rate = Ordered ÷ Reached × 100</Formula>
+          <SectionLabel>ช่วงข้อมูลอ้างอิงจาก</SectionLabel>
+          <p>
+            <PageBadge>วันที่โทรติดต่อครั้งแรก (First Connected Date)</PageBadge>
+            {' '}— ใช้เป็นหลักสำหรับ funnel และจำนวน calls
+          </p>
 
-          <SectionLabel>Agent Leaderboard</SectionLabel>
-          <Term label="Calls/day">Total calls ÷ number of working days in the period.</Term>
-          <Term label="Conversion rate">Ordered leads ÷ Reached leads for that agent.</Term>
+          <SectionLabel>Funnel 3 ขั้นตอน</SectionLabel>
+          <Term label="Total Leads">ลูกค้าทั้งหมดที่อยู่ในรายชื่อของทีม Telesales</Term>
+          <Term label="Reached">ลูกค้าที่โทรหาแล้วติดต่อได้ (ไม่ใช่ "ไม่รับสาย" หรือ "ปิดเครื่อง")</Term>
+          <Term label="Ordered">ลูกค้าที่โทรแล้วสั่งซื้อสินค้า HOC จริง</Term>
 
-          <Note>Call statuses are stored in Thai in the database and translated to English labels in the UI only.</Note>
+          <SectionLabel>อัตราที่ควรดู</SectionLabel>
+          <Term label="Reach Rate">ติดต่อได้ ÷ รายชื่อทั้งหมด — บอกว่าโทรติดกี่ %</Term>
+          <Term label="Conversion Rate">สั่งซื้อ ÷ ติดต่อได้ — บอกว่าลูกค้าที่คุยด้วยกลายเป็นผู้ซื้อกี่ %</Term>
         </AccordionContent>
       </AccordionItem>
 
@@ -196,16 +202,21 @@ function AllUsersContent() {
             Products
           </span>
         </AccordionTrigger>
-        <AccordionContent>
-          <SectionLabel>Dimensions</SectionLabel>
-          <Term label="Brand">Product brand (e.g. Dove, Sunsilk). Comes from the products master file.</Term>
-          <Term label="Class">Product category (e.g. Hair Care, Skin Care).</Term>
-          <Term label="Subclass">Sub-category within a class.</Term>
+        <AccordionContent className="space-y-3 text-sm text-muted-foreground">
+          <p>
+            หน้าดูว่าสินค้าตัวไหนขายดี แบ่งตาม Brand, หมวดหมู่สินค้า (Class) และหมวดย่อย (Subclass)
+          </p>
 
-          <SectionLabel>Metrics</SectionLabel>
-          <Term label="HOC Sales">Revenue from attributed telesales orders for that product group.</Term>
-          <Term label="New vs Retention split">HOC Sales broken down by customer_type: new_customer vs retention.</Term>
-          <Term label="HOC Orders">Number of distinct order lines for that product group.</Term>
+          <SectionLabel>ช่วงข้อมูลอ้างอิงจาก</SectionLabel>
+          <p>
+            <PageBadge>วันที่สั่งซื้อ (Order Date)</PageBadge>
+            {' '}— นับเฉพาะคำสั่งซื้อจากลูกค้าที่ convert แล้วเท่านั้น
+          </p>
+
+          <SectionLabel>วิธีใช้</SectionLabel>
+          <Term label="Brand">ดูว่า Dove, Sunsilk, Knorr หรือแบรนด์ไหนขายได้มากที่สุด</Term>
+          <Term label="Class">ดูตามหมวดสินค้า เช่น Hair Care, Personal Care, Food</Term>
+          <Term label="New vs Repeat">แยกยอดขายว่ามาจากลูกค้าใหม่หรือลูกค้าประจำ</Term>
         </AccordionContent>
       </AccordionItem>
 
@@ -217,27 +228,56 @@ function AllUsersContent() {
             Incentives
           </span>
         </AccordionTrigger>
-        <AccordionContent>
-          <SectionLabel>Achievement &amp; Tier</SectionLabel>
-          <p className="text-muted-foreground mb-2 text-xs">
-            Achievement % determines which incentive tier applies. The system picks the <strong>highest tier whose threshold ≤ achievement %</strong>.
+        <AccordionContent className="space-y-3 text-sm text-muted-foreground">
+          <p>
+            หน้าดูค่าใช้จ่ายและ incentive ของโครงการ คำนวณว่าจ่าย incentive ไปเท่าไหร่ และคุ้มค่าเพียงใด (ROI)
           </p>
-          <Formula>Achievement % = Incentive-eligible Sales ÷ Incentive Target × 100</Formula>
-          <Term label="Incentive-eligible sales">FOOD RETAILER + HORECA CMGs only (from May 2026 — DISTRIBUTOR excluded).</Term>
 
-          <SectionLabel>Incentive calculation</SectionLabel>
-          <Formula>Total Incentives Paid = Agent Count × Rate per Head</Formula>
-          <Formula>Total Expense = Total Incentives + Agent Salaries + Supervisor Salaries</Formula>
-          <Formula>ROI = Incentive-eligible HOC Sales ÷ Total Expense</Formula>
+          <SectionLabel>ช่วงข้อมูลอ้างอิงจาก</SectionLabel>
+          <p>
+            <PageBadge>เดือน (Month)</PageBadge>
+            {' '}— รายงานระดับเดือน ไม่สามารถกรองรายวันได้
+          </p>
+
+          <SectionLabel>การคำนวณ Achievement %</SectionLabel>
+          <p>
+            ระบบจะเปรียบยอดขาย HOC กับ Target ของเดือนนั้น แล้วหา tier ที่สูงที่สุดที่ทำได้ เพื่อคำนวณ incentive ต่อหัว
+          </p>
+          <Term label="Achievement ≥ 80%">ได้ rate ตาม tier 80%</Term>
+          <Term label="Achievement ≥ 100%">ได้ rate ตาม tier 100% (สูงกว่า)</Term>
+
+          <SectionLabel>สูตรคำนวณ</SectionLabel>
+          <Formula>Incentive รวม = จำนวน Agent × Incentive ต่อหัว</Formula>
+          <Formula>ค่าใช้จ่ายรวม = Incentive + เงินเดือน Agent + เงินเดือน Supervisor</Formula>
+          <Formula>ROI = ยอดขาย HOC ÷ ค่าใช้จ่ายรวม</Formula>
 
           <Note>
-            Rows from May 2026 onwards show an ⚠ icon — DISTRIBUTOR is excluded from HOC Sales, Achievement %, and ROI for those months.
+            ตั้งแต่ พ.ค. 2569 เป็นต้นไป — กลุ่ม DISTRIBUTOR ไม่รวมอยู่ในการคำนวณ Achievement และ ROI
           </Note>
+        </AccordionContent>
+      </AccordionItem>
 
-          <SectionLabel>Incentive Tiers table</SectionLabel>
-          <p className="text-muted-foreground text-xs">
-            Shows the threshold → rate mapping uploaded via Data Hub. Example: achievement ≥ 80% → ฿500/head, ≥ 100% → ฿1,000/head.
+      {/* Attribution Window */}
+      <AccordionItem value="attribution">
+        <AccordionTrigger>
+          <span className="flex items-center gap-2">
+            <Clock className="h-4 w-4 text-[#003DA6]" />
+            Attribution Window คืออะไร?
+          </span>
+        </AccordionTrigger>
+        <AccordionContent className="space-y-3 text-sm text-muted-foreground">
+          <p>
+            <strong className="text-foreground">Attribution Window</strong> คือจำนวนวันที่ระบบจะนับว่า "คำสั่งซื้อนี้เกิดจากการโทรของทีม Telesales"
           </p>
+          <p>
+            เช่น ถ้าตั้งไว้ที่ <strong className="text-foreground">14 วัน</strong> หมายความว่า ถ้าลูกค้าสั่งซื้อภายใน 14 วันหลังจากที่ถูกโทรหาครั้งแรก — คำสั่งซื้อนั้นจะถูกนับเป็นผลงานของ Telesales
+          </p>
+          <p>
+            ถ้าลูกค้าสั่งซื้อหลังจาก 14 วัน — จะไม่นับรวมใน HOC Sales, ยอดขาย Converted หรือจำนวนลูกค้าใหม่
+          </p>
+          <Note>
+            ค่า Attribution Window ที่ใช้อยู่แสดงที่แถบด้านบน — การเปลี่ยนค่านี้ต้อง Build Mart ใหม่ทุกครั้ง
+          </Note>
         </AccordionContent>
       </AccordionItem>
 
@@ -481,9 +521,9 @@ export function HelpSheet({ open, onOpenChange, isAdmin }: HelpSheetProps) {
     <Sheet open={open} onOpenChange={onOpenChange}>
       <SheetContent side="right" className="w-full sm:max-w-lg p-0 flex flex-col">
         <SheetHeader className="px-6 pt-6 pb-4 border-b shrink-0">
-          <SheetTitle className="text-base">Help &amp; User Guide</SheetTitle>
+          <SheetTitle className="text-base">คู่มือการใช้งาน</SheetTitle>
           <p className="text-xs text-muted-foreground mt-0.5">
-            Explains calculations, values, and data definitions used across the dashboard.
+            แต่ละหน้าดูข้อมูลอะไร และช่วงวันที่คำนวณจากอะไร
           </p>
         </SheetHeader>
 
@@ -494,7 +534,7 @@ export function HelpSheet({ open, onOpenChange, isAdmin }: HelpSheetProps) {
             <div>
               <div className="flex items-center gap-2 mb-3">
                 <Users className="h-4 w-4 text-muted-foreground" />
-                <span className="text-sm font-semibold">All Users</span>
+                <span className="text-sm font-semibold">หน้าต่าง ๆ ในแดชบอร์ด</span>
               </div>
               <AllUsersContent />
             </div>
