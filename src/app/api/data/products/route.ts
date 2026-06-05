@@ -13,6 +13,8 @@ function buildProductWhere(
   subclass: string[],
   startDate: string | null,
   endDate: string | null,
+  converted: string | null,
+  leadCustomers: string[],
 ) {
   const conditions: string[] = []
   const params: any[] = []
@@ -27,6 +29,12 @@ function buildProductWhere(
     conditions.push(`m.prod_num IN (SELECT prod_num FROM products WHERE buyer_name = ANY(${qpush(params, buyer)}))`)
   }
   addFilter(params, conditions, subclass, 'm.subclass')
+  if (converted === 'converted') {
+    conditions.push(`m.customer_type IN ('new_customer', 'retention')`)
+  } else if (converted === 'not_converted') {
+    conditions.push(`m.customer_type IN ('first_order_not_converted', 'retention_not_converted')`)
+  }
+  addFilter(params, conditions, leadCustomers, 'm.dynamic_cmg')
 
   return { where: conditions.length ? 'AND ' + conditions.join(' AND ') : '', params }
 }
@@ -39,14 +47,16 @@ export async function GET(request: Request) {
     const seniorBuyer = (searchParams.get('senior_buyer') || '').split(',').filter(Boolean)
     const buyer       = (searchParams.get('buyer')        || '').split(',').filter(Boolean)
     const subclass    = (searchParams.get('subclass')     || '').split(',').filter(Boolean)
-    const startDate   = searchParams.get('startDate')   || null
-    const endDate     = searchParams.get('endDate')     || null
+    const startDate     = searchParams.get('startDate')      || null
+    const endDate       = searchParams.get('endDate')        || null
+    const converted     = searchParams.get('converted')      || null
+    const leadCustomers = (searchParams.get('cmg') || '').split(',').filter(Boolean)
 
     const { where: extraWhere, params: filterParams } = buildProductWhere(
-      brands, className, seniorBuyer, buyer, subclass, startDate, endDate,
+      brands, className, seniorBuyer, buyer, subclass, startDate, endDate, converted, leadCustomers,
     )
 
-    const [kpiRow, productRows, brandRows, monthsRaw, brandTrendRows] = await Promise.all([
+    const [kpiRow, productRows, brandRows, monthsRaw, brandTrendRows, buyerRows] = await Promise.all([
       // ── KPI totals ───────────────────────────────────────────────────────
       queryOne<{
         total_sales: string
@@ -163,6 +173,31 @@ export async function GET(request: Request) {
         ORDER BY m.month
       `, filterParams),
 
+      // ── By senior buyer / buyer ──────────────────────────────────────────
+      query<{
+        senior_buyer_name: string
+        buyer_name: string
+        total_sales: string
+        online_sales: string
+        offline_sales: string
+        total_qty: string
+        product_count: string
+      }>(`
+        SELECT
+          COALESCE(p.senior_buyer_name, '—')                                                 AS senior_buyer_name,
+          COALESCE(p.buyer_name, '—')                                                        AS buyer_name,
+          SUM(m.sales_in_vat)::text                                                          AS total_sales,
+          COALESCE(SUM(CASE WHEN m.channel = 'online'  THEN m.sales_in_vat END), 0)::text   AS online_sales,
+          COALESCE(SUM(CASE WHEN m.channel = 'offline' THEN m.sales_in_vat END), 0)::text   AS offline_sales,
+          SUM(m.sales_qty)::text                                                              AS total_qty,
+          COUNT(DISTINCT m.prod_num)::text                                                    AS product_count
+        FROM sales_hoc_orders m
+        LEFT JOIN products p ON m.prod_num = p.prod_num
+        WHERE true ${extraWhere}
+        GROUP BY COALESCE(p.senior_buyer_name, '—'), COALESCE(p.buyer_name, '—')
+        ORDER BY SUM(m.sales_in_vat) DESC
+      `, filterParams),
+
     ])
 
     const totalSales  = Number(kpiRow?.total_sales  ?? 0)
@@ -223,11 +258,30 @@ export async function GET(request: Request) {
       return row
     })
 
+    const by_buyer = buyerRows.map(b => {
+      const sales   = Number(b.total_sales)
+      const online  = Number(b.online_sales)
+      const offline = Number(b.offline_sales)
+      return {
+        senior_buyer_name: b.senior_buyer_name,
+        buyer_name:        b.buyer_name,
+        total_sales:       sales,
+        online_sales:      online,
+        offline_sales:     offline,
+        online_pct:        sales > 0 ? online  / sales : 0,
+        offline_pct:       sales > 0 ? offline / sales : 0,
+        total_qty:         Number(b.total_qty),
+        product_count:     Number(b.product_count),
+        pct_of_total:      totalSales > 0 ? sales / totalSales : 0,
+      }
+    })
+
     const res = NextResponse.json({
       ok: true,
       data: {
         by_product,
         by_brand,
+        by_buyer,
         by_brand_trend,
         top5_brands: top5Brands,
         total_sales:     totalSales,

@@ -14,6 +14,7 @@ import {
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { MultiSelect } from '@/components/dashboard/MultiSelect'
+import { FilterSelect } from '@/components/dashboard/FilterSelect'
 import { KpiCard } from '@/components/dashboard/KpiCard'
 import { KpiGrid } from '@/components/dashboard/KpiGrid'
 import { DataTable } from '@/components/ui/data-table'
@@ -56,18 +57,33 @@ interface BrandRow {
   pct_of_total: number
 }
 
+interface BuyerRow {
+  senior_buyer_name: string
+  buyer_name: string
+  total_sales: number
+  online_sales: number
+  offline_sales: number
+  online_pct: number
+  offline_pct: number
+  total_qty: number
+  product_count: number
+  pct_of_total: number
+}
+
 interface ProductOptions {
   brands: string[]
   class_names: string[]
   senior_buyers: string[]
   buyers: string[]
   subclasses: string[]
+  cmg_segments: string[]
   months: string[]
 }
 
 interface ProductData {
   by_product: ExtProductRow[]
   by_brand: BrandRow[]
+  by_buyer: BuyerRow[]
   by_brand_trend: Record<string, string | number>[]
   top5_brands: string[]
   total_sales: number
@@ -243,9 +259,84 @@ const brandColumns: ColumnDef<BrandRow>[] = [
   },
 ]
 
+// ── By Senior Buyer / Buyer columns ──────────────────────────────────────────
+
+const buyerColumns: ColumnDef<BuyerRow>[] = [
+  {
+    accessorKey: 'senior_buyer_name',
+    header: ({ column }) => <DataTableColumnHeader column={column} title="Senior Buyer" />,
+    cell: ({ row }) => <span className="font-semibold">{row.original.senior_buyer_name}</span>,
+  },
+  {
+    accessorKey: 'buyer_name',
+    header: ({ column }) => <DataTableColumnHeader column={column} title="Buyer" />,
+    cell: ({ row }) => <span>{row.original.buyer_name}</span>,
+  },
+  {
+    accessorKey: 'product_count',
+    header: ({ column }) => <DataTableColumnHeader column={column} title="SKUs" className="justify-end" />,
+    cell: ({ row }) => <div className="text-right">{formatNumber(row.original.product_count)}</div>,
+  },
+  {
+    accessorKey: 'total_qty',
+    header: ({ column }) => <DataTableColumnHeader column={column} title="Qty Sold" className="justify-end" />,
+    cell: ({ row }) => <div className="text-right">{formatNumber(row.original.total_qty)}</div>,
+  },
+  {
+    accessorKey: 'total_sales',
+    header: ({ column }) => <DataTableColumnHeader column={column} title="Total Revenue" className="justify-end" />,
+    cell: ({ row }) => <div className="text-right font-semibold">{formatTHB(row.original.total_sales)}</div>,
+  },
+  {
+    accessorKey: 'online_sales',
+    header: ({ column }) => <DataTableColumnHeader column={column} title="Online" className="justify-end" />,
+    cell: ({ row }) => (
+      <div className="text-right">
+        <div className="font-medium text-[#003DA6]">{formatTHB(row.original.online_sales)}</div>
+        <div className="text-[10px] text-muted-foreground">{formatPct(row.original.online_pct)}</div>
+      </div>
+    ),
+  },
+  {
+    accessorKey: 'offline_sales',
+    header: ({ column }) => <DataTableColumnHeader column={column} title="Offline" className="justify-end" />,
+    cell: ({ row }) => (
+      <div className="text-right">
+        <div className="font-medium text-[#EE2737]">{formatTHB(row.original.offline_sales)}</div>
+        <div className="text-[10px] text-muted-foreground">{formatPct(row.original.offline_pct)}</div>
+      </div>
+    ),
+  },
+  {
+    id: 'channel_bar',
+    header: 'Channel Mix',
+    cell: ({ row }) => {
+      const onPct  = row.original.online_pct  * 100
+      const offPct = row.original.offline_pct * 100
+      return (
+        <div className="w-24">
+          <div className="h-2 rounded-full overflow-hidden flex">
+            <div className="h-full bg-[#003DA6]" style={{ width: `${onPct}%` }} />
+            <div className="h-full bg-[#EE2737]" style={{ width: `${offPct}%` }} />
+          </div>
+          <div className="flex justify-between text-[10px] text-muted-foreground mt-0.5">
+            <span>{onPct.toFixed(0)}%</span>
+            <span>{offPct.toFixed(0)}%</span>
+          </div>
+        </div>
+      )
+    },
+  },
+  {
+    accessorKey: 'pct_of_total',
+    header: ({ column }) => <DataTableColumnHeader column={column} title="% of Total" className="justify-end" />,
+    cell: ({ row }) => <div className="text-right">{formatPct(row.original.pct_of_total)}</div>,
+  },
+]
+
 // ── Component ─────────────────────────────────────────────────────────────────
 
-const EMPTY_OPTS: ProductOptions = { brands: [], class_names: [], senior_buyers: [], buyers: [], subclasses: [], months: [] }
+const EMPTY_OPTS: ProductOptions = { brands: [], class_names: [], senior_buyers: [], buyers: [], subclasses: [], cmg_segments: [], months: [] }
 
 export default function ProductsClient() {
   const { lang } = useLanguage()
@@ -268,8 +359,10 @@ export default function ProductsClient() {
   const [filterClass,       setFilterClass]       = useState<string[]>([])
   const [filterSeniorBuyer, setFilterSeniorBuyer] = useState<string[]>([])
   const [filterBuyer,       setFilterBuyer]       = useState<string[]>([])
-  const [filterSubclass,    setFilterSubclass]    = useState<string[]>([])
-  const [filterSegment,     setFilterSegment]     = useState('all')
+  const [filterSubclass,       setFilterSubclass]       = useState<string[]>([])
+  const [filterLeadCustomers,  setFilterLeadCustomers]  = useState<string[]>([])
+  const [filterSegment,        setFilterSegment]        = useState('all')
+  const [filterConverted,      setFilterConverted]      = useState('all')
   const [prodSearch,        setProdSearch]        = useState('')
   const [activeTab,         setActiveTab]         = useState('products')
 
@@ -280,7 +373,9 @@ export default function ProductsClient() {
     if (filterClass.length > 0)       p.set('class_name',   filterClass.join(','))
     if (filterSeniorBuyer.length > 0) p.set('senior_buyer', filterSeniorBuyer.join(','))
     if (filterBuyer.length > 0)       p.set('buyer',        filterBuyer.join(','))
-    if (filterSubclass.length > 0)    p.set('subclass',     filterSubclass.join(','))
+    if (filterSubclass.length > 0)       p.set('subclass',        filterSubclass.join(','))
+    if (filterConverted !== 'all')        p.set('converted',       filterConverted)
+    if (filterLeadCustomers.length > 0)   p.set('cmg',  filterLeadCustomers.join(','))
     if (rangeFrom) {
       p.set('startDate', rangeFrom)
       p.set('endDate',   lastDayOfMonth(rangeTo ?? rangeFrom))
@@ -289,17 +384,19 @@ export default function ProductsClient() {
     if (buildVersion) p.set('_v', String(buildVersion))
     const qs = p.toString()
     return `/api/data/products${qs ? `?${qs}` : ''}`
-  }, [filterBrands, filterClass, filterSeniorBuyer, filterBuyer, filterSubclass, rangeFrom, rangeTo, buildVersion])
+  }, [filterBrands, filterClass, filterSeniorBuyer, filterBuyer, filterSubclass, filterConverted, filterLeadCustomers, rangeFrom, rangeTo, buildVersion])
 
   const { data, isLoading, isValidating, error } = useDashboardSWR<ProductData>(apiUrl)
 
   const hasFilter = filterBrands.length > 0 || filterClass.length > 0 ||
-    filterSeniorBuyer.length > 0 || filterBuyer.length > 0 || filterSubclass.length > 0
+    filterSeniorBuyer.length > 0 || filterBuyer.length > 0 || filterSubclass.length > 0 ||
+    filterConverted !== 'all' || filterLeadCustomers.length > 0
   const hasRange  = !!rangeFrom
 
   const clearAll = () => {
     setFilterBrands([]); setFilterClass([])
     setFilterSeniorBuyer([]); setFilterBuyer([]); setFilterSubclass([])
+    setFilterConverted('all'); setFilterLeadCustomers([])
     clearRange()
   }
 
@@ -343,8 +440,8 @@ export default function ProductsClient() {
           </div>
         </CardHeader>
         <CardContent>
+          {/* Row 1 — Date range */}
           <div className="flex flex-wrap items-center gap-4">
-            {/* Month chips */}
             <MonthChipGroup
               months={months}
               rangeFrom={rangeFrom}
@@ -354,10 +451,10 @@ export default function ProductsClient() {
               onMouseEnter={setHoverMonth}
               onMouseLeave={() => setHoverMonth(null)}
             />
+          </div>
 
-            <div className="w-px h-6 bg-border hidden lg:block" />
-
-            {/* Dimension filters */}
+          {/* Row 2 — Dimension filters */}
+          <div className="flex flex-wrap items-center gap-3 mt-3">
             <MultiSelect
               label="All Brands"
               value={filterBrands}
@@ -393,7 +490,25 @@ export default function ProductsClient() {
               options={opts.subclasses.map(v => ({ value: v, label: v }))}
               width="w-[145px]"
             />
-
+            <FilterSelect
+              label={t('products.allOrders', lang)}
+              value={filterConverted}
+              onChange={setFilterConverted}
+              options={[
+                { value: 'converted',     label: t('products.convertedOnly', lang) },
+                { value: 'not_converted', label: t('products.notConverted',  lang) },
+              ]}
+              width="w-[165px]"
+            />
+            {opts.cmg_segments.length > 0 && (
+              <MultiSelect
+                label={t('common.allSegments', lang)}
+                value={filterLeadCustomers}
+                onChange={setFilterLeadCustomers}
+                options={opts.cmg_segments.map(v => ({ value: v, label: v }))}
+                width="w-[155px]"
+              />
+            )}
             {(hasFilter || hasRange) && (
               <button onClick={clearAll} className="text-xs text-[#003DA6] hover:underline font-semibold">
                 Reset All
@@ -500,6 +615,7 @@ export default function ProductsClient() {
               <TabsTrigger value="products">Top SKUs</TabsTrigger>
               <TabsTrigger value="new_vs_retention">New vs Repeat</TabsTrigger>
               <TabsTrigger value="brands">By Brand</TabsTrigger>
+              <TabsTrigger value="buyers">By Senior Buyer</TabsTrigger>
             </TabsList>
 
             {/* ── Top SKUs ────────────────────────────────────────────── */}
@@ -554,6 +670,11 @@ export default function ProductsClient() {
             {/* ── By Brand ────────────────────────────────────────────── */}
             <TabsContent value="brands" className="pt-2">
               <DataTable columns={brandColumns} data={data.by_brand} />
+            </TabsContent>
+
+            {/* ── By Senior Buyer ─────────────────────────────────────── */}
+            <TabsContent value="buyers" className="pt-2">
+              <DataTable columns={buyerColumns} data={data.by_buyer} />
             </TabsContent>
           </Tabs>
         </CardContent>
