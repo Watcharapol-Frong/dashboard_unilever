@@ -10,6 +10,7 @@ import {
   LayoutDashboard, PhoneCall, TrendingUp, Package, PiggyBank,
   Upload, DatabaseZap, Shield, Users, Clock, Download,
 } from "lucide-react"
+import type { Lang } from "@/context/LanguageContext"
 
 // ─── Reusable small components ────────────────────────────────────────────────
 
@@ -90,7 +91,7 @@ function PageBadge({ children }: { children: React.ReactNode }) {
   )
 }
 
-function AllUsersContent() {
+function AllUsersContent({ lang }: { lang: Lang }) {
   return (
     <Accordion type="multiple" className="w-full">
 
@@ -104,27 +105,65 @@ function AllUsersContent() {
         </AccordionTrigger>
         <AccordionContent className="space-y-3 text-sm text-muted-foreground">
           <p>
-            A single-screen summary of the entire programme — HOC Sales vs. Target, new and repeat customers, call activity, and programme ROI.
+            {lang === 'th'
+              ? 'หน้าภาพรวมโครงการ ดูยอดขาย HOC เทียบ Target ลูกค้าใหม่/ประจำ และ ROI'
+              : 'A single-screen summary of the entire programme — HOC Sales vs. Target, new and repeat customers, call activity, and programme ROI.'}
           </p>
 
-          <SectionLabel>Date basis</SectionLabel>
+          <SectionLabel>{lang === 'th' ? 'ช่วงข้อมูลอ้างอิงจาก' : 'Date basis'}</SectionLabel>
           <p>
-            <PageBadge>Order Date</PageBadge>
-            {' '}— use the month chips to select the period you want to review.
+            <PageBadge>{lang === 'th' ? 'วันที่สั่งซื้อ (Order Date)' : 'Order Date'}</PageBadge>
+            {' '}{lang === 'th' ? '— เลือกช่วงเวลาโดยคลิก chip เดือน' : '— use the month chips to select the period you want to review.'}
           </p>
 
-          <SectionLabel>What each KPI means</SectionLabel>
-          <Term label="HOC Sales">Total revenue from Unilever HOC products ordered by customers the telesales team called, within the selected period (online + offline combined).</Term>
-          <Term label="Achievement %">HOC Sales ÷ Target × 100 — how close the team is to hitting the monthly goal.</Term>
-          <Term label="New Customers">Customers placing their first-ever HOC order after being contacted by telesales.</Term>
-          <Term label="Repeat Customers">Customers who already bought before and placed another order within the selected period.</Term>
-          <Term label="Total Calls">Number of customers contacted during the period, based on call records.</Term>
-          <Term label="Program ROI">HOC Sales ÷ Total Programme Cost (incentives + agent salaries + supervisor salaries). ROI of 3× means every ฿1 spent returned ฿3 in sales.</Term>
+          <SectionLabel>{lang === 'th' ? 'KPI แต่ละตัวหมายถึงอะไร' : 'What each KPI means'}</SectionLabel>
+          <Term label="HOC Sales">
+            {lang === 'th'
+              ? 'ยอดขายสินค้า Unilever HOC จากลูกค้าที่ทีม Telesales โทรหา (online + offline)'
+              : 'Total revenue from Unilever HOC products ordered by customers the telesales team called, within the selected period (online + offline combined).'}
+          </Term>
+          <Term label="Achievement %">
+            {lang === 'th'
+              ? 'ยอดขายจริง ÷ เป้าหมาย × 100'
+              : 'HOC Sales ÷ Target × 100 — how close the team is to hitting the monthly goal.'}
+          </Term>
+          <Term label={lang === 'th' ? 'ลูกค้าใหม่' : 'New Customers'}>
+            {lang === 'th'
+              ? 'ลูกค้าที่ซื้อ HOC ครั้งแรกหลังจากถูกโทรหา'
+              : 'Customers placing their first-ever HOC order after being contacted by telesales.'}
+          </Term>
+          <Term label={lang === 'th' ? 'ลูกค้าประจำ' : 'Repeat Customers'}>
+            {lang === 'th'
+              ? 'ลูกค้าที่เคยซื้อแล้วและกลับมาซื้อซ้ำ'
+              : 'Customers who already bought before and placed another order within the selected period.'}
+          </Term>
+          <Term label={lang === 'th' ? 'การโทรทั้งหมด' : 'Total Calls'}>
+            {lang === 'th'
+              ? 'จำนวนลูกค้าที่ถูกโทรหาในช่วงนั้น'
+              : 'Number of customers contacted during the period, based on call records.'}
+          </Term>
+          <Term label="Program ROI">
+            {lang === 'th'
+              ? 'ยอดขาย ÷ ค่าใช้จ่ายรวม (incentive + เงินเดือน) — ROI 3x = ลงทุน 1 บาทได้ 3 บาท'
+              : 'HOC Sales ÷ Total Programme Cost (incentives + agent salaries + supervisor salaries). ROI of 3× means every ฿1 spent returned ฿3 in sales.'}
+          </Term>
 
-          <SectionLabel>Using the filters</SectionLabel>
-          <Term label="Month chips">Click a month to select it; click another month to set a range; click the same month again to clear.</Term>
-          <Term label="Segment">Narrow down to a specific customer group — FOOD RETAILER, HORECA, END USER, etc.</Term>
-          <Term label="Channel">Filter to Online or Offline to compare the two sales channels.</Term>
+          <SectionLabel>{lang === 'th' ? 'วิธีใช้ Filter' : 'Using the filters'}</SectionLabel>
+          <Term label={lang === 'th' ? 'chip เดือน' : 'Month chips'}>
+            {lang === 'th'
+              ? 'คลิก 1 เดือนเพื่อเลือก คลิกเดือนอื่นเพื่อเลือกช่วง คลิกเดือนเดิมซ้ำเพื่อยกเลิก'
+              : 'Click a month to select it; click another month to set a range; click the same month again to clear.'}
+          </Term>
+          <Term label="Segment">
+            {lang === 'th'
+              ? 'กรองเฉพาะกลุ่มลูกค้า เช่น FOOD RETAILER, HORECA, END USER'
+              : 'Narrow down to a specific customer group — FOOD RETAILER, HORECA, END USER, etc.'}
+          </Term>
+          <Term label="Channel">
+            {lang === 'th'
+              ? 'กรอง Online หรือ Offline'
+              : 'Filter to Online or Offline to compare the two sales channels.'}
+          </Term>
         </AccordionContent>
       </AccordionItem>
 
@@ -133,34 +172,72 @@ function AllUsersContent() {
         <AccordionTrigger>
           <span className="flex items-center gap-2">
             <TrendingUp className="h-4 w-4 text-[#003DA6]" />
-            Sales
+            {lang === 'th' ? 'ยอดขาย' : 'Sales'}
           </span>
         </AccordionTrigger>
         <AccordionContent className="space-y-3 text-sm text-muted-foreground">
           <p>
-            Detailed breakdown of HOC sales — how much came from online vs. offline, how the trend looks over time, and how each agent is performing.
+            {lang === 'th'
+              ? 'ยอดขาย HOC แบบละเอียด ดู online/offline เทรนด์รายเดือน และผลงาน agent'
+              : 'Detailed breakdown of HOC sales — how much came from online vs. offline, how the trend looks over time, and how each agent is performing.'}
           </p>
 
-          <SectionLabel>Date basis</SectionLabel>
+          <SectionLabel>{lang === 'th' ? 'ช่วงข้อมูลอ้างอิงจาก' : 'Date basis'}</SectionLabel>
           <p>
-            <PageBadge>Order Date</PageBadge>
-            {' '}— use month chips or the date picker to set the period.
+            <PageBadge>{lang === 'th' ? 'วันที่สั่งซื้อ (Order Date)' : 'Order Date'}</PageBadge>
+            {' '}{lang === 'th' ? '— เลือกช่วงเวลาด้วย chip เดือนหรือ date picker' : '— use month chips or the date picker to set the period.'}
           </p>
 
-          <SectionLabel>What each KPI means</SectionLabel>
-          <Term label="Total Sales">Combined revenue for the selected period, adjusted by the Conversion filter (All / Converted / Not Converted).</Term>
-          <Term label="Avg Order Value">Average revenue per order in the selected view.</Term>
-          <Term label="New Customers">First-time HOC buyers — always counts converted customers only.</Term>
-          <Term label="Repeat Customers">Customers who came back to buy again — always counts converted customers only.</Term>
+          <SectionLabel>{lang === 'th' ? 'KPI แต่ละตัวหมายถึงอะไร' : 'What each KPI means'}</SectionLabel>
+          <Term label={lang === 'th' ? 'ยอดขายรวม' : 'Total Sales'}>
+            {lang === 'th'
+              ? 'ยอดขายรวมในช่วงที่เลือก ปรับตาม Conversion filter'
+              : 'Combined revenue for the selected period, adjusted by the Conversion filter (All / Converted / Not Converted).'}
+          </Term>
+          <Term label={lang === 'th' ? 'มูลค่าสั่งซื้อเฉลี่ย' : 'Avg Order Value'}>
+            {lang === 'th'
+              ? 'ยอดขายเฉลี่ยต่อ 1 คำสั่งซื้อ'
+              : 'Average revenue per order in the selected view.'}
+          </Term>
+          <Term label={lang === 'th' ? 'ลูกค้าใหม่' : 'New Customers'}>
+            {lang === 'th'
+              ? 'ลูกค้าใหม่ที่ซื้อ HOC ครั้งแรก (นับเฉพาะที่ convert)'
+              : 'First-time HOC buyers — always counts converted customers only.'}
+          </Term>
+          <Term label={lang === 'th' ? 'ลูกค้าประจำ' : 'Repeat Customers'}>
+            {lang === 'th'
+              ? 'ลูกค้าที่กลับมาซื้อซ้ำ (นับเฉพาะที่ convert)'
+              : 'Customers who came back to buy again — always counts converted customers only.'}
+          </Term>
 
-          <SectionLabel>Conversion filter</SectionLabel>
-          <Term label="All Customers">Shows total sales including both converted and not-converted orders.</Term>
-          <Term label="Converted Only">Only sales from customers who ordered within the attribution window.</Term>
-          <Term label="Not Converted">Only sales from customers who ordered outside the attribution window.</Term>
+          <SectionLabel>{lang === 'th' ? 'Filter Conversion' : 'Conversion filter'}</SectionLabel>
+          <Term label={lang === 'th' ? 'ลูกค้าทั้งหมด' : 'All Customers'}>
+            {lang === 'th'
+              ? 'ยอดขายทั้งหมด ทั้งที่ convert และยังไม่ convert'
+              : 'Shows total sales including both converted and not-converted orders.'}
+          </Term>
+          <Term label={lang === 'th' ? 'Converted เท่านั้น' : 'Converted Only'}>
+            {lang === 'th'
+              ? 'เฉพาะยอดขายจากลูกค้าที่สั่งซื้อภายใน attribution window'
+              : 'Only sales from customers who ordered within the attribution window.'}
+          </Term>
+          <Term label={lang === 'th' ? 'ไม่ Converted' : 'Not Converted'}>
+            {lang === 'th'
+              ? 'เฉพาะยอดขายจากลูกค้าที่สั่งซื้อนอก attribution window'
+              : 'Only sales from customers who ordered outside the attribution window.'}
+          </Term>
 
           <SectionLabel>Agent Leaderboard</SectionLabel>
-          <p>Ranks agents by HOC converted sales. Agents with zero sales are hidden automatically. Conv. Rate = converted customers ÷ total customers called during the period.</p>
-          <Note>The leaderboard responds to the Segment filter, but call counts are not split by segment — call records do not carry segment information.</Note>
+          <p>
+            {lang === 'th'
+              ? 'จัดอันดับ agent ตามยอดขาย HOC — ตัดรายชื่อที่ยอด = 0 ออก Conv. Rate = ลูกค้าที่ convert ÷ ลูกค้าที่โทรหา'
+              : 'Ranks agents by HOC converted sales. Agents with zero sales are hidden automatically. Conv. Rate = converted customers ÷ total customers called during the period.'}
+          </p>
+          <Note>
+            {lang === 'th'
+              ? 'Agent Leaderboard ใช้ Segment filter ได้ แต่ Calls ไม่แยก Segment'
+              : 'The leaderboard responds to the Segment filter, but call counts are not split by segment — call records do not carry segment information.'}
+          </Note>
         </AccordionContent>
       </AccordionItem>
 
@@ -169,28 +246,50 @@ function AllUsersContent() {
         <AccordionTrigger>
           <span className="flex items-center gap-2">
             <PhoneCall className="h-4 w-4 text-[#003DA6]" />
-            Telesales
+            {lang === 'th' ? 'เทเลเซลส์' : 'Telesales'}
           </span>
         </AccordionTrigger>
         <AccordionContent className="space-y-3 text-sm text-muted-foreground">
           <p>
-            Tracks how effective the calling activity is — how many customers were called, how many were reached, and how many actually placed an order.
+            {lang === 'th'
+              ? 'ติดตามประสิทธิภาพการโทร ดูว่าโทรไปกี่คน ติดต่อได้กี่คน สั่งซื้อกี่คน'
+              : 'Tracks how effective the calling activity is — how many customers were called, how many were reached, and how many actually placed an order.'}
           </p>
 
-          <SectionLabel>Date basis</SectionLabel>
+          <SectionLabel>{lang === 'th' ? 'ช่วงข้อมูลอ้างอิงจาก' : 'Date basis'}</SectionLabel>
           <p>
-            <PageBadge>First Connected Date</PageBadge>
-            {' '}— the date a customer was first successfully contacted, used for the funnel and call counts.
+            <PageBadge>{lang === 'th' ? 'วันที่โทรติดต่อครั้งแรก (First Connected Date)' : 'First Connected Date'}</PageBadge>
+            {' '}{lang === 'th' ? '— วันที่ติดต่อลูกค้าได้ครั้งแรก' : '— the date a customer was first successfully contacted, used for the funnel and call counts.'}
           </p>
 
-          <SectionLabel>The 3-step funnel</SectionLabel>
-          <Term label="Total Leads">All customers on the telesales team&apos;s calling list.</Term>
-          <Term label="Reached">Customers who were successfully contacted (excludes no-answer and unreachable).</Term>
-          <Term label="Ordered">Customers who were reached and then placed a HOC order.</Term>
+          <SectionLabel>{lang === 'th' ? 'Funnel 3 ขั้นตอน' : 'The 3-step funnel'}</SectionLabel>
+          <Term label={lang === 'th' ? 'รายชื่อทั้งหมด' : 'Total Leads'}>
+            {lang === 'th'
+              ? 'ลูกค้าทั้งหมดในรายชื่อของทีม Telesales'
+              : 'All customers on the telesales team\'s calling list.'}
+          </Term>
+          <Term label={lang === 'th' ? 'ติดต่อได้' : 'Reached'}>
+            {lang === 'th'
+              ? 'ลูกค้าที่โทรติดต่อสำเร็จ (ไม่ใช่ไม่รับสายหรือปิดเครื่อง)'
+              : 'Customers who were successfully contacted (excludes no-answer and unreachable).'}
+          </Term>
+          <Term label={lang === 'th' ? 'สั่งซื้อแล้ว' : 'Ordered'}>
+            {lang === 'th'
+              ? 'ลูกค้าที่ถูกโทรแล้วสั่งซื้อสินค้า HOC'
+              : 'Customers who were reached and then placed a HOC order.'}
+          </Term>
 
-          <SectionLabel>Key rates</SectionLabel>
-          <Term label="Reach Rate">Reached ÷ Total Leads — what percentage of the list was actually spoken to.</Term>
-          <Term label="Conversion Rate">Ordered ÷ Reached — of those spoken to, how many went on to buy.</Term>
+          <SectionLabel>{lang === 'th' ? 'อัตราที่ควรดู' : 'Key rates'}</SectionLabel>
+          <Term label={lang === 'th' ? 'อัตราการติดต่อ' : 'Reach Rate'}>
+            {lang === 'th'
+              ? 'ติดต่อได้ ÷ รายชื่อทั้งหมด — โทรติดกี่ %'
+              : 'Reached ÷ Total Leads — what percentage of the list was actually spoken to.'}
+          </Term>
+          <Term label={lang === 'th' ? 'อัตราการ Convert' : 'Conversion Rate'}>
+            {lang === 'th'
+              ? 'สั่งซื้อ ÷ ติดต่อได้ — กี่ % ที่คุยแล้วซื้อ'
+              : 'Ordered ÷ Reached — of those spoken to, how many went on to buy.'}
+          </Term>
         </AccordionContent>
       </AccordionItem>
 
@@ -199,24 +298,38 @@ function AllUsersContent() {
         <AccordionTrigger>
           <span className="flex items-center gap-2">
             <Package className="h-4 w-4 text-[#003DA6]" />
-            Products
+            {lang === 'th' ? 'สินค้า' : 'Products'}
           </span>
         </AccordionTrigger>
         <AccordionContent className="space-y-3 text-sm text-muted-foreground">
           <p>
-            Shows which products are selling, broken down by Brand, product category (Class), and sub-category (Subclass).
+            {lang === 'th'
+              ? 'ดูว่าสินค้าตัวไหนขายดี แบ่งตาม Brand, Class, Subclass'
+              : 'Shows which products are selling, broken down by Brand, product category (Class), and sub-category (Subclass).'}
           </p>
 
-          <SectionLabel>Date basis</SectionLabel>
+          <SectionLabel>{lang === 'th' ? 'ช่วงข้อมูลอ้างอิงจาก' : 'Date basis'}</SectionLabel>
           <p>
-            <PageBadge>Order Date</PageBadge>
-            {' '}— counts converted orders only.
+            <PageBadge>{lang === 'th' ? 'วันที่สั่งซื้อ (Order Date) — นับเฉพาะคำสั่งซื้อที่ convert' : 'Order Date'}</PageBadge>
+            {lang === 'th' ? '' : ' — counts converted orders only.'}
           </p>
 
-          <SectionLabel>How to use</SectionLabel>
-          <Term label="Brand">See which brand — Dove, Sunsilk, Knorr, etc. — is driving the most revenue.</Term>
-          <Term label="Class">View performance by product category such as Hair Care, Personal Care, or Food.</Term>
-          <Term label="New vs Repeat">Split sales between first-time buyers and returning customers.</Term>
+          <SectionLabel>{lang === 'th' ? 'วิธีใช้' : 'How to use'}</SectionLabel>
+          <Term label={lang === 'th' ? 'แบรนด์' : 'Brand'}>
+            {lang === 'th'
+              ? 'ดูว่า Dove, Sunsilk, Knorr หรือแบรนด์ไหนขายดีสุด'
+              : 'See which brand — Dove, Sunsilk, Knorr, etc. — is driving the most revenue.'}
+          </Term>
+          <Term label={lang === 'th' ? 'หมวดหมู่' : 'Class'}>
+            {lang === 'th'
+              ? 'ดูตามหมวดสินค้า เช่น Hair Care, Personal Care, Food'
+              : 'View performance by product category such as Hair Care, Personal Care, or Food.'}
+          </Term>
+          <Term label={lang === 'th' ? 'ใหม่ vs ประจำ' : 'New vs Repeat'}>
+            {lang === 'th'
+              ? 'แยกยอดขายว่ามาจากลูกค้าใหม่หรือลูกค้าประจำ'
+              : 'Split sales between first-time buyers and returning customers.'}
+          </Term>
         </AccordionContent>
       </AccordionItem>
 
@@ -225,34 +338,44 @@ function AllUsersContent() {
         <AccordionTrigger>
           <span className="flex items-center gap-2">
             <PiggyBank className="h-4 w-4 text-[#003DA6]" />
-            Incentives
+            {lang === 'th' ? 'รางวัลจูงใจ' : 'Incentives'}
           </span>
         </AccordionTrigger>
         <AccordionContent className="space-y-3 text-sm text-muted-foreground">
           <p>
-            Shows programme costs and incentive payouts — how much was paid out in bonuses, and whether the investment was worthwhile (ROI).
+            {lang === 'th'
+              ? 'ดูค่าใช้จ่ายและ incentive ของโครงการ จ่าย incentive ไปเท่าไหร่ และคุ้มค่าแค่ไหน (ROI)'
+              : 'Shows programme costs and incentive payouts — how much was paid out in bonuses, and whether the investment was worthwhile (ROI).'}
           </p>
 
-          <SectionLabel>Date basis</SectionLabel>
+          <SectionLabel>{lang === 'th' ? 'ช่วงข้อมูลอ้างอิงจาก' : 'Date basis'}</SectionLabel>
           <p>
-            <PageBadge>Month</PageBadge>
-            {' '}— monthly view only; day-level filtering is not available here.
+            <PageBadge>{lang === 'th' ? 'เดือน (Month) — ดูรายเดือนเท่านั้น' : 'Month'}</PageBadge>
+            {lang === 'th' ? '' : ' — monthly view only; day-level filtering is not available here.'}
           </p>
 
-          <SectionLabel>How Achievement determines the incentive</SectionLabel>
+          <SectionLabel>{lang === 'th' ? 'การคำนวณ Achievement %' : 'How Achievement determines the incentive'}</SectionLabel>
           <p>
-            The system compares HOC Sales against the month&apos;s target, finds the highest incentive tier reached, and calculates the payout per agent head.
+            {lang === 'th'
+              ? 'ระบบเปรียบยอดขาย HOC กับ Target แล้วหา tier สูงสุดที่ทำได้'
+              : 'The system compares HOC Sales against the month\'s target, finds the highest incentive tier reached, and calculates the payout per agent head.'}
           </p>
-          <Term label="Achievement ≥ 80%">Qualifies for the 80% tier rate.</Term>
-          <Term label="Achievement ≥ 100%">Qualifies for the 100% tier rate (higher payout).</Term>
+          <Term label="Achievement ≥ 80%">
+            {lang === 'th' ? 'ได้ rate ตาม tier 80%' : 'Qualifies for the 80% tier rate.'}
+          </Term>
+          <Term label="Achievement ≥ 100%">
+            {lang === 'th' ? 'ได้ rate ตาม tier 100% (สูงกว่า)' : 'Qualifies for the 100% tier rate (higher payout).'}
+          </Term>
 
-          <SectionLabel>Calculations</SectionLabel>
+          <SectionLabel>{lang === 'th' ? 'สูตรคำนวณ' : 'Calculations'}</SectionLabel>
           <Formula>Total Incentive = Agent Count × Incentive per Head</Formula>
           <Formula>Total Expense = Total Incentive + Agent Salaries + Supervisor Salaries</Formula>
           <Formula>ROI = HOC Sales ÷ Total Expense</Formula>
 
           <Note>
-            From May 2026 onwards — the DISTRIBUTOR segment is excluded from Achievement % and ROI calculations.
+            {lang === 'th'
+              ? 'ตั้งแต่ พ.ค. 2569 — กลุ่ม DISTRIBUTOR ไม่รวมในการคำนวณ Achievement และ ROI'
+              : 'From May 2026 onwards — the DISTRIBUTOR segment is excluded from Achievement % and ROI calculations.'}
           </Note>
         </AccordionContent>
       </AccordionItem>
@@ -262,21 +385,29 @@ function AllUsersContent() {
         <AccordionTrigger>
           <span className="flex items-center gap-2">
             <Clock className="h-4 w-4 text-[#003DA6]" />
-            What is the Attribution Window?
+            {lang === 'th' ? 'Attribution Window คืออะไร?' : 'What is the Attribution Window?'}
           </span>
         </AccordionTrigger>
         <AccordionContent className="space-y-3 text-sm text-muted-foreground">
           <p>
-            The <strong className="text-foreground">Attribution Window</strong> is the number of days the system uses to decide whether an order counts as a result of a telesales call.
+            {lang === 'th'
+              ? <>Attribution Window คือจำนวนวันที่ระบบจะนับว่า &ldquo;คำสั่งซื้อนี้เกิดจากการโทรของทีม Telesales&rdquo;</>
+              : <><strong className="text-foreground">Attribution Window</strong> is the number of days the system uses to decide whether an order counts as a result of a telesales call.</>}
           </p>
           <p>
-            For example, with a window of <strong className="text-foreground">14 days</strong>: if a customer places an order within 14 days of being first contacted, that order is credited to the telesales programme.
+            {lang === 'th'
+              ? 'เช่น ตั้งไว้ที่ 14 วัน: ถ้าลูกค้าสั่งซื้อภายใน 14 วันหลังจากถูกโทรหาครั้งแรก — คำสั่งซื้อนั้นนับเป็นผลงานของ Telesales'
+              : <>For example, with a window of <strong className="text-foreground">14 days</strong>: if a customer places an order within 14 days of being first contacted, that order is credited to the telesales programme.</>}
           </p>
           <p>
-            If the customer orders after 14 days, the order is not counted in HOC Sales, converted revenue, or new customer numbers.
+            {lang === 'th'
+              ? 'ถ้าสั่งซื้อหลัง 14 วัน — ไม่นับรวมใน HOC Sales, ยอดขาย Converted หรือจำนวนลูกค้าใหม่'
+              : 'If the customer orders after 14 days, the order is not counted in HOC Sales, converted revenue, or new customer numbers.'}
           </p>
           <Note>
-            To check the current value — look at the <strong>top-right corner of every page</strong>. You will see a badge like <span className="font-mono font-semibold">14-day attribution</span>. That number is what the system is currently using. Changing it requires a Mart Rebuild — all historical numbers will recalculate.
+            {lang === 'th'
+              ? <>ค่า Attribution Window แสดงที่มุมขวาบนทุกหน้า เช่น <span className="font-mono font-semibold">14-day attribution</span> — การเปลี่ยนค่านี้ต้อง Build Mart ใหม่ทุกครั้ง</>
+              : <>To check the current value — look at the <strong>top-right corner of every page</strong>. You will see a badge like <span className="font-mono font-semibold">14-day attribution</span>. That number is what the system is currently using. Changing it requires a Mart Rebuild — all historical numbers will recalculate.</>}
           </Note>
         </AccordionContent>
       </AccordionItem>
@@ -514,16 +645,21 @@ interface HelpSheetProps {
   open: boolean
   onOpenChange: (open: boolean) => void
   isAdmin: boolean
+  lang: Lang
 }
 
-export function HelpSheet({ open, onOpenChange, isAdmin }: HelpSheetProps) {
+export function HelpSheet({ open, onOpenChange, isAdmin, lang }: HelpSheetProps) {
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
       <SheetContent side="right" className="w-full sm:max-w-lg p-0 flex flex-col">
         <SheetHeader className="px-6 pt-6 pb-4 border-b shrink-0">
-          <SheetTitle className="text-base">Help &amp; User Guide</SheetTitle>
+          <SheetTitle className="text-base">
+            {lang === 'th' ? 'คู่มือการใช้งาน' : 'Help & User Guide'}
+          </SheetTitle>
           <p className="text-xs text-muted-foreground mt-0.5">
-            What each page shows and which date range it uses.
+            {lang === 'th'
+              ? 'แต่ละหน้าดูข้อมูลอะไร และช่วงวันที่คำนวณจากอะไร'
+              : 'What each page shows and which date range it uses.'}
           </p>
         </SheetHeader>
 
@@ -534,9 +670,11 @@ export function HelpSheet({ open, onOpenChange, isAdmin }: HelpSheetProps) {
             <div>
               <div className="flex items-center gap-2 mb-3">
                 <Users className="h-4 w-4 text-muted-foreground" />
-                <span className="text-sm font-semibold">Dashboard Pages</span>
+                <span className="text-sm font-semibold">
+                  {lang === 'th' ? 'หน้าต่าง ๆ ในแดชบอร์ด' : 'Dashboard Pages'}
+                </span>
               </div>
-              <AllUsersContent />
+              <AllUsersContent lang={lang} />
             </div>
 
             {/* Admin section */}
@@ -546,11 +684,17 @@ export function HelpSheet({ open, onOpenChange, isAdmin }: HelpSheetProps) {
                 <div>
                   <div className="flex items-center gap-2 mb-1">
                     <Shield className="h-4 w-4 text-rose-600" />
-                    <span className="text-sm font-semibold">Admin Guide</span>
-                    <Badge variant="destructive" className="text-[10px] px-1.5 py-0">Admin only</Badge>
+                    <span className="text-sm font-semibold">
+                      {lang === 'th' ? 'คู่มือผู้ดูแลระบบ' : 'Admin Guide'}
+                    </span>
+                    <Badge variant="destructive" className="text-[10px] px-1.5 py-0">
+                      {lang === 'th' ? 'เฉพาะผู้ดูแลระบบ' : 'Admin only'}
+                    </Badge>
                   </div>
                   <p className="text-xs text-muted-foreground mb-3">
-                    Data upload requirements and mart rebuild instructions.
+                    {lang === 'th'
+                      ? 'ข้อกำหนดการอัปโหลดข้อมูลและคำแนะนำการ Build Mart'
+                      : 'Data upload requirements and mart rebuild instructions.'}
                   </p>
                   <AdminContent />
                 </div>

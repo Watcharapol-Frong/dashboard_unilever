@@ -1,6 +1,8 @@
 'use client'
 
 import { useMemo, useState } from 'react'
+import { useLanguage } from '@/context/LanguageContext'
+import { t } from '@/lib/i18n'
 import {
   AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip,
   BarChart, Bar, Legend
@@ -147,6 +149,7 @@ const CustomTooltip = ({ active, payload, label }: { active?: boolean; payload?:
 }
 
 export default function TelesalesClient() {
+  const { lang } = useLanguage()
   // Range chip state
   const {
     rangeFrom, rangeTo, hoverMonth, setHoverMonth,
@@ -274,7 +277,7 @@ export default function TelesalesClient() {
 
   if (isLoading && !data) return <PageLoading />
   if (!data || data.months.length === 0) {
-    return <PageEmpty message="No telesales data available" hint="Please upload telesales data and build mart." />
+    return <PageEmpty message={t('telesales.noData', lang)} hint={t('common.buildFirst', lang)} />
   }
 
   const totalConvertedDisplay = (data.summary.new_converted ?? 0) + (data.summary.repeat_converted ?? 0)
@@ -301,7 +304,7 @@ export default function TelesalesClient() {
         <CardHeader className="pb-3">
           <div className="flex items-center gap-2">
             <Calendar className="h-4 w-4 text-[#003DA6]" />
-            <CardTitle className="text-sm font-medium">Filter & Range Selection</CardTitle>
+            <CardTitle className="text-sm font-medium">{t('common.filterRange', lang)}</CardTitle>
           </div>
         </CardHeader>
         <CardContent>
@@ -363,7 +366,7 @@ export default function TelesalesClient() {
             {/* Row 2: Dropdown Filters */}
             <div className="flex flex-wrap items-center gap-4">
               <MultiSelect
-                label="All Channels"
+                label={t('common.allChannels', lang)}
                 value={channel}
                 onChange={setChannel}
                 options={[
@@ -374,7 +377,7 @@ export default function TelesalesClient() {
               />
 
               <MultiSelect
-                label="All Segments"
+                label={t('common.allSegments', lang)}
                 value={cmg}
                 onChange={setCmg}
                 options={[
@@ -385,7 +388,7 @@ export default function TelesalesClient() {
               />
 
               <MultiSelect
-                label="All Agents"
+                label={t('common.allAgents', lang)}
                 value={agent}
                 onChange={setAgent}
                 options={(data?.options?.agents || []).map(v => ({ value: v, label: v }))}
@@ -405,7 +408,7 @@ export default function TelesalesClient() {
                   }}
                   className="text-xs text-[#003DA6] hover:underline font-semibold"
                 >
-                  Reset All
+                  {t('common.resetAll', lang)}
                 </button>
               )}
             </div>
@@ -413,8 +416,8 @@ export default function TelesalesClient() {
 
           <p className="text-xs text-muted-foreground mt-3">
             {displayRangeLabel
-              ? <>Showing: <span className="font-medium text-foreground">{displayRangeLabel}</span></>
-              : <>Showing: <span className="font-medium text-foreground">all available periods</span> — select month chips to filter by period</>
+              ? <>{t('common.showing', lang)}: <span className="font-medium text-foreground">{displayRangeLabel}</span></>
+              : <>{t('common.showing', lang)}: <span className="font-medium text-foreground">{t('common.allPeriods', lang)}</span> — {t('common.selectChips', lang)}</>
             }
           </p>
         </CardContent>
@@ -422,32 +425,32 @@ export default function TelesalesClient() {
 
       <KpiGrid cols={4}>
         <KpiCard
-          title="Total Leads"
+          title={t('telesales.totalLeads', lang)}
           value={formatNumber(data.summary.total_leads)}
           subtitle="Total target leads in database"
           icon={Users}
           tooltip="Total unique customers in the telesales lead pool — all MMIDs assigned for calling, regardless of call outcome."
         />
         <KpiCard
-          title="Connected Rate"
+          title={t('telesales.reachRate', lang)}
           value={formatPct(reachRate)}
-          subtitle={`Connected: ${formatNumber(data.summary.reached)} / Total: ${formatNumber(data.summary.total_calls)}`}
+          subtitle={`${t('telesales.reached', lang)}: ${formatNumber(data.summary.reached)} / Total: ${formatNumber(data.summary.total_calls)}`}
           valueClassName={colorRate(reachRate)}
           icon={PhoneCall}
           tooltip="Unique customers reached ÷ Unique customers called. 'Connected' = at least one call where the customer answered (excludes: no answer, switched off, unavailable)."
         />
         <KpiCard
-          title="Conversion Rate"
+          title={t('telesales.convRate', lang)}
           value={formatPct(conversionRate)}
-          subtitle={`Converted: ${formatNumber(data.summary.total_converted)} / Total: ${formatNumber(data.summary.total_calls)}`}
+          subtitle={`${t('telesales.ordered', lang)}: ${formatNumber(data.summary.total_converted)} / Total: ${formatNumber(data.summary.total_calls)}`}
           valueClassName={colorRate(conversionRate, [0.15, 0.08])}
           icon={UserCheck}
           tooltip="Unique converted customers ÷ Unique customers called (Total). Includes customers who ordered without answering, so the denominator is the full target scope — not just those who picked up."
         />
         <KpiCard
-          title="Orders (Conversion)"
+          title={t('telesales.ordered', lang)}
           value={formatNumber(totalConvertedDisplay)}
-          subtitle={`New: ${formatNumber(data.summary.new_converted ?? 0)} · Repeat: ${formatNumber(data.summary.repeat_converted ?? 0)}`}
+          subtitle={`${t('kpi.newCustomers', lang)}: ${formatNumber(data.summary.new_converted ?? 0)} · ${t('kpi.repeatCustomers', lang)}: ${formatNumber(data.summary.repeat_converted ?? 0)}`}
           icon={Phone}
           tooltip="Total conversions = New customers + Repeat customers. Counted separately so a customer with both a new and a repeat order contributes to each."
         />

@@ -1,6 +1,8 @@
 'use client'
 
 import { useMemo, useState } from 'react'
+import { useLanguage } from '@/context/LanguageContext'
+import { t } from '@/lib/i18n'
 import { ComposedChart, Bar, Line, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip } from 'recharts'
 import { Card, CardContent } from '@/components/ui/card'
 import { KpiCard } from '@/components/dashboard/KpiCard'
@@ -123,6 +125,7 @@ const summaryColumns: ColumnDef<MonthlySummary>[] = [
 ]
 
 export default function IncentivesClient() {
+  const { lang } = useLanguage()
   const { data, isLoading } = useDashboardSWR<IncentivesKpi>('/api/data/incentives')
   const [activeTab, setActiveTab] = useState('summary')
 
@@ -137,7 +140,7 @@ export default function IncentivesClient() {
 
   if (isLoading) return <PageLoading />
   if (!data || data.monthly_summary.length === 0) {
-    return <PageEmpty message="No incentive data available" hint="Please upload agent headcounts, costs, targets & incentives data and rebuild mart." />
+    return <PageEmpty message={t('incentives.noData', lang)} hint={t('common.buildFirst', lang)} />
   }
 
   const totalExpense   = data.monthly_summary.reduce((sum, m) => sum + m.total_expense,         0)
@@ -152,14 +155,14 @@ export default function IncentivesClient() {
     <div className="space-y-6">
       <KpiGrid cols={2}>
         <KpiCard
-          title="Incentive Per Head"
+          title={t('incentives.incentivePaid', lang)}
           value={latestPerHead > 0 ? formatTHB(latestPerHead) : '—'}
           subtitle="Latest month · per agent"
           icon={PiggyBank}
           tooltip={`HOC Sales: ${formatTHB(totalSales)}\nTarget: ${formatTHB(totalTarget)}\nAchievement: ${grandAchieve.toFixed(1)}%\n\nIncentive rate per agent head for the most recent month — determined by the achievement tier (FOOD RETAILER + HORECA sales vs target). Earlier months may have a different rate.`}
         />
         <KpiCard
-          title="Overall Program ROI"
+          title={t('incentives.roi', lang)}
           value={grandRoi > 0 ? `${grandRoi.toFixed(2)}x` : '—'}
           subtitle="Unilever HOC sales / Expense"
           valueClassName={colorRoi(grandRoi)}
