@@ -14,6 +14,7 @@ function buildProductWhere(
   startDate: string | null,
   endDate: string | null,
   converted: string | null,
+  leadCustomers: string[],
 ) {
   const conditions: string[] = []
   const params: any[] = []
@@ -33,6 +34,7 @@ function buildProductWhere(
   } else if (converted === 'not_converted') {
     conditions.push(`m.customer_type IN ('first_order_not_converted', 'retention_not_converted')`)
   }
+  addFilter(params, conditions, leadCustomers, 'm.lead_customers')
 
   return { where: conditions.length ? 'AND ' + conditions.join(' AND ') : '', params }
 }
@@ -45,12 +47,13 @@ export async function GET(request: Request) {
     const seniorBuyer = (searchParams.get('senior_buyer') || '').split(',').filter(Boolean)
     const buyer       = (searchParams.get('buyer')        || '').split(',').filter(Boolean)
     const subclass    = (searchParams.get('subclass')     || '').split(',').filter(Boolean)
-    const startDate   = searchParams.get('startDate')   || null
-    const endDate     = searchParams.get('endDate')     || null
-    const converted   = searchParams.get('converted')   || null
+    const startDate     = searchParams.get('startDate')      || null
+    const endDate       = searchParams.get('endDate')        || null
+    const converted     = searchParams.get('converted')      || null
+    const leadCustomers = (searchParams.get('lead_customers') || '').split(',').filter(Boolean)
 
     const { where: extraWhere, params: filterParams } = buildProductWhere(
-      brands, className, seniorBuyer, buyer, subclass, startDate, endDate, converted,
+      brands, className, seniorBuyer, buyer, subclass, startDate, endDate, converted, leadCustomers,
     )
 
     const [kpiRow, productRows, brandRows, monthsRaw, brandTrendRows, buyerRows] = await Promise.all([

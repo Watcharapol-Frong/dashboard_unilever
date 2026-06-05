@@ -76,6 +76,7 @@ interface ProductOptions {
   senior_buyers: string[]
   buyers: string[]
   subclasses: string[]
+  lead_customers: string[]
   months: string[]
 }
 
@@ -335,7 +336,7 @@ const buyerColumns: ColumnDef<BuyerRow>[] = [
 
 // ── Component ─────────────────────────────────────────────────────────────────
 
-const EMPTY_OPTS: ProductOptions = { brands: [], class_names: [], senior_buyers: [], buyers: [], subclasses: [], months: [] }
+const EMPTY_OPTS: ProductOptions = { brands: [], class_names: [], senior_buyers: [], buyers: [], subclasses: [], lead_customers: [], months: [] }
 
 export default function ProductsClient() {
   const { lang } = useLanguage()
@@ -358,9 +359,10 @@ export default function ProductsClient() {
   const [filterClass,       setFilterClass]       = useState<string[]>([])
   const [filterSeniorBuyer, setFilterSeniorBuyer] = useState<string[]>([])
   const [filterBuyer,       setFilterBuyer]       = useState<string[]>([])
-  const [filterSubclass,    setFilterSubclass]    = useState<string[]>([])
-  const [filterSegment,     setFilterSegment]     = useState('all')
-  const [filterConverted,   setFilterConverted]   = useState('all')
+  const [filterSubclass,       setFilterSubclass]       = useState<string[]>([])
+  const [filterLeadCustomers,  setFilterLeadCustomers]  = useState<string[]>([])
+  const [filterSegment,        setFilterSegment]        = useState('all')
+  const [filterConverted,      setFilterConverted]      = useState('all')
   const [prodSearch,        setProdSearch]        = useState('')
   const [activeTab,         setActiveTab]         = useState('products')
 
@@ -371,8 +373,9 @@ export default function ProductsClient() {
     if (filterClass.length > 0)       p.set('class_name',   filterClass.join(','))
     if (filterSeniorBuyer.length > 0) p.set('senior_buyer', filterSeniorBuyer.join(','))
     if (filterBuyer.length > 0)       p.set('buyer',        filterBuyer.join(','))
-    if (filterSubclass.length > 0)    p.set('subclass',     filterSubclass.join(','))
-    if (filterConverted !== 'all')    p.set('converted',    filterConverted)
+    if (filterSubclass.length > 0)       p.set('subclass',        filterSubclass.join(','))
+    if (filterConverted !== 'all')        p.set('converted',       filterConverted)
+    if (filterLeadCustomers.length > 0)   p.set('lead_customers',  filterLeadCustomers.join(','))
     if (rangeFrom) {
       p.set('startDate', rangeFrom)
       p.set('endDate',   lastDayOfMonth(rangeTo ?? rangeFrom))
@@ -381,19 +384,19 @@ export default function ProductsClient() {
     if (buildVersion) p.set('_v', String(buildVersion))
     const qs = p.toString()
     return `/api/data/products${qs ? `?${qs}` : ''}`
-  }, [filterBrands, filterClass, filterSeniorBuyer, filterBuyer, filterSubclass, filterConverted, rangeFrom, rangeTo, buildVersion])
+  }, [filterBrands, filterClass, filterSeniorBuyer, filterBuyer, filterSubclass, filterConverted, filterLeadCustomers, rangeFrom, rangeTo, buildVersion])
 
   const { data, isLoading, isValidating, error } = useDashboardSWR<ProductData>(apiUrl)
 
   const hasFilter = filterBrands.length > 0 || filterClass.length > 0 ||
     filterSeniorBuyer.length > 0 || filterBuyer.length > 0 || filterSubclass.length > 0 ||
-    filterConverted !== 'all'
+    filterConverted !== 'all' || filterLeadCustomers.length > 0
   const hasRange  = !!rangeFrom
 
   const clearAll = () => {
     setFilterBrands([]); setFilterClass([])
     setFilterSeniorBuyer([]); setFilterBuyer([]); setFilterSubclass([])
-    setFilterConverted('all')
+    setFilterConverted('all'); setFilterLeadCustomers([])
     clearRange()
   }
 
@@ -498,6 +501,16 @@ export default function ProductsClient() {
               ]}
               width="w-[165px]"
             />
+
+            {opts.lead_customers.length > 0 && (
+              <MultiSelect
+                label={lang === 'th' ? 'ทุก Segment' : 'All Segments'}
+                value={filterLeadCustomers}
+                onChange={setFilterLeadCustomers}
+                options={opts.lead_customers.map(v => ({ value: v, label: v }))}
+                width="w-[155px]"
+              />
+            )}
 
             {(hasFilter || hasRange) && (
               <button onClick={clearAll} className="text-xs text-[#003DA6] hover:underline font-semibold">
