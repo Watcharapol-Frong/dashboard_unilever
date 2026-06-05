@@ -1,6 +1,8 @@
 'use client'
 
 import { useMemo, useState, useEffect, useRef } from 'react'
+import { useLanguage } from '@/context/LanguageContext'
+import { t } from '@/lib/i18n'
 import useSWR from 'swr'
 import { DataTable } from '@/components/ui/data-table'
 import { KpiCard } from '@/components/dashboard/KpiCard'
@@ -46,6 +48,7 @@ function buildUrl(base: string, params: Record<string, string | number | string[
 }
 
 export default function LeadsClient() {
+  const { lang } = useLanguage()
   const [search,        setSearch]        = useState('')
   const [debouncedSearch, setDebouncedSearch] = useState('')
   const [filterTier,    setFilterTier]    = useState<string[]>([])
@@ -111,7 +114,7 @@ export default function LeadsClient() {
   if (summaryLoading) return <PageLoadingTable kpiCols={4} rows={8} />
   if (summaryError)   return <PageError message={summaryError.message} />
   if (!kpi || kpi.total === 0) return (
-    <PageEmpty message="No data available" hint="Upload a leads file and run Build Mart first" />
+    <PageEmpty message={t('common.noData', lang)} hint={t('common.buildFirst', lang)} />
   )
 
   return (
@@ -119,21 +122,21 @@ export default function LeadsClient() {
 
       <KpiGrid cols={4}>
         <KpiCard
-          title="Total Leads"
+          title={t('telesales.totalLeads', lang)}
           value={kpi.total.toLocaleString()}
           subtitle="Assigned telesales leads"
           icon={Users}
           tooltip="Total number of MMIDs assigned to the telesales team as leads."
         />
         <KpiCard
-          title="Contacted"
+          title={t('leads.contacted', lang)}
           value={kpi.contacted.toLocaleString()}
           subtitle={fmtPct(kpi.contacted, kpi.total)}
           icon={PhoneCall}
           tooltip="MMIDs that have been called at least once — includes both Reached and Called Not Reached."
         />
         <KpiCard
-          title="Conversion"
+          title={t('leads.converted', lang)}
           value={kpi.converted.toLocaleString()}
           subtitle={fmtPct(kpi.converted, kpi.total)}
           valueClassName="text-blue-600"
@@ -141,7 +144,7 @@ export default function LeadsClient() {
           tooltip="Unique MMIDs with at least one HOC order (new_customer or retention)."
         />
         <KpiCard
-          title="Orders"
+          title={t('nav.orders', lang)}
           value={kpi.orders.toLocaleString()}
           subtitle={kpi.converted > 0 ? `avg ${(kpi.orders / kpi.converted).toFixed(1)}x / person` : undefined}
           valueClassName="text-green-600"
@@ -155,46 +158,46 @@ export default function LeadsClient() {
         <CardHeader className="pb-3">
           <div className="flex items-center gap-2">
             <Filter className="h-4 w-4 text-[#003DA6]" />
-            <CardTitle className="text-sm font-medium">Filter & Search Selection</CardTitle>
+            <CardTitle className="text-sm font-medium">{t('common.filterRange', lang)}</CardTitle>
           </div>
         </CardHeader>
         <CardContent>
           <FilterBar hasFilter={hasFilter} onClear={clearFilters}>
             {/* No search input here anymore, moved to DataTable */}
             <MultiSelect
-              label="All Tiers"
+              label={t('leads.allTiers', lang)}
               value={filterTier}
               onChange={setFilterTier}
               options={tiers.map(v => ({ value: v, label: v }))}
             />
             <MultiSelect
-              label="Contact"
+              label={t('leads.allContacts', lang)}
               value={filterContact}
               onChange={setFilterContact}
               options={[
-                { value: 'reached',            label: 'Reached' },
+                { value: 'reached',            label: t('telesales.reached', lang) },
                 { value: 'called_not_reached', label: 'Not Reached' },
                 { value: 'not_called',         label: 'Not Called' },
               ]}
             />
             <MultiSelect
-              label="Conversion"
+              label={t('leads.allConversions', lang)}
               value={filterConv}
               onChange={setFilterConv}
               options={[
-                { value: 'converted',     label: 'Converted' },
-                { value: 'not_converted', label: 'Not Converted' },
+                { value: 'converted',     label: t('leads.converted', lang) },
+                { value: 'not_converted', label: t('leads.notConverted', lang) },
                 { value: 'no_hoc_order',  label: 'No Order' },
               ]}
             />
             <MultiSelect
-              label="All Segments"
+              label={t('common.allSegments', lang)}
               value={filterCmg}
               onChange={setFilterCmg}
               options={cmgs.map(v => ({ value: v, label: v }))}
             />
             <MultiSelect
-              label="All Agents"
+              label={t('common.allAgents', lang)}
               value={filterAgent}
               onChange={setFilterAgent}
               options={agents.map(v => ({ value: v, label: v }))}
@@ -212,7 +215,7 @@ export default function LeadsClient() {
           data={rows}
           searchValue={search}
           onSearchChange={(v) => { setSearch(v); setPage(1) }}
-          searchPlaceholder="Search MMID or name..."
+          searchPlaceholder={t('leads.search', lang)}
           defaultPageSize={20}
         />
       </div>

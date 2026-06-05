@@ -7,23 +7,18 @@ import { SidebarTrigger } from '@/components/ui/sidebar'
 import useSWR from 'swr'
 import { DatabaseZap } from 'lucide-react'
 import { useBuild } from '@/context/BuildContext'
+import { useLanguage } from '@/context/LanguageContext'
+import { t } from '@/lib/i18n'
 
-const PAGE_LABELS: Record<string, string> = {
-  '/overview':   'Overview',
-  '/telesales':  'Telesales',
-  '/sales':      'Sales',
-  '/products':   'Products',
-  '/leads':      'Leads',
-  '/incentives': 'Incentives',
-  '/data-hub':   'Data Hub',
-  '/exports':    'Exports',
-}
-
-function getPageLabel(pathname: string) {
-  for (const [path, label] of Object.entries(PAGE_LABELS)) {
-    if (pathname === path || pathname.startsWith(path + '/')) return label
-  }
-  return 'Dashboard'
+const PAGE_LABEL_KEYS: Record<string, string> = {
+  '/overview':   'topbar.overview',
+  '/telesales':  'topbar.telesales',
+  '/sales':      'topbar.sales',
+  '/products':   'topbar.products',
+  '/leads':      'topbar.leads',
+  '/incentives': 'topbar.incentives',
+  '/data-hub':   'topbar.dataHub',
+  '/exports':    'topbar.exports',
 }
 
 interface Freshness {
@@ -35,9 +30,15 @@ interface Freshness {
 
 const fetcher = (url: string) => fetch(url).then(r => r.json())
 
-function formatRelative(iso: string | null): string {
+function formatRelative(iso: string | null, lang: string): string {
   if (!iso) return ''
   const diff = Math.floor((Date.now() - new Date(iso).getTime()) / 1000)
+  if (lang === 'th') {
+    if (diff < 60)    return 'เมื่อกี้'
+    if (diff < 3600)  return `${Math.floor(diff / 60)} นาทีที่แล้ว`
+    if (diff < 86400) return `${Math.floor(diff / 3600)} ชม.ที่แล้ว`
+    return `${Math.floor(diff / 86400)} วันที่แล้ว`
+  }
   if (diff < 60)    return 'just now'
   if (diff < 3600)  return `${Math.floor(diff / 60)}m ago`
   if (diff < 86400) return `${Math.floor(diff / 3600)}h ago`
@@ -51,8 +52,14 @@ function formatDate(iso: string | null): string {
 
 export function TopBar({ title }: { title?: string }) {
   const pathname  = usePathname()
-  const pageLabel = title ?? getPageLabel(pathname)
   const { buildVersion } = useBuild()
+  const { lang } = useLanguage()
+
+  const labelKey = Object.entries(PAGE_LABEL_KEYS).find(([path]) =>
+    pathname === path || pathname.startsWith(path + '/')
+  )?.[1] ?? 'topbar.dashboard'
+
+  const pageLabel = title ?? t(labelKey, lang)
 
   const { data } = useSWR<Freshness>(
     ['/api/data/mart-freshness', buildVersion],
@@ -78,19 +85,21 @@ export function TopBar({ title }: { title?: string }) {
         <div className="ml-auto flex items-center gap-1.5 text-xs text-muted-foreground">
           <DatabaseZap className="h-3.5 w-3.5 text-[#003DA6]" />
           <span>
-            Data through{' '}
+            {t('topbar.dataThrough', lang)}{' '}
             <span className="font-semibold text-foreground">{formatDate(freshness.max_date)}</span>
           </span>
           {freshness.last_refreshed && (
             <>
               <span className="opacity-40">·</span>
-              <span>updated {formatRelative(freshness.last_refreshed)}</span>
+              <span>{t('topbar.updated', lang)} {formatRelative(freshness.last_refreshed, lang)}</span>
             </>
           )}
           {freshness.attribution_days && (
             <>
               <span className="opacity-40">·</span>
-              <span>{freshness.attribution_days}-day attribution</span>
+              <span>
+                {t('topbar.attribution', lang).replace('{n}', String(freshness.attribution_days))}
+              </span>
             </>
           )}
         </div>

@@ -1,6 +1,8 @@
 'use client'
 
 import { useMemo, useState } from 'react'
+import { useLanguage } from '@/context/LanguageContext'
+import { t } from '@/lib/i18n'
 import {
   AreaChart, Area, XAxis, YAxis, CartesianGrid,
 } from 'recharts'
@@ -143,6 +145,7 @@ function ChannelBar({ label, online, offline }: { label: string; online: number;
 // ── Component ─────────────────────────────────────────────────────────────────
 
 export default function SalesClient() {
+  const { lang } = useLanguage()
   const {
     rangeFrom, rangeTo, hoverMonth, setHoverMonth,
     handleChipClick: baseHandleChipClick, clearRange, activeRangeLabel,
@@ -200,7 +203,7 @@ export default function SalesClient() {
 
   if (isLoading && !data) return <PageLoading cols={4} />
   if (!data || data.months.length === 0) {
-    return <PageEmpty message="No telesales sales data available" hint="Please build mart first." />
+    return <PageEmpty message={t('sales.noData', lang)} hint={t('common.buildFirst', lang)} />
   }
 
   const { kpi, by_period, options, months } = data
@@ -233,10 +236,10 @@ export default function SalesClient() {
   })
 
   const channelBarLabel = conversionView === 'converted'
-    ? 'Converted Orders'
+    ? t('sales.convertedOrders', lang)
     : conversionView === 'not_converted'
-    ? 'Not Converted'
-    : 'All Orders'
+    ? t('sales.notConverted', lang)
+    : t('sales.allOrders', lang)
 
   return (
     <div className="space-y-6">
@@ -246,7 +249,7 @@ export default function SalesClient() {
         <CardHeader className="pb-3">
           <div className="flex items-center gap-2">
             <Calendar className="h-4 w-4 text-[#003DA6]" />
-            <CardTitle className="text-sm font-medium">Filter &amp; Range Selection</CardTitle>
+            <CardTitle className="text-sm font-medium">{t('common.filterRange', lang)}</CardTitle>
           </div>
         </CardHeader>
         <CardContent>
@@ -282,21 +285,21 @@ export default function SalesClient() {
             {/* Row 2: Dropdown filters */}
             <div className="flex flex-wrap items-center gap-4">
               <MultiSelect
-                label="All Channels"
+                label={t('common.allChannels', lang)}
                 value={channel}
                 onChange={setChannel}
                 options={[{ value: 'online', label: 'Online' }, { value: 'offline', label: 'Offline' }]}
                 width="w-[130px]"
               />
               <MultiSelect
-                label="All Segments"
+                label={t('common.allSegments', lang)}
                 value={cmg}
                 onChange={setCmg}
                 options={options.cmg.map(v => ({ value: v, label: v }))}
                 width="w-[150px]"
               />
               <MultiSelect
-                label="All Agents"
+                label={t('common.allAgents', lang)}
                 value={agent}
                 onChange={setAgent}
                 options={options.agents.map(v => ({ value: v, label: v }))}
@@ -306,9 +309,9 @@ export default function SalesClient() {
               <Select value={conversionView} onValueChange={v => setConversionView(v as Conversion)}>
                 <SelectTrigger className="h-7 text-xs w-[155px]"><SelectValue /></SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="all">All Customers</SelectItem>
-                  <SelectItem value="converted">Converted Only</SelectItem>
-                  <SelectItem value="not_converted">Not Converted</SelectItem>
+                  <SelectItem value="all">{t('common.allCustomers', lang)}</SelectItem>
+                  <SelectItem value="converted">{t('sales.convertedOnly', lang)}</SelectItem>
+                  <SelectItem value="not_converted">{t('sales.notConverted', lang)}</SelectItem>
                 </SelectContent>
               </Select>
 
@@ -321,7 +324,7 @@ export default function SalesClient() {
                   }}
                   className="text-xs text-[#003DA6] hover:underline font-semibold"
                 >
-                  Reset All
+                  {t('common.resetAll', lang)}
                 </button>
               )}
             </div>
@@ -330,12 +333,12 @@ export default function SalesClient() {
           <div className="flex flex-wrap items-center justify-between gap-2 mt-3">
             {rangeFrom ? (
               <p className="text-xs text-muted-foreground">
-                Selected: <span className="font-medium text-foreground">{activeRangeLabel}</span>
+                {t('common.selected', lang)}: <span className="font-medium text-foreground">{activeRangeLabel}</span>
               </p>
             ) : kpiPeriodLabel ? (
               <p className="text-xs text-muted-foreground">
-                Showing: <span className="font-medium text-foreground">{kpiPeriodLabel}</span>
-                <span className="ml-1">(latest available) — select month chips to change period</span>
+                {t('common.showing', lang)}: <span className="font-medium text-foreground">{kpiPeriodLabel}</span>
+                <span className="ml-1">({t('sales.latestAvailable', lang)}) — {t('sales.selectToChange', lang)}</span>
               </p>
             ) : null}
           </div>
@@ -345,35 +348,35 @@ export default function SalesClient() {
       {/* ── KPI Cards ─────────────────────────────────────────────────────── */}
       <KpiGrid cols={4}>
         <KpiCard
-          title="Total Sales"
+          title={t('sales.totalSales', lang)}
           value={fmtBaht(displaySales)}
           subtitle={
             conversionView === 'converted'
-              ? 'Converted orders only'
+              ? t('sales.convertedOrdersOnly', lang)
               : conversionView === 'not_converted'
-              ? 'Not converted orders'
-              : `${fmt(kpi.total_qty)} units · ${kpi.total_orders.toLocaleString()} orders`
+              ? t('sales.notConvertedOrders', lang)
+              : `${fmt(kpi.total_qty)} ${t('common.units', lang)} · ${kpi.total_orders.toLocaleString()} ${t('common.orders', lang)}`
           }
           icon={TrendingUp}
         />
         <KpiCard
-          title="Avg Order Value"
+          title={t('sales.avgOrderValue', lang)}
           value={fmtBaht(displayAvgOV)}
-          subtitle={`${displayOrders.toLocaleString()} orders`}
+          subtitle={`${displayOrders.toLocaleString()} ${t('common.orders', lang)}`}
           icon={CreditCard}
         />
         <KpiCard
-          title="New Customers"
+          title={t('kpi.newCustomers', lang)}
           value={kpi.new_customers.toLocaleString()}
-          subtitle="Converted new buyers"
+          subtitle={t('kpi.convertedNewBuyers', lang)}
           icon={UserPlus}
           comparison={kpi.cmp_converted_sales ?? undefined}
           comparisonLabel={kpi.comparison_label ?? undefined}
         />
         <KpiCard
-          title="Repeat Customers"
+          title={t('kpi.repeatCustomers', lang)}
           value={kpi.retention_customers.toLocaleString()}
-          subtitle="Converted repeat buyers"
+          subtitle={t('kpi.convertedRepeatBuyers', lang)}
           icon={Users}
         />
       </KpiGrid>
@@ -385,10 +388,10 @@ export default function SalesClient() {
         <Card className="lg:col-span-2 py-6 gap-4">
           <CardHeader className="flex sm:flex-row flex-col justify-between sm:items-center items-start gap-3 px-6 pb-2">
             <div className="flex items-center gap-2 flex-wrap">
-              <CardTitle className="text-sm font-medium">Sales Trend</CardTitle>
+              <CardTitle className="text-sm font-medium">{t('sales.trend', lang)}</CardTitle>
               {isValidating && !isLoading && (
                 <span className="text-[10px] font-medium text-muted-foreground bg-muted px-2 py-0.5 rounded-full animate-pulse">
-                  Updating…
+                  {t('common.updating', lang)}
                 </span>
               )}
             </div>
@@ -424,7 +427,7 @@ export default function SalesClient() {
         {/* Channel Breakdown (1/3) */}
         <Card>
           <CardHeader>
-            <CardTitle className="text-sm font-medium">Channel Breakdown</CardTitle>
+            <CardTitle className="text-sm font-medium">{t('sales.channelBreakdown', lang)}</CardTitle>
           </CardHeader>
           <CardContent className="flex flex-col justify-center gap-6 pt-2">
             <ChannelBar
@@ -433,7 +436,7 @@ export default function SalesClient() {
               offline={displayOffline}
             />
             <div className="text-center space-y-0.5 pt-2">
-              <div className="text-xs text-muted-foreground">Total Telesales Revenue</div>
+              <div className="text-xs text-muted-foreground">{t('sales.totalRevenue', lang)}</div>
               <div className="text-base font-bold text-foreground">{fmtBaht(displaySales)}</div>
             </div>
           </CardContent>
@@ -443,8 +446,8 @@ export default function SalesClient() {
       {/* ── Agent Performance Leaderboard ─────────────────────────────────── */}
       <Card>
         <CardHeader className="pb-3">
-          <CardTitle className="text-sm font-medium">Agent Performance Leaderboard</CardTitle>
-          <p className="text-xs text-muted-foreground">HOC converted sales by agent — responds to date range and segment filters above</p>
+          <CardTitle className="text-sm font-medium">{t('sales.leaderboard', lang)}</CardTitle>
+          <p className="text-xs text-muted-foreground">{t('sales.leaderboardSub', lang)}</p>
         </CardHeader>
         <CardContent>
           {agentsLoading ? (
@@ -461,11 +464,11 @@ export default function SalesClient() {
                 <TableHeader>
                   <TableRow>
                     <TableHead className="w-8">#</TableHead>
-                    <TableHead>Agent</TableHead>
-                    <TableHead className="text-right">HOC Sales</TableHead>
-                    <TableHead className="text-right">Orders</TableHead>
-                    <TableHead className="text-right">Calls</TableHead>
-                    <TableHead className="text-right">Conv. Rate</TableHead>
+                    <TableHead>{t('common.agent', lang)}</TableHead>
+                    <TableHead className="text-right">{t('kpi.hocSales', lang)}</TableHead>
+                    <TableHead className="text-right">{t('common.orders', lang)}</TableHead>
+                    <TableHead className="text-right">{t('common.calls', lang)}</TableHead>
+                    <TableHead className="text-right">{t('common.convRate', lang)}</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -486,7 +489,7 @@ export default function SalesClient() {
                 </TableBody>
                 <TableFooter>
                   <TableRow>
-                    <TableCell colSpan={2} className="font-semibold">Total</TableCell>
+                    <TableCell colSpan={2} className="font-semibold">{t('common.total', lang)}</TableCell>
                     <TableCell className="text-right tabular-nums font-semibold">{formatTHB(totalSales)}</TableCell>
                     <TableCell className="text-right tabular-nums font-semibold">{totalOrders.toLocaleString()}</TableCell>
                     <TableCell className="text-right tabular-nums font-semibold">{totalCalls.toLocaleString()}</TableCell>

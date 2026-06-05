@@ -1,6 +1,8 @@
 'use client'
 
 import { useMemo, useState } from 'react'
+import { useLanguage } from '@/context/LanguageContext'
+import { t } from '@/lib/i18n'
 import { useDashboardSWR } from '@/hooks/useDashboardSWR'
 import { useMonthRange, lastDayOfMonth } from '@/hooks/useMonthRange'
 import { MonthChipGroup } from '@/components/dashboard/MonthChipGroup'
@@ -246,6 +248,7 @@ const brandColumns: ColumnDef<BrandRow>[] = [
 const EMPTY_OPTS: ProductOptions = { brands: [], class_names: [], senior_buyers: [], buyers: [], subclasses: [], months: [] }
 
 export default function ProductsClient() {
+  const { lang } = useLanguage()
   const { buildVersion } = useBuild()
 
   // Options fetched once and cached for 1hr — independent of filter changes
@@ -318,7 +321,7 @@ export default function ProductsClient() {
 
   if (isLoading && !data) return <PageLoading />
   if (!data || data.months.length === 0) {
-    return <PageEmpty message="No product sales data available" hint="Please build mart first." />
+    return <PageEmpty message={t('products.noData', lang)} hint={t('common.buildFirst', lang)} />
   }
 
   const top5      = data.top5_brands
@@ -334,8 +337,8 @@ export default function ProductsClient() {
           <div className="flex items-center gap-2">
             <Calendar className="h-4 w-4 text-[#003DA6]" />
             <CardTitle className="text-sm font-medium flex items-center gap-2">
-            Filter & Range Selection
-            {isValidating && !isLoading && <span className="text-xs font-normal text-muted-foreground animate-pulse">Updating…</span>}
+            {t('common.filterRange', lang)}
+            {isValidating && !isLoading && <span className="text-xs font-normal text-muted-foreground animate-pulse">{t('common.updating', lang)}</span>}
           </CardTitle>
           </div>
         </CardHeader>
@@ -400,8 +403,8 @@ export default function ProductsClient() {
 
           <p className="text-xs text-muted-foreground mt-3">
             {rangeFrom
-              ? <>Showing: <span className="font-medium text-foreground">{activeRangeLabel}</span></>
-              : <>Showing: <span className="font-medium text-foreground">all available periods</span> — select month chips to filter by period</>
+              ? <>{t('common.showing', lang)}: <span className="font-medium text-foreground">{activeRangeLabel}</span></>
+              : <>{t('common.showing', lang)}: <span className="font-medium text-foreground">{t('common.allPeriods', lang)}</span> — {t('common.selectChips', lang)}</>
             }
           </p>
           {error && (
