@@ -13,15 +13,15 @@ export async function GET(request: Request) {
     const cmg       = (searchParams.get('cmg') || '').split(',').filter(Boolean)
 
     const params: any[] = []
-    const conds: string[] = []
+    const extraConds: string[] = []
 
     const push = (v: any) => { params.push(v); return params.length }
 
-    if (startDate) conds.push(`order_date >= $${push(startDate)}::date`)
-    if (endDate)   conds.push(`order_date <= $${push(endDate)}::date`)
-    if (cmg.length > 0) conds.push(`primary_cmg = ANY($${push(cmg)})`)
+    if (startDate) extraConds.push(`order_date >= $${push(startDate)}::date`)
+    if (endDate)   extraConds.push(`order_date <= $${push(endDate)}::date`)
+    if (cmg.length > 0) extraConds.push(`primary_cmg = ANY($${push(cmg)})`)
 
-    const where = conds.length > 0 ? `WHERE ${conds.join(' AND ')}` : ''
+    const extra = extraConds.length > 0 ? `AND ${extraConds.join(' AND ')}` : ''
 
     const row = await query<{ total_calls: string; connected: string }>(`
       SELECT
@@ -31,7 +31,8 @@ export async function GET(request: Request) {
             AND call_status IS DISTINCT FROM 'ปิดเครื่อง/ติดต่อไม่ได้'
         )::text AS connected
       FROM sales_hoc_orders
-      ${where}
+      WHERE customer_type IN ('new_customer', 'retention')
+      ${extra}
     `, params)
 
     const res = NextResponse.json({

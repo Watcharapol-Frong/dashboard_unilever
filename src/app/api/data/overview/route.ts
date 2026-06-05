@@ -89,7 +89,8 @@ export async function GET() {
 
     const callsRow = await queryOne<{ total_calls: string }>(
       `SELECT COUNT(DISTINCT mmid)::text AS total_calls
-       FROM telesales_calls WHERE first_connected_date IS NOT NULL`
+       FROM sales_hoc_orders
+       WHERE customer_type IN ('new_customer', 'retention')`
     )
 
     const data = rows.map((r: any) => ({
