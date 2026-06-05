@@ -76,7 +76,7 @@ interface ProductOptions {
   senior_buyers: string[]
   buyers: string[]
   subclasses: string[]
-  lead_customers: string[]
+  cmg_segments: string[]
   months: string[]
 }
 
@@ -336,7 +336,7 @@ const buyerColumns: ColumnDef<BuyerRow>[] = [
 
 // ── Component ─────────────────────────────────────────────────────────────────
 
-const EMPTY_OPTS: ProductOptions = { brands: [], class_names: [], senior_buyers: [], buyers: [], subclasses: [], lead_customers: [], months: [] }
+const EMPTY_OPTS: ProductOptions = { brands: [], class_names: [], senior_buyers: [], buyers: [], subclasses: [], cmg_segments: [], months: [] }
 
 export default function ProductsClient() {
   const { lang } = useLanguage()
@@ -375,7 +375,7 @@ export default function ProductsClient() {
     if (filterBuyer.length > 0)       p.set('buyer',        filterBuyer.join(','))
     if (filterSubclass.length > 0)       p.set('subclass',        filterSubclass.join(','))
     if (filterConverted !== 'all')        p.set('converted',       filterConverted)
-    if (filterLeadCustomers.length > 0)   p.set('lead_customers',  filterLeadCustomers.join(','))
+    if (filterLeadCustomers.length > 0)   p.set('cmg',  filterLeadCustomers.join(','))
     if (rangeFrom) {
       p.set('startDate', rangeFrom)
       p.set('endDate',   lastDayOfMonth(rangeTo ?? rangeFrom))
@@ -502,12 +502,12 @@ export default function ProductsClient() {
               width="w-[165px]"
             />
 
-            {opts.lead_customers.length > 0 && (
+            {opts.cmg_segments.length > 0 && (
               <MultiSelect
-                label={lang === 'th' ? 'ทุก Segment' : 'All Segments'}
+                label={t('common.allSegments', lang)}
                 value={filterLeadCustomers}
                 onChange={setFilterLeadCustomers}
-                options={opts.lead_customers.map(v => ({ value: v, label: v }))}
+                options={opts.cmg_segments.map(v => ({ value: v, label: v }))}
                 width="w-[155px]"
               />
             )}

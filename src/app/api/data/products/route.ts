@@ -34,7 +34,7 @@ function buildProductWhere(
   } else if (converted === 'not_converted') {
     conditions.push(`m.customer_type IN ('first_order_not_converted', 'retention_not_converted')`)
   }
-  addFilter(params, conditions, leadCustomers, 'm.lead_customers')
+  addFilter(params, conditions, leadCustomers, 'm.dynamic_cmg')
 
   return { where: conditions.length ? 'AND ' + conditions.join(' AND ') : '', params }
 }
@@ -50,7 +50,7 @@ export async function GET(request: Request) {
     const startDate     = searchParams.get('startDate')      || null
     const endDate       = searchParams.get('endDate')        || null
     const converted     = searchParams.get('converted')      || null
-    const leadCustomers = (searchParams.get('lead_customers') || '').split(',').filter(Boolean)
+    const leadCustomers = (searchParams.get('cmg') || '').split(',').filter(Boolean)
 
     const { where: extraWhere, params: filterParams } = buildProductWhere(
       brands, className, seniorBuyer, buyer, subclass, startDate, endDate, converted, leadCustomers,
