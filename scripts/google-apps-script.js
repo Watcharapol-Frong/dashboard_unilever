@@ -244,12 +244,75 @@ function testConnection() {
 }
 
 /**
- * รันเพื่อดูว่า threshold ที่ได้คือวันไหน ก่อนรัน exportIncrementalToStorage จริง
+ * Debug: แสดง 5 records แรกจากทุก Lead sheet
+ * พร้อมบอกว่าแต่ละ row ถูกกรองออกด้วยเหตุผลอะไร
  */
-function testThreshold() {
-  const threshold = getThresholdDate_();
-  Logger.log(`threshold = ${threshold}`);
+function debugLeadSheets() {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const mapSheet = ss.getSheetByName("schema_map");
+  if (!mapSheet) { Logger.log("❌ ไม่พบแท็บ schema_map"); return; }
+  const columnDictionary = buildColumnDictionary_(mapSheet);
+
+  Logger.log("=== schema_map keys ===");
+  Logger.log(JSON.stringify(Object.keys(columnDictionary).slice(0, 20)));
+
+  const thresholdDateStr = getThresholdDate_();
+
+  const allSheets = ss.getSheets();
+  allSheets.forEach(sheet => {
+    const sheetName = sheet.getName();
+    if (!sheetName.startsWith("Lead")) return;
+
+    Logger.log(`\n=== Sheet: ${sheetName} ===`);
+    const data = sheet.getDataRange().getValues();
+    if (data.length < 2) { Logger.log("  (ข้อมูลน้อยกว่า 2 แถว)"); return; }
+
+    const headerRowIndex = findHeaderRow_(data);
+    if (headerRowIndex === -1) { Logger.log("  (หา header row ไม่เจอ)"); return; }
+
+    const rawHeaders = data[headerRowIndex];
+    Logger.log(`  header row index = ${headerRowIndex}`);
+    Logger.log(`  raw headers = ${JSON.stringify(rawHeaders.slice(0, 10))}`);
+
+    const headerMapping = mapHeadersToTarget_(rawHeaders, columnDictionary);
+    Logger.log(`  mapped fields = ${JSON.stringify(headerMapping)}`);
+
+    let shown = 0;
+    for (let r = headerRowIndex + 1; r < data.length && shown < 5; r++) {
+      const row = data[r];
+      if (isRowEmpty_(row)) continue;
+
+      let record = { lead_customers: sheetName.replace(/^Lead\s*/i, "").trim() };
+      let hasCoreData = false;
+
+      Object.keys(headerMapping).forEach(targetField => {
+        const colIndex = headerMapping[targetField];
+        let val = row[colIndex];
+        if (targetField === "first_connected_date" && val !== "") {
+          const parsedDate = parseDateFlexible_(val);
+          val = parsedDate ? formatDateForExport_(parsedDate) : "";
+        } else if (val instanceof Date) {
+          val = formatDateForExport_(val);
+        } else {
+          val = String(val || "").trim();
+        }
+        if (targetField === "mmid") val = cleanMMID_(val);
+        if (targetField === "mobile") val = cleanMobile_(val);
+        record[targetField] = val;
+        if (targetField === "mmid" && val !== "") hasCoreData = true;
+      });
+
+      const contactDate = record["first_connected_date"];
+      const passDate = contactDate && contactDate > thresholdDateStr;
+
+      Logger.log(`  row ${r}: mmid=${record["mmid"] || "(empty)"} | first_connected_date=${contactDate || "(empty)"} | hasCoreData=${hasCoreData} | passDate=${passDate} (threshold=${thresholdDateStr})`);
+      shown++;
+    }
+    if (shown === 0) Logger.log("  (ทุก row ว่างเปล่า)");
+  });
 }
+
+
 
 /* ================= HELPER FUNCTIONS ================= */
 
