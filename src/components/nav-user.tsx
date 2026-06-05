@@ -80,7 +80,7 @@ export function NavUser() {
             <DropdownMenuSeparator />
 
             {/* Language toggle */}
-            <DropdownMenuItem disabled className="opacity-100 cursor-default">
+            <DropdownMenuItem onSelect={e => e.preventDefault()} className="cursor-default">
               <span className="text-xs text-muted-foreground mr-2">{t('user.language', lang)}</span>
               <div className="ml-auto flex items-center gap-1">
                 {(['en', 'th'] as Lang[]).map(l => (
