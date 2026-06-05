@@ -104,27 +104,27 @@ function AllUsersContent() {
         </AccordionTrigger>
         <AccordionContent className="space-y-3 text-sm text-muted-foreground">
           <p>
-            หน้าภาพรวมโครงการทั้งหมด ดูได้ในคลิกเดียวว่าตอนนี้โครงการเป็นอย่างไร ยอดขาย HOC เทียบ Target ได้เท่าไหร่ ลูกค้าใหม่/ลูกค้าประจำมีกี่คน และ ROI ของโครงการ
+            A single-screen summary of the entire programme — HOC Sales vs. Target, new and repeat customers, call activity, and programme ROI.
           </p>
 
-          <SectionLabel>ช่วงข้อมูลอ้างอิงจาก</SectionLabel>
+          <SectionLabel>Date basis</SectionLabel>
           <p>
-            <PageBadge>วันที่สั่งซื้อ (Order Date)</PageBadge>
-            {' '}ใช้เป็นหลัก — เลือก month chip เพื่อกรองช่วงเวลาที่ต้องการดู
+            <PageBadge>Order Date</PageBadge>
+            {' '}— use the month chips to select the period you want to review.
           </p>
 
-          <SectionLabel>KPI แต่ละตัวหมายถึงอะไร</SectionLabel>
-          <Term label="HOC Sales">ยอดขายสินค้า Unilever HOC จากลูกค้าที่ทีม Telesales โทรหาและสั่งซื้อภายในช่วงที่กำหนด (online + offline รวมกัน)</Term>
-          <Term label="Achievement %">ยอดขายจริง ÷ เป้าหมาย × 100 — บอกว่าทำได้กี่ % ของ target</Term>
-          <Term label="New Customers">ลูกค้าที่ซื้อสินค้า HOC ครั้งแรก ภายหลังจากที่ทีม telesales โทรหา</Term>
-          <Term label="Repeat Customers">ลูกค้าที่เคยซื้อแล้ว และกลับมาซื้อซ้ำอีกครั้งภายในช่วงที่กำหนด</Term>
-          <Term label="Total Calls">จำนวนลูกค้าที่ถูกโทรหาในช่วงนั้น (นับจากบันทึกการโทร)</Term>
-          <Term label="Program ROI">ยอดขายที่นับได้ ÷ ค่าใช้จ่ายทั้งหมด (incentive + เงินเดือน agent + supervisor) — ถ้า ROI = 3x หมายความว่าทุก 1 บาทที่ลงทุนได้กลับมา 3 บาท</Term>
+          <SectionLabel>What each KPI means</SectionLabel>
+          <Term label="HOC Sales">Total revenue from Unilever HOC products ordered by customers the telesales team called, within the selected period (online + offline combined).</Term>
+          <Term label="Achievement %">HOC Sales ÷ Target × 100 — how close the team is to hitting the monthly goal.</Term>
+          <Term label="New Customers">Customers placing their first-ever HOC order after being contacted by telesales.</Term>
+          <Term label="Repeat Customers">Customers who already bought before and placed another order within the selected period.</Term>
+          <Term label="Total Calls">Number of customers contacted during the period, based on call records.</Term>
+          <Term label="Program ROI">HOC Sales ÷ Total Programme Cost (incentives + agent salaries + supervisor salaries). ROI of 3× means every ฿1 spent returned ฿3 in sales.</Term>
 
-          <SectionLabel>วิธีใช้ Filter</SectionLabel>
-          <Term label="Month chips">คลิก 1 เดือนเพื่อเลือก คลิกเดือนอื่นเพื่อเลือกช่วง (range) คลิกเดือนเดิมซ้ำเพื่อยกเลิก</Term>
-          <Term label="Segment">กรองเฉพาะกลุ่มลูกค้า เช่น FOOD RETAILER, HORECA, END USER</Term>
-          <Term label="Channel">กรอง Online หรือ Offline เพื่อแยกดูยอดขายแต่ละช่องทาง</Term>
+          <SectionLabel>Using the filters</SectionLabel>
+          <Term label="Month chips">Click a month to select it; click another month to set a range; click the same month again to clear.</Term>
+          <Term label="Segment">Narrow down to a specific customer group — FOOD RETAILER, HORECA, END USER, etc.</Term>
+          <Term label="Channel">Filter to Online or Offline to compare the two sales channels.</Term>
         </AccordionContent>
       </AccordionItem>
 
@@ -138,29 +138,29 @@ function AllUsersContent() {
         </AccordionTrigger>
         <AccordionContent className="space-y-3 text-sm text-muted-foreground">
           <p>
-            หน้าวิเคราะห์ยอดขาย HOC แบบละเอียด ดูได้ว่ายอดมาจาก online/offline เท่าไหร่ เทรนด์รายเดือนเป็นอย่างไร และ agent แต่ละคนทำผลงานได้แค่ไหน
+            Detailed breakdown of HOC sales — how much came from online vs. offline, how the trend looks over time, and how each agent is performing.
           </p>
 
-          <SectionLabel>ช่วงข้อมูลอ้างอิงจาก</SectionLabel>
+          <SectionLabel>Date basis</SectionLabel>
           <p>
-            <PageBadge>วันที่สั่งซื้อ (Order Date)</PageBadge>
-            {' '}— เลือก month chip หรือ date picker เพื่อกำหนดช่วงเวลา
+            <PageBadge>Order Date</PageBadge>
+            {' '}— use month chips or the date picker to set the period.
           </p>
 
-          <SectionLabel>KPI แต่ละตัวหมายถึงอะไร</SectionLabel>
-          <Term label="Total Sales">ยอดขายรวมทั้งหมดในช่วงที่เลือก ขึ้นอยู่กับ Filter Conversion ที่เลือก (All / Converted / Not Converted)</Term>
-          <Term label="Avg Order Value">ยอดขายเฉลี่ยต่อ 1 คำสั่งซื้อ</Term>
-          <Term label="New Customers">ลูกค้าใหม่ที่ซื้อสินค้า HOC ครั้งแรก (นับเฉพาะที่ convert แล้วเสมอ)</Term>
-          <Term label="Repeat Customers">ลูกค้าที่กลับมาซื้อซ้ำ (นับเฉพาะที่ convert แล้วเสมอ)</Term>
+          <SectionLabel>What each KPI means</SectionLabel>
+          <Term label="Total Sales">Combined revenue for the selected period, adjusted by the Conversion filter (All / Converted / Not Converted).</Term>
+          <Term label="Avg Order Value">Average revenue per order in the selected view.</Term>
+          <Term label="New Customers">First-time HOC buyers — always counts converted customers only.</Term>
+          <Term label="Repeat Customers">Customers who came back to buy again — always counts converted customers only.</Term>
 
-          <SectionLabel>Filter Conversion</SectionLabel>
-          <Term label="All Customers">แสดงยอดขายทั้งหมด ทั้งที่ convert และยังไม่ convert</Term>
-          <Term label="Converted Only">เฉพาะยอดขายจากลูกค้าที่สั่งซื้อภายในช่วงเวลาที่นับ (attribution window)</Term>
-          <Term label="Not Converted">เฉพาะยอดขายจากลูกค้าที่สั่งซื้อนอกช่วงเวลาที่นับ</Term>
+          <SectionLabel>Conversion filter</SectionLabel>
+          <Term label="All Customers">Shows total sales including both converted and not-converted orders.</Term>
+          <Term label="Converted Only">Only sales from customers who ordered within the attribution window.</Term>
+          <Term label="Not Converted">Only sales from customers who ordered outside the attribution window.</Term>
 
           <SectionLabel>Agent Leaderboard</SectionLabel>
-          <p>จัดอันดับ agent ตามยอดขาย HOC ที่ convert ได้ — ตัดรายชื่อที่ยอดขาย = 0 ออกอัตโนมัติ Conv. Rate คำนวณจาก ลูกค้าที่ convert ÷ ลูกค้าทั้งหมดที่โทรหาในช่วงนั้น</p>
-          <Note>Agent Leaderboard ใช้ Segment filter ได้ แต่ Calls ไม่แยก Segment เพราะบันทึกการโทรไม่มีข้อมูล Segment</Note>
+          <p>Ranks agents by HOC converted sales. Agents with zero sales are hidden automatically. Conv. Rate = converted customers ÷ total customers called during the period.</p>
+          <Note>The leaderboard responds to the Segment filter, but call counts are not split by segment — call records do not carry segment information.</Note>
         </AccordionContent>
       </AccordionItem>
 
@@ -174,23 +174,23 @@ function AllUsersContent() {
         </AccordionTrigger>
         <AccordionContent className="space-y-3 text-sm text-muted-foreground">
           <p>
-            หน้าติดตามประสิทธิภาพการโทร ดูได้ว่าโทรหาลูกค้าไปกี่คน ติดต่อได้กี่คน และสุดท้ายมีกี่คนที่สั่งซื้อจริง
+            Tracks how effective the calling activity is — how many customers were called, how many were reached, and how many actually placed an order.
           </p>
 
-          <SectionLabel>ช่วงข้อมูลอ้างอิงจาก</SectionLabel>
+          <SectionLabel>Date basis</SectionLabel>
           <p>
-            <PageBadge>วันที่โทรติดต่อครั้งแรก (First Connected Date)</PageBadge>
-            {' '}— ใช้เป็นหลักสำหรับ funnel และจำนวน calls
+            <PageBadge>First Connected Date</PageBadge>
+            {' '}— the date a customer was first successfully contacted, used for the funnel and call counts.
           </p>
 
-          <SectionLabel>Funnel 3 ขั้นตอน</SectionLabel>
-          <Term label="Total Leads">ลูกค้าทั้งหมดที่อยู่ในรายชื่อของทีม Telesales</Term>
-          <Term label="Reached">ลูกค้าที่โทรหาแล้วติดต่อได้ (ไม่ใช่ "ไม่รับสาย" หรือ "ปิดเครื่อง")</Term>
-          <Term label="Ordered">ลูกค้าที่โทรแล้วสั่งซื้อสินค้า HOC จริง</Term>
+          <SectionLabel>The 3-step funnel</SectionLabel>
+          <Term label="Total Leads">All customers on the telesales team&apos;s calling list.</Term>
+          <Term label="Reached">Customers who were successfully contacted (excludes no-answer and unreachable).</Term>
+          <Term label="Ordered">Customers who were reached and then placed a HOC order.</Term>
 
-          <SectionLabel>อัตราที่ควรดู</SectionLabel>
-          <Term label="Reach Rate">ติดต่อได้ ÷ รายชื่อทั้งหมด — บอกว่าโทรติดกี่ %</Term>
-          <Term label="Conversion Rate">สั่งซื้อ ÷ ติดต่อได้ — บอกว่าลูกค้าที่คุยด้วยกลายเป็นผู้ซื้อกี่ %</Term>
+          <SectionLabel>Key rates</SectionLabel>
+          <Term label="Reach Rate">Reached ÷ Total Leads — what percentage of the list was actually spoken to.</Term>
+          <Term label="Conversion Rate">Ordered ÷ Reached — of those spoken to, how many went on to buy.</Term>
         </AccordionContent>
       </AccordionItem>
 
@@ -204,19 +204,19 @@ function AllUsersContent() {
         </AccordionTrigger>
         <AccordionContent className="space-y-3 text-sm text-muted-foreground">
           <p>
-            หน้าดูว่าสินค้าตัวไหนขายดี แบ่งตาม Brand, หมวดหมู่สินค้า (Class) และหมวดย่อย (Subclass)
+            Shows which products are selling, broken down by Brand, product category (Class), and sub-category (Subclass).
           </p>
 
-          <SectionLabel>ช่วงข้อมูลอ้างอิงจาก</SectionLabel>
+          <SectionLabel>Date basis</SectionLabel>
           <p>
-            <PageBadge>วันที่สั่งซื้อ (Order Date)</PageBadge>
-            {' '}— นับเฉพาะคำสั่งซื้อจากลูกค้าที่ convert แล้วเท่านั้น
+            <PageBadge>Order Date</PageBadge>
+            {' '}— counts converted orders only.
           </p>
 
-          <SectionLabel>วิธีใช้</SectionLabel>
-          <Term label="Brand">ดูว่า Dove, Sunsilk, Knorr หรือแบรนด์ไหนขายได้มากที่สุด</Term>
-          <Term label="Class">ดูตามหมวดสินค้า เช่น Hair Care, Personal Care, Food</Term>
-          <Term label="New vs Repeat">แยกยอดขายว่ามาจากลูกค้าใหม่หรือลูกค้าประจำ</Term>
+          <SectionLabel>How to use</SectionLabel>
+          <Term label="Brand">See which brand — Dove, Sunsilk, Knorr, etc. — is driving the most revenue.</Term>
+          <Term label="Class">View performance by product category such as Hair Care, Personal Care, or Food.</Term>
+          <Term label="New vs Repeat">Split sales between first-time buyers and returning customers.</Term>
         </AccordionContent>
       </AccordionItem>
 
@@ -230,29 +230,29 @@ function AllUsersContent() {
         </AccordionTrigger>
         <AccordionContent className="space-y-3 text-sm text-muted-foreground">
           <p>
-            หน้าดูค่าใช้จ่ายและ incentive ของโครงการ คำนวณว่าจ่าย incentive ไปเท่าไหร่ และคุ้มค่าเพียงใด (ROI)
+            Shows programme costs and incentive payouts — how much was paid out in bonuses, and whether the investment was worthwhile (ROI).
           </p>
 
-          <SectionLabel>ช่วงข้อมูลอ้างอิงจาก</SectionLabel>
+          <SectionLabel>Date basis</SectionLabel>
           <p>
-            <PageBadge>เดือน (Month)</PageBadge>
-            {' '}— รายงานระดับเดือน ไม่สามารถกรองรายวันได้
+            <PageBadge>Month</PageBadge>
+            {' '}— monthly view only; day-level filtering is not available here.
           </p>
 
-          <SectionLabel>การคำนวณ Achievement %</SectionLabel>
+          <SectionLabel>How Achievement determines the incentive</SectionLabel>
           <p>
-            ระบบจะเปรียบยอดขาย HOC กับ Target ของเดือนนั้น แล้วหา tier ที่สูงที่สุดที่ทำได้ เพื่อคำนวณ incentive ต่อหัว
+            The system compares HOC Sales against the month&apos;s target, finds the highest incentive tier reached, and calculates the payout per agent head.
           </p>
-          <Term label="Achievement ≥ 80%">ได้ rate ตาม tier 80%</Term>
-          <Term label="Achievement ≥ 100%">ได้ rate ตาม tier 100% (สูงกว่า)</Term>
+          <Term label="Achievement ≥ 80%">Qualifies for the 80% tier rate.</Term>
+          <Term label="Achievement ≥ 100%">Qualifies for the 100% tier rate (higher payout).</Term>
 
-          <SectionLabel>สูตรคำนวณ</SectionLabel>
-          <Formula>Incentive รวม = จำนวน Agent × Incentive ต่อหัว</Formula>
-          <Formula>ค่าใช้จ่ายรวม = Incentive + เงินเดือน Agent + เงินเดือน Supervisor</Formula>
-          <Formula>ROI = ยอดขาย HOC ÷ ค่าใช้จ่ายรวม</Formula>
+          <SectionLabel>Calculations</SectionLabel>
+          <Formula>Total Incentive = Agent Count × Incentive per Head</Formula>
+          <Formula>Total Expense = Total Incentive + Agent Salaries + Supervisor Salaries</Formula>
+          <Formula>ROI = HOC Sales ÷ Total Expense</Formula>
 
           <Note>
-            ตั้งแต่ พ.ค. 2569 เป็นต้นไป — กลุ่ม DISTRIBUTOR ไม่รวมอยู่ในการคำนวณ Achievement และ ROI
+            From May 2026 onwards — the DISTRIBUTOR segment is excluded from Achievement % and ROI calculations.
           </Note>
         </AccordionContent>
       </AccordionItem>
@@ -262,21 +262,21 @@ function AllUsersContent() {
         <AccordionTrigger>
           <span className="flex items-center gap-2">
             <Clock className="h-4 w-4 text-[#003DA6]" />
-            Attribution Window คืออะไร?
+            What is the Attribution Window?
           </span>
         </AccordionTrigger>
         <AccordionContent className="space-y-3 text-sm text-muted-foreground">
           <p>
-            <strong className="text-foreground">Attribution Window</strong> คือจำนวนวันที่ระบบจะนับว่า "คำสั่งซื้อนี้เกิดจากการโทรของทีม Telesales"
+            The <strong className="text-foreground">Attribution Window</strong> is the number of days the system uses to decide whether an order counts as a result of a telesales call.
           </p>
           <p>
-            เช่น ถ้าตั้งไว้ที่ <strong className="text-foreground">14 วัน</strong> หมายความว่า ถ้าลูกค้าสั่งซื้อภายใน 14 วันหลังจากที่ถูกโทรหาครั้งแรก — คำสั่งซื้อนั้นจะถูกนับเป็นผลงานของ Telesales
+            For example, with a window of <strong className="text-foreground">14 days</strong>: if a customer places an order within 14 days of being first contacted, that order is credited to the telesales programme.
           </p>
           <p>
-            ถ้าลูกค้าสั่งซื้อหลังจาก 14 วัน — จะไม่นับรวมใน HOC Sales, ยอดขาย Converted หรือจำนวนลูกค้าใหม่
+            If the customer orders after 14 days, the order is not counted in HOC Sales, converted revenue, or new customer numbers.
           </p>
           <Note>
-            ค่า Attribution Window ที่ใช้อยู่แสดงที่แถบด้านบน — การเปลี่ยนค่านี้ต้อง Build Mart ใหม่ทุกครั้ง
+            The current attribution window is shown in the top bar. Changing it requires a Mart Rebuild — all historical numbers will recalculate.
           </Note>
         </AccordionContent>
       </AccordionItem>
@@ -521,9 +521,9 @@ export function HelpSheet({ open, onOpenChange, isAdmin }: HelpSheetProps) {
     <Sheet open={open} onOpenChange={onOpenChange}>
       <SheetContent side="right" className="w-full sm:max-w-lg p-0 flex flex-col">
         <SheetHeader className="px-6 pt-6 pb-4 border-b shrink-0">
-          <SheetTitle className="text-base">คู่มือการใช้งาน</SheetTitle>
+          <SheetTitle className="text-base">Help &amp; User Guide</SheetTitle>
           <p className="text-xs text-muted-foreground mt-0.5">
-            แต่ละหน้าดูข้อมูลอะไร และช่วงวันที่คำนวณจากอะไร
+            What each page shows and which date range it uses.
           </p>
         </SheetHeader>
 
@@ -534,7 +534,7 @@ export function HelpSheet({ open, onOpenChange, isAdmin }: HelpSheetProps) {
             <div>
               <div className="flex items-center gap-2 mb-3">
                 <Users className="h-4 w-4 text-muted-foreground" />
-                <span className="text-sm font-semibold">หน้าต่าง ๆ ในแดชบอร์ด</span>
+                <span className="text-sm font-semibold">Dashboard Pages</span>
               </div>
               <AllUsersContent />
             </div>
