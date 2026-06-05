@@ -19,9 +19,10 @@ import { MonthChipGroup } from '@/components/dashboard/MonthChipGroup'
 import { fmtBaht, fmt, formatTHB } from '@/lib/formatters'
 import { TrendingUp, UserPlus, Users, CreditCard, Calendar } from 'lucide-react'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
-import { DataTable } from '@/components/ui/data-table'
-import { ColumnDef } from '@tanstack/react-table'
 import { Skeleton } from '@/components/ui/skeleton'
+import {
+  Table, TableBody, TableCell, TableFooter, TableHead, TableHeader, TableRow,
+} from '@/components/ui/table'
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -138,45 +139,6 @@ function ChannelBar({ label, online, offline }: { label: string; online: number;
     </div>
   )
 }
-
-// ── Agent Columns ─────────────────────────────────────────────────────────────
-
-const agentColumns: ColumnDef<AgentRow>[] = [
-  {
-    id: 'rank',
-    header: '#',
-    cell: ({ row }) => <span className="text-muted-foreground text-xs">{row.index + 1}</span>,
-  },
-  {
-    accessorKey: 'agent',
-    header: 'Agent',
-    cell: ({ row }) => <span className="font-medium text-sm">{row.original.agent}</span>,
-  },
-  {
-    accessorKey: 'sales_total',
-    header: () => <div className="text-right">HOC Sales</div>,
-    cell: ({ row }) => <div className="text-right tabular-nums text-sm font-medium">{formatTHB(row.original.sales_total)}</div>,
-  },
-  {
-    accessorKey: 'order_total',
-    header: () => <div className="text-right">Orders</div>,
-    cell: ({ row }) => <div className="text-right tabular-nums text-sm">{row.original.order_total.toLocaleString()}</div>,
-  },
-  {
-    accessorKey: 'call_total',
-    header: () => <div className="text-right">Calls</div>,
-    cell: ({ row }) => <div className="text-right tabular-nums text-sm">{row.original.call_total.toLocaleString()}</div>,
-  },
-  {
-    accessorKey: 'conversion_rate',
-    header: () => <div className="text-right">Conv. Rate</div>,
-    cell: ({ row }) => {
-      const v = row.original.conversion_rate * 100
-      const color = v >= 30 ? 'text-green-600' : v >= 15 ? 'text-yellow-600' : 'text-red-500'
-      return <div className={`text-right tabular-nums text-sm font-semibold ${color}`}>{v.toFixed(1)}%</div>
-    },
-  },
-]
 
 // ── Component ─────────────────────────────────────────────────────────────────
 
@@ -485,10 +447,55 @@ export default function SalesClient() {
           <p className="text-xs text-muted-foreground">HOC converted sales by agent — responds to date range and segment filters above</p>
         </CardHeader>
         <CardContent>
-          {agentsLoading
-            ? <Skeleton className="h-48 w-full" />
-            : <DataTable columns={agentColumns} data={agentsData ?? []} />
-          }
+          {agentsLoading ? (
+            <Skeleton className="h-48 w-full" />
+          ) : (() => {
+            const agents = agentsData ?? []
+            const totalSales    = agents.reduce((s, r) => s + r.sales_total, 0)
+            const totalOrders   = agents.reduce((s, r) => s + r.order_total, 0)
+            const totalCalls    = agents.reduce((s, r) => s + r.call_total, 0)
+            const totalConv     = agents.reduce((s, r) => s + r.converted_customers, 0)
+            const totalConvRate = totalCalls > 0 ? totalConv / totalCalls : 0
+            return (
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead className="w-8">#</TableHead>
+                    <TableHead>Agent</TableHead>
+                    <TableHead className="text-right">HOC Sales</TableHead>
+                    <TableHead className="text-right">Orders</TableHead>
+                    <TableHead className="text-right">Calls</TableHead>
+                    <TableHead className="text-right">Conv. Rate</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {agents.map((r, i) => {
+                    const convPct = r.conversion_rate * 100
+                    const convColor = convPct >= 30 ? 'text-green-600' : convPct >= 15 ? 'text-yellow-600' : 'text-red-500'
+                    return (
+                      <TableRow key={r.agent}>
+                        <TableCell className="text-muted-foreground text-xs">{i + 1}</TableCell>
+                        <TableCell className="font-medium text-sm">{r.agent}</TableCell>
+                        <TableCell className="text-right tabular-nums text-sm font-medium">{formatTHB(r.sales_total)}</TableCell>
+                        <TableCell className="text-right tabular-nums text-sm">{r.order_total.toLocaleString()}</TableCell>
+                        <TableCell className="text-right tabular-nums text-sm">{r.call_total.toLocaleString()}</TableCell>
+                        <TableCell className={`text-right tabular-nums text-sm font-semibold ${convColor}`}>{convPct.toFixed(1)}%</TableCell>
+                      </TableRow>
+                    )
+                  })}
+                </TableBody>
+                <TableFooter>
+                  <TableRow>
+                    <TableCell colSpan={2} className="font-semibold">Total</TableCell>
+                    <TableCell className="text-right tabular-nums font-semibold">{formatTHB(totalSales)}</TableCell>
+                    <TableCell className="text-right tabular-nums font-semibold">{totalOrders.toLocaleString()}</TableCell>
+                    <TableCell className="text-right tabular-nums font-semibold">{totalCalls.toLocaleString()}</TableCell>
+                    <TableCell className="text-right tabular-nums font-semibold">{(totalConvRate * 100).toFixed(1)}%</TableCell>
+                  </TableRow>
+                </TableFooter>
+              </Table>
+            )
+          })()}
         </CardContent>
       </Card>
 

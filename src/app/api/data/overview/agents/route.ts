@@ -39,6 +39,7 @@ export async function GET(request: Request) {
       FROM sales_hoc_orders
       ${where}
       GROUP BY agent
+      HAVING COALESCE(SUM(sales_in_vat) FILTER (WHERE customer_type IN ('new_customer', 'retention')), 0) > 0
       ORDER BY SUM(sales_in_vat) FILTER (WHERE customer_type IN ('new_customer', 'retention')) DESC NULLS LAST
     `, params)
 
