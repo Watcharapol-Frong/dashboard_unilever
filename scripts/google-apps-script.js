@@ -1,12 +1,17 @@
 /************ CONFIG ************
  * อย่า hardcode secret ที่นี่
  * ไปที่ Extensions → Apps Script → Project Settings → Script Properties แล้วเพิ่ม:
- *   DASHBOARD_URL  =  https://your-app.vercel.app
- *   INGEST_SECRET  =  <ค่า INGEST_API_SECRET จาก Vercel env>
+ *
+ *   DASHBOARD_URL          =  https://your-app.vercel.app
+ *   INGEST_SECRET          =  <ค่า INGEST_API_SECRET จาก Vercel env>
+ *
+ * ถ้า Vercel Security Checkpoint block request (HTTP 429):
+ *   VERCEL_BYPASS_SECRET   =  <ค่าจาก Vercel Dashboard → Settings → Deployment Protection
+ *                              → "Protection Bypass for Automation" → copy secret>
  *
  * Optional:
- *   FALLBACK_DATE  =  2026-01-01  (ใช้เป็น threshold เมื่อ API ติดต่อไม่ได้)
- *                     ถ้าไม่ตั้งค่าจะ throw error แทน
+ *   FALLBACK_DATE          =  2026-01-01  (ใช้เป็น threshold เมื่อ API ติดต่อไม่ได้)
+ *                             ถ้าไม่ตั้งค่าจะ throw error แทน
  ********************************/
 function getConfig_() {
   const props  = PropertiesService.getScriptProperties();
@@ -21,10 +26,22 @@ function getConfig_() {
     );
   }
   return {
-    url:          url.replace(/\/$/, ""),
+    url:           url.replace(/\/$/, ""),
     secret,
-    fallbackDate: props.getProperty("FALLBACK_DATE") || null,
+    bypassSecret:  props.getProperty("VERCEL_BYPASS_SECRET") || null,
+    fallbackDate:  props.getProperty("FALLBACK_DATE") || null,
   };
+}
+
+/** สร้าง headers ที่ใช้กับทุก request — รวม bypass secret ถ้ามี */
+function buildHeaders_(secret, bypassSecret) {
+  const h = {
+    "Authorization": `Bearer ${secret}`,
+    "Content-Type":  "application/json",
+    "User-Agent":    "GoogleAppsScript-DashboardSync/1.0",
+  };
+  if (bypassSecret) h["x-vercel-protection-bypass"] = bypassSecret;
+  return h;
 }
 
 function exportIncrementalToStorage() {
@@ -111,10 +128,10 @@ function exportIncrementalToStorage() {
 
 /* ================= POST ไปยัง Next.js API ================= */
 function postToAPI_(records) {
-  const { url, secret } = getConfig_();
+  const { url, secret, bypassSecret } = getConfig_();
   const options = {
     method:             "post",
-    headers:            { "Authorization": `Bearer ${secret}`, "Content-Type": "application/json" },
+    headers:            buildHeaders_(secret, bypassSecret),
     payload:            JSON.stringify({ records }),
     muteHttpExceptions: true,
   };
@@ -138,10 +155,10 @@ function postToAPI_(records) {
 
 /* ================= ดึง Threshold Date จาก API ================= */
 function getThresholdDate_() {
-  const { url, secret, fallbackDate } = getConfig_();
+  const { url, secret, bypassSecret, fallbackDate } = getConfig_();
   const options = {
     method:             "get",
-    headers:            { "Authorization": `Bearer ${secret}` },
+    headers:            buildHeaders_(secret, bypassSecret),
     muteHttpExceptions: true,
   };
 
@@ -207,13 +224,14 @@ function getThresholdDate_() {
  * ดูผลใน Execution log
  */
 function testConnection() {
-  const { url, secret } = getConfig_();
-  Logger.log(`DASHBOARD_URL = ${url}`);
-  Logger.log(`INGEST_SECRET = ${secret.slice(0, 4)}${"*".repeat(Math.max(0, secret.length - 4))}`);
+  const { url, secret, bypassSecret } = getConfig_();
+  Logger.log(`DASHBOARD_URL        = ${url}`);
+  Logger.log(`INGEST_SECRET        = ${secret.slice(0, 4)}${"*".repeat(Math.max(0, secret.length - 4))}`);
+  Logger.log(`VERCEL_BYPASS_SECRET = ${bypassSecret ? bypassSecret.slice(0, 4) + "****" : "(not set)"}`);
 
   const res = UrlFetchApp.fetch(`${url}/api/data/ingest/threshold`, {
     method:             "get",
-    headers:            { "Authorization": `Bearer ${secret}` },
+    headers:            buildHeaders_(secret, bypassSecret),
     muteHttpExceptions: true,
   });
   const code = res.getResponseCode();
