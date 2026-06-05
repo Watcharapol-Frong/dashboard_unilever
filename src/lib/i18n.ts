@@ -130,6 +130,9 @@ const dict: Record<string, Record<Lang, string>> = {
   'products.class':             { en: 'Class',                        th: 'หมวดหมู่' },
   'products.subclass':          { en: 'Subclass',                     th: 'หมวดหมู่ย่อย' },
   'products.newVsRepeat':       { en: 'New vs Repeat',                th: 'ใหม่ vs ประจำ' },
+  'products.allOrders':         { en: 'All Orders',                   th: 'ทุกคำสั่งซื้อ' },
+  'products.convertedOnly':     { en: 'Converted Only',               th: 'Converted เท่านั้น' },
+  'products.notConverted':      { en: 'Not Converted',                th: 'ไม่ Converted' },
 
   // ─── Incentives Page ───────────────────────────────────────────────────────
   'incentives.achievement':     { en: 'Achievement %',                th: 'ผลสำเร็จ %' },

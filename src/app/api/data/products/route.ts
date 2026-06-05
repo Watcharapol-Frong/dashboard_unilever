@@ -13,6 +13,7 @@ function buildProductWhere(
   subclass: string[],
   startDate: string | null,
   endDate: string | null,
+  converted: string | null,
 ) {
   const conditions: string[] = []
   const params: any[] = []
@@ -27,6 +28,11 @@ function buildProductWhere(
     conditions.push(`m.prod_num IN (SELECT prod_num FROM products WHERE buyer_name = ANY(${qpush(params, buyer)}))`)
   }
   addFilter(params, conditions, subclass, 'm.subclass')
+  if (converted === 'converted') {
+    conditions.push(`m.customer_type IN ('new_customer', 'retention')`)
+  } else if (converted === 'not_converted') {
+    conditions.push(`m.customer_type IN ('first_order_not_converted', 'retention_not_converted')`)
+  }
 
   return { where: conditions.length ? 'AND ' + conditions.join(' AND ') : '', params }
 }
@@ -41,9 +47,10 @@ export async function GET(request: Request) {
     const subclass    = (searchParams.get('subclass')     || '').split(',').filter(Boolean)
     const startDate   = searchParams.get('startDate')   || null
     const endDate     = searchParams.get('endDate')     || null
+    const converted   = searchParams.get('converted')   || null
 
     const { where: extraWhere, params: filterParams } = buildProductWhere(
-      brands, className, seniorBuyer, buyer, subclass, startDate, endDate,
+      brands, className, seniorBuyer, buyer, subclass, startDate, endDate, converted,
     )
 
     const [kpiRow, productRows, brandRows, monthsRaw, brandTrendRows] = await Promise.all([

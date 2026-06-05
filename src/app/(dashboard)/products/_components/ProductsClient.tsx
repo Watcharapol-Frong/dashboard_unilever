@@ -14,6 +14,7 @@ import {
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { MultiSelect } from '@/components/dashboard/MultiSelect'
+import { FilterSelect } from '@/components/dashboard/FilterSelect'
 import { KpiCard } from '@/components/dashboard/KpiCard'
 import { KpiGrid } from '@/components/dashboard/KpiGrid'
 import { DataTable } from '@/components/ui/data-table'
@@ -270,6 +271,7 @@ export default function ProductsClient() {
   const [filterBuyer,       setFilterBuyer]       = useState<string[]>([])
   const [filterSubclass,    setFilterSubclass]    = useState<string[]>([])
   const [filterSegment,     setFilterSegment]     = useState('all')
+  const [filterConverted,   setFilterConverted]   = useState('all')
   const [prodSearch,        setProdSearch]        = useState('')
   const [activeTab,         setActiveTab]         = useState('products')
 
@@ -281,6 +283,7 @@ export default function ProductsClient() {
     if (filterSeniorBuyer.length > 0) p.set('senior_buyer', filterSeniorBuyer.join(','))
     if (filterBuyer.length > 0)       p.set('buyer',        filterBuyer.join(','))
     if (filterSubclass.length > 0)    p.set('subclass',     filterSubclass.join(','))
+    if (filterConverted !== 'all')    p.set('converted',    filterConverted)
     if (rangeFrom) {
       p.set('startDate', rangeFrom)
       p.set('endDate',   lastDayOfMonth(rangeTo ?? rangeFrom))
@@ -289,17 +292,19 @@ export default function ProductsClient() {
     if (buildVersion) p.set('_v', String(buildVersion))
     const qs = p.toString()
     return `/api/data/products${qs ? `?${qs}` : ''}`
-  }, [filterBrands, filterClass, filterSeniorBuyer, filterBuyer, filterSubclass, rangeFrom, rangeTo, buildVersion])
+  }, [filterBrands, filterClass, filterSeniorBuyer, filterBuyer, filterSubclass, filterConverted, rangeFrom, rangeTo, buildVersion])
 
   const { data, isLoading, isValidating, error } = useDashboardSWR<ProductData>(apiUrl)
 
   const hasFilter = filterBrands.length > 0 || filterClass.length > 0 ||
-    filterSeniorBuyer.length > 0 || filterBuyer.length > 0 || filterSubclass.length > 0
+    filterSeniorBuyer.length > 0 || filterBuyer.length > 0 || filterSubclass.length > 0 ||
+    filterConverted !== 'all'
   const hasRange  = !!rangeFrom
 
   const clearAll = () => {
     setFilterBrands([]); setFilterClass([])
     setFilterSeniorBuyer([]); setFilterBuyer([]); setFilterSubclass([])
+    setFilterConverted('all')
     clearRange()
   }
 
@@ -392,6 +397,17 @@ export default function ProductsClient() {
               onChange={setFilterSubclass}
               options={opts.subclasses.map(v => ({ value: v, label: v }))}
               width="w-[145px]"
+            />
+
+            <FilterSelect
+              label={t('products.allOrders', lang)}
+              value={filterConverted}
+              onChange={setFilterConverted}
+              options={[
+                { value: 'converted',     label: t('products.convertedOnly', lang) },
+                { value: 'not_converted', label: t('products.notConverted',  lang) },
+              ]}
+              width="w-[165px]"
             />
 
             {(hasFilter || hasRange) && (
