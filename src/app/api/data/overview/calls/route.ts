@@ -29,8 +29,6 @@ export async function GET(request: Request) {
         COUNT(DISTINCT mmid) FILTER (
           WHERE call_status NOT LIKE 'ไม่รับสาย%'
             AND call_status IS DISTINCT FROM 'ปิดเครื่อง/ติดต่อไม่ได้'
-            AND call_status IS DISTINCT FROM 'ไม่สะดวกคุย'
-            AND call_status IS DISTINCT FROM 'ยังไม่ต้องการสินค้า'
         )::text AS connected
       FROM sales_hoc_orders
       ${where}

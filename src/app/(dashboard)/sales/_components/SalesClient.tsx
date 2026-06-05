@@ -8,7 +8,6 @@ import {
   ChartContainer, ChartTooltip, type ChartConfig,
 } from '@/components/ui/chart'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { MultiSelect } from '@/components/dashboard/MultiSelect'
 import { KpiCard } from '@/components/dashboard/KpiCard'
 import { KpiGrid } from '@/components/dashboard/KpiGrid'
@@ -17,30 +16,57 @@ import { DateRangePicker } from '@/components/dashboard/DateRangePicker'
 import { useDashboardSWR } from '@/hooks/useDashboardSWR'
 import { useMonthRange, lastDayOfMonth } from '@/hooks/useMonthRange'
 import { MonthChipGroup } from '@/components/dashboard/MonthChipGroup'
-import { fmtBaht, fmt } from '@/lib/formatters'
+import { fmtBaht, fmt, formatTHB } from '@/lib/formatters'
 import { TrendingUp, UserPlus, Users, CreditCard, Calendar } from 'lucide-react'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import { Skeleton } from '@/components/ui/skeleton'
+import {
+  Table, TableBody, TableCell, TableFooter, TableHead, TableHeader, TableRow,
+} from '@/components/ui/table'
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
 interface SalesKpi {
-  total_sales: number; online_sales: number; offline_sales: number
-  total_orders: number; new_customers: number; retention_customers: number
-  total_qty: number; avg_order_value: number
-  cmp_total_sales: number | null; cmp_total_orders: number | null
-  cmp_new_customers: number | null; cmp_avg_order_value: number | null
-  cmp_retention_customers: number | null; comparison_label: string | null
-  current_period_label: string | null; previous_period_label: string | null
+  total_sales: number; total_online: number; total_offline: number
+  total_orders: number; total_qty: number
+  converted_sales: number; converted_online: number; converted_offline: number
+  converted_orders: number; new_customers: number; retention_customers: number
+  not_converted_sales: number; not_converted_online: number; not_converted_offline: number
+  not_converted_orders: number
+  avg_order_value: number
+  cmp_converted_sales: number | null
+  comparison_label: string | null
+  current_period_label: string | null
+  previous_period_label: string | null
 }
 
 interface SalesData {
   kpi: SalesKpi
-  by_period: { period: string; period_label: string; online: number; offline: number; total: number }[]
+  by_period: {
+    period: string
+    period_label: string
+    total_online: number
+    total_offline: number
+    converted_online: number
+    converted_offline: number
+    not_converted_online: number
+    not_converted_offline: number
+  }[]
   options: { cmg: string[]; agents: string[] }
   months: string[]
 }
 
 type Interval   = 'monthly' | 'weekly' | 'custom'
 type Conversion = 'all' | 'converted' | 'not_converted'
+
+type AgentRow = {
+  agent: string
+  sales_total: number
+  order_total: number
+  call_total: number
+  converted_customers: number
+  conversion_rate: number
+}
 
 // ── Chart Config ──────────────────────────────────────────────────────────────
 
@@ -83,6 +109,37 @@ function SalesTooltip({ active, payload, label }: { active?: boolean; payload?: 
   )
 }
 
+// ── Channel Bar ───────────────────────────────────────────────────────────────
+
+function ChannelBar({ label, online, offline }: { label: string; online: number; offline: number }) {
+  const total      = online + offline
+  const onlinePct  = total > 0 ? (online  / total) * 100 : 0
+  const offlinePct = total > 0 ? (offline / total) * 100 : 0
+  return (
+    <div className="space-y-1.5">
+      <div className="text-xs font-semibold text-muted-foreground">{label}</div>
+      <div className="w-full h-7 rounded-md overflow-hidden flex shadow-sm">
+        <div
+          className="h-full flex items-center justify-center text-white text-[10px] font-bold transition-all duration-500 min-w-0"
+          style={{ width: `${onlinePct}%`, backgroundColor: '#003DA6' }}
+        >
+          {onlinePct >= 15 ? `${onlinePct.toFixed(0)}%` : ''}
+        </div>
+        <div
+          className="h-full flex items-center justify-center text-white text-[10px] font-bold transition-all duration-500 min-w-0"
+          style={{ width: `${offlinePct}%`, backgroundColor: '#EE2737' }}
+        >
+          {offlinePct >= 15 ? `${offlinePct.toFixed(0)}%` : ''}
+        </div>
+      </div>
+      <div className="flex justify-between text-[10px] text-muted-foreground">
+        <span>Online {formatTHB(online)}</span>
+        <span>Offline {formatTHB(offline)}</span>
+      </div>
+    </div>
+  )
+}
+
 // ── Component ─────────────────────────────────────────────────────────────────
 
 export default function SalesClient() {
@@ -90,13 +147,13 @@ export default function SalesClient() {
     rangeFrom, rangeTo, hoverMonth, setHoverMonth,
     handleChipClick: baseHandleChipClick, clearRange, activeRangeLabel,
   } = useMonthRange()
-  const [interval,    setInterval]    = useState<Interval>('custom')
-  const [customStart, setCustomStart] = useState('2026-05-01')
-  const [customEnd,   setCustomEnd]   = useState('2026-05-31')
-  const [channel,    setChannel]    = useState<string[]>([])
-  const [cmg,        setCmg]        = useState<string[]>([])
-  const [agent,      setAgent]      = useState<string[]>([])
-  const [conversion, setConversion] = useState<Conversion>('all')
+  const [interval,        setInterval]        = useState<Interval>('custom')
+  const [customStart,     setCustomStart]     = useState('2026-05-01')
+  const [customEnd,       setCustomEnd]       = useState('2026-05-31')
+  const [channel,         setChannel]         = useState<string[]>([])
+  const [cmg,             setCmg]             = useState<string[]>([])
+  const [agent,           setAgent]           = useState<string[]>([])
+  const [conversionView,  setConversionView]  = useState<Conversion>('all')
 
   const handleChipClick = (m: string) => {
     if (interval === 'custom') setInterval('monthly')
@@ -121,16 +178,25 @@ export default function SalesClient() {
 
   const apiUrl = useMemo(() => {
     const p = new URLSearchParams({ interval: calculatedInterval })
-    if (channel.length > 0)   p.set('channel',    channel.join(','))
-    if (cmg.length > 0)       p.set('cmg',        cmg.join(','))
-    if (agent.length > 0)     p.set('agent',      agent.join(','))
-    if (conversion !== 'all') p.set('conversion', conversion)
-    if (effectiveStart)       p.set('startDate',  effectiveStart)
-    if (effectiveEnd)         p.set('endDate',    effectiveEnd)
+    if (channel.length > 0) p.set('channel',   channel.join(','))
+    if (cmg.length > 0)     p.set('cmg',       cmg.join(','))
+    if (agent.length > 0)   p.set('agent',     agent.join(','))
+    if (effectiveStart)     p.set('startDate', effectiveStart)
+    if (effectiveEnd)       p.set('endDate',   effectiveEnd)
     return `/api/data/sales?${p.toString()}`
-  }, [calculatedInterval, channel, cmg, agent, conversion, effectiveStart, effectiveEnd])
+  }, [calculatedInterval, channel, cmg, agent, effectiveStart, effectiveEnd])
 
   const { data, isLoading, isValidating } = useDashboardSWR<SalesData>(apiUrl)
+
+  const agentsApiUrl = useMemo(() => {
+    const p = new URLSearchParams()
+    if (effectiveStart) p.set('startDate', effectiveStart)
+    if (effectiveEnd)   p.set('endDate',   effectiveEnd)
+    if (cmg.length > 0) p.set('cmg', cmg.join(','))
+    return `/api/data/overview/agents?${p.toString()}`
+  }, [effectiveStart, effectiveEnd, cmg])
+
+  const { data: agentsData, isLoading: agentsLoading } = useDashboardSWR<AgentRow[]>(agentsApiUrl)
 
   if (isLoading && !data) return <PageLoading cols={4} />
   if (!data || data.months.length === 0) {
@@ -139,34 +205,38 @@ export default function SalesClient() {
 
   const { kpi, by_period, options, months } = data
 
-  const onlinePct  = kpi.total_sales > 0 ? (kpi.online_sales  / kpi.total_sales) * 100 : 0
-  const offlinePct = kpi.total_sales > 0 ? (kpi.offline_sales / kpi.total_sales) * 100 : 0
-  const hasFilter  = channel.length > 0 || cmg.length > 0 || agent.length > 0 || conversion !== 'all'
-  const hasRange   = !!(rangeFrom || (interval === 'custom'))
+  const hasFilter = channel.length > 0 || cmg.length > 0 || agent.length > 0 || conversionView !== 'all'
+  const hasRange  = !!(rangeFrom || (interval === 'custom'))
 
-  // Label for the period currently shown on KPI cards
   const kpiPeriodLabel = kpi.current_period_label ?? null
-
-  // Tooltip text for the % comparison badge
-  const cmpTooltip = (() => {
-    if (kpiPeriodLabel && kpi.previous_period_label) {
-      return `Comparing ${kpiPeriodLabel} vs ${kpi.previous_period_label}\n(current − previous) ÷ previous`
-    }
-    if (kpi.comparison_label === 'vs preceding period') {
-      return `Comparing selected period vs the preceding period of equal length\n(current − previous) ÷ previous`
-    }
-    return `(current − previous) ÷ previous`
-  })()
-
-  const chartData = by_period.map(p => ({
-    name:    p.period_label,
-    Online:  p.online,
-    Offline: p.offline,
-  }))
 
   const intervalBadge = interval === 'custom' && durationDays > 0
     ? `${calculatedInterval} · ${durationDays}d`
     : `${calculatedInterval} view`
+
+  // ── Display values based on conversionView ────────────────────────────────
+  const displaySales   = conversionView === 'converted' ? kpi.converted_sales   : conversionView === 'not_converted' ? kpi.not_converted_sales   : kpi.total_sales
+  const displayOrders  = conversionView === 'converted' ? kpi.converted_orders  : conversionView === 'not_converted' ? kpi.not_converted_orders  : kpi.total_orders
+  const displayOnline  = conversionView === 'converted' ? kpi.converted_online  : conversionView === 'not_converted' ? kpi.not_converted_online  : kpi.total_online
+  const displayOffline = conversionView === 'converted' ? kpi.converted_offline : conversionView === 'not_converted' ? kpi.not_converted_offline : kpi.total_offline
+  const displayAvgOV   = displayOrders > 0 ? displaySales / displayOrders : 0
+
+  // ── Chart data based on conversionView ────────────────────────────────────
+  const chartData = by_period.map(p => {
+    if (conversionView === 'converted') {
+      return { name: p.period_label, Online: p.converted_online, Offline: p.converted_offline }
+    }
+    if (conversionView === 'not_converted') {
+      return { name: p.period_label, Online: p.not_converted_online, Offline: p.not_converted_offline }
+    }
+    return { name: p.period_label, Online: p.total_online, Offline: p.total_offline }
+  })
+
+  const channelBarLabel = conversionView === 'converted'
+    ? 'Converted Orders'
+    : conversionView === 'not_converted'
+    ? 'Not Converted'
+    : 'All Orders'
 
   return (
     <div className="space-y-6">
@@ -232,8 +302,9 @@ export default function SalesClient() {
                 options={options.agents.map(v => ({ value: v, label: v }))}
                 width="w-[150px]"
               />
-              <Select value={conversion} onValueChange={v => setConversion(v as Conversion)}>
-                <SelectTrigger className="h-7 text-xs w-[155px]"><SelectValue placeholder="All Customers" /></SelectTrigger>
+
+              <Select value={conversionView} onValueChange={v => setConversionView(v as Conversion)}>
+                <SelectTrigger className="h-7 text-xs w-[155px]"><SelectValue /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="all">All Customers</SelectItem>
                   <SelectItem value="converted">Converted Only</SelectItem>
@@ -244,7 +315,7 @@ export default function SalesClient() {
               {(hasFilter || hasRange) && (
                 <button
                   onClick={() => {
-                    setChannel([]); setCmg([]); setAgent([]); setConversion('all')
+                    setChannel([]); setCmg([]); setAgent([]); setConversionView('all')
                     clearRange(); setInterval('custom')
                     setCustomStart('2026-05-01'); setCustomEnd('2026-05-31')
                   }}
@@ -274,62 +345,54 @@ export default function SalesClient() {
       {/* ── KPI Cards ─────────────────────────────────────────────────────── */}
       <KpiGrid cols={4}>
         <KpiCard
-          title="Total Sales (Telesales)"
-          value={fmtBaht(kpi.total_sales)}
-          subtitle={kpiPeriodLabel ? `${kpiPeriodLabel} · ${fmt(kpi.total_qty)} units` : `${fmt(kpi.total_qty)} units sold`}
+          title="Total Sales"
+          value={fmtBaht(displaySales)}
+          subtitle={
+            conversionView === 'converted'
+              ? 'Converted orders only'
+              : conversionView === 'not_converted'
+              ? 'Not converted orders'
+              : `${fmt(kpi.total_qty)} units · ${kpi.total_orders.toLocaleString()} orders`
+          }
           icon={TrendingUp}
-          comparison={kpi.cmp_total_sales ?? undefined}
-          comparisonLabel={kpi.comparison_label ?? undefined}
-          comparisonTooltip={cmpTooltip}
-          tooltip="HOC Unilever revenue for the displayed period — includes converted AND not-converted orders. Higher than Overview's HOC Sales which counts converted only. Use 'Converted Only' filter to align."
         />
         <KpiCard
           title="Avg Order Value"
-          value={fmtBaht(kpi.avg_order_value)}
-          subtitle={kpiPeriodLabel ? `${kpiPeriodLabel} · ${kpi.total_orders.toLocaleString()} orders` : `${kpi.total_orders.toLocaleString()} orders`}
+          value={fmtBaht(displayAvgOV)}
+          subtitle={`${displayOrders.toLocaleString()} orders`}
           icon={CreditCard}
-          comparison={kpi.cmp_avg_order_value ?? undefined}
-          comparisonLabel={kpi.comparison_label ?? undefined}
-          comparisonTooltip={cmpTooltip}
-          tooltip="Total Sales ÷ Total Orders for the displayed period. Includes not-converted orders — switch to 'Converted Only' for attribution-window figures."
         />
         <KpiCard
           title="New Customers"
           value={kpi.new_customers.toLocaleString()}
-          subtitle={kpiPeriodLabel ? `${kpiPeriodLabel} · first-time buyers` : 'First-time telesales buyers'}
+          subtitle="Converted new buyers"
           icon={UserPlus}
-          comparison={kpi.cmp_new_customers ?? undefined}
+          comparison={kpi.cmp_converted_sales ?? undefined}
           comparisonLabel={kpi.comparison_label ?? undefined}
-          comparisonTooltip={cmpTooltip}
-          tooltip="Unique first-time HOC buyers for the displayed period — includes both converted (within attribution window) and first-order-not-converted."
         />
         <KpiCard
           title="Repeat Customers"
           value={kpi.retention_customers.toLocaleString()}
-          subtitle={kpiPeriodLabel ? `${kpiPeriodLabel} · repeat buyers` : 'Repeat telesales buyers'}
+          subtitle="Converted repeat buyers"
           icon={Users}
-          comparison={kpi.cmp_retention_customers ?? undefined}
-          comparisonLabel={kpi.comparison_label ?? undefined}
-          comparisonTooltip={cmpTooltip}
-          tooltip="Unique repeat HOC buyers for the displayed period — includes both converted (within attribution window) and retention-not-converted."
         />
       </KpiGrid>
 
-      {/* ── Sales Trend + Channel Distribution ────────────────────────────── */}
+      {/* ── Sales Trend + Channel Breakdown ───────────────────────────────── */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
 
-        {/* Sales Trend */}
+        {/* Sales Trend (2/3) */}
         <Card className="lg:col-span-2 py-6 gap-4">
           <CardHeader className="flex sm:flex-row flex-col justify-between sm:items-center items-start gap-3 px-6 pb-2">
-            <div className="flex items-center gap-2">
-              <CardTitle className="text-sm font-medium">Sales Trend (Telesales Activity)</CardTitle>
+            <div className="flex items-center gap-2 flex-wrap">
+              <CardTitle className="text-sm font-medium">Sales Trend</CardTitle>
               {isValidating && !isLoading && (
                 <span className="text-[10px] font-medium text-muted-foreground bg-muted px-2 py-0.5 rounded-full animate-pulse">
                   Updating…
                 </span>
               )}
             </div>
-            <span className="text-[9px] bg-blue-50 text-[#003DA6] px-1.5 py-0.5 rounded font-bold uppercase">
+            <span className="text-[9px] bg-blue-50 text-[#003DA6] px-1.5 py-0.5 rounded font-bold uppercase shrink-0">
               {intervalBadge}
             </span>
           </CardHeader>
@@ -358,49 +421,83 @@ export default function SalesClient() {
           </CardContent>
         </Card>
 
-        {/* Channel Distribution */}
+        {/* Channel Breakdown (1/3) */}
         <Card>
           <CardHeader>
-            <CardTitle className="text-sm font-medium">Channel Distribution</CardTitle>
+            <CardTitle className="text-sm font-medium">Channel Breakdown</CardTitle>
           </CardHeader>
-          <CardContent className="flex flex-col justify-center h-[300px] gap-6">
-            <div className="w-full h-10 rounded-lg overflow-hidden flex shadow-sm">
-              <div
-                className="h-full flex items-center justify-center text-white text-xs font-bold transition-all duration-500 min-w-0"
-                style={{ width: `${onlinePct}%`, backgroundColor: '#003DA6' }}
-              >
-                {onlinePct >= 12 ? `${onlinePct.toFixed(0)}%` : ''}
-              </div>
-              <div
-                className="h-full flex items-center justify-center text-white text-xs font-bold transition-all duration-500 min-w-0"
-                style={{ width: `${offlinePct}%`, backgroundColor: '#EE2737' }}
-              >
-                {offlinePct >= 12 ? `${offlinePct.toFixed(0)}%` : ''}
-              </div>
-            </div>
-            <div className="flex justify-between text-xs">
-              <div className="flex flex-col gap-1">
-                <div className="flex items-center gap-1.5">
-                  <span className="w-3 h-3 rounded-sm shrink-0" style={{ backgroundColor: '#003DA6' }} />
-                  <span className="font-semibold">Online {onlinePct.toFixed(1)}%</span>
-                </div>
-                <span className="text-muted-foreground pl-4">{fmtBaht(kpi.online_sales)}</span>
-              </div>
-              <div className="flex flex-col gap-1 items-end">
-                <div className="flex items-center gap-1.5">
-                  <span className="font-semibold">Offline {offlinePct.toFixed(1)}%</span>
-                  <span className="w-3 h-3 rounded-sm shrink-0" style={{ backgroundColor: '#EE2737' }} />
-                </div>
-                <span className="text-muted-foreground pr-4">{fmtBaht(kpi.offline_sales)}</span>
-              </div>
-            </div>
-            <div className="text-center">
-              <div className="text-2xl font-bold tabular-nums">{fmtBaht(kpi.total_sales)}</div>
-              <div className="text-xs text-muted-foreground mt-0.5">Total Telesales Revenue</div>
+          <CardContent className="flex flex-col justify-center gap-6 pt-2">
+            <ChannelBar
+              label={channelBarLabel}
+              online={displayOnline}
+              offline={displayOffline}
+            />
+            <div className="text-center space-y-0.5 pt-2">
+              <div className="text-xs text-muted-foreground">Total Telesales Revenue</div>
+              <div className="text-base font-bold text-foreground">{fmtBaht(displaySales)}</div>
             </div>
           </CardContent>
         </Card>
       </div>
+
+      {/* ── Agent Performance Leaderboard ─────────────────────────────────── */}
+      <Card>
+        <CardHeader className="pb-3">
+          <CardTitle className="text-sm font-medium">Agent Performance Leaderboard</CardTitle>
+          <p className="text-xs text-muted-foreground">HOC converted sales by agent — responds to date range and segment filters above</p>
+        </CardHeader>
+        <CardContent>
+          {agentsLoading ? (
+            <Skeleton className="h-48 w-full" />
+          ) : (() => {
+            const agents = agentsData ?? []
+            const totalSales    = agents.reduce((s, r) => s + r.sales_total, 0)
+            const totalOrders   = agents.reduce((s, r) => s + r.order_total, 0)
+            const totalCalls    = agents.reduce((s, r) => s + r.call_total, 0)
+            const totalConv     = agents.reduce((s, r) => s + r.converted_customers, 0)
+            const totalConvRate = totalCalls > 0 ? totalConv / totalCalls : 0
+            return (
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead className="w-8">#</TableHead>
+                    <TableHead>Agent</TableHead>
+                    <TableHead className="text-right">HOC Sales</TableHead>
+                    <TableHead className="text-right">Orders</TableHead>
+                    <TableHead className="text-right">Calls</TableHead>
+                    <TableHead className="text-right">Conv. Rate</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {agents.map((r, i) => {
+                    const convPct = r.conversion_rate * 100
+                    const convColor = convPct >= 30 ? 'text-green-600' : convPct >= 15 ? 'text-yellow-600' : 'text-red-500'
+                    return (
+                      <TableRow key={r.agent}>
+                        <TableCell className="text-muted-foreground text-xs">{i + 1}</TableCell>
+                        <TableCell className="font-medium text-sm">{r.agent}</TableCell>
+                        <TableCell className="text-right tabular-nums text-sm font-medium">{formatTHB(r.sales_total)}</TableCell>
+                        <TableCell className="text-right tabular-nums text-sm">{r.order_total.toLocaleString()}</TableCell>
+                        <TableCell className="text-right tabular-nums text-sm">{r.call_total.toLocaleString()}</TableCell>
+                        <TableCell className={`text-right tabular-nums text-sm font-semibold ${convColor}`}>{convPct.toFixed(1)}%</TableCell>
+                      </TableRow>
+                    )
+                  })}
+                </TableBody>
+                <TableFooter>
+                  <TableRow>
+                    <TableCell colSpan={2} className="font-semibold">Total</TableCell>
+                    <TableCell className="text-right tabular-nums font-semibold">{formatTHB(totalSales)}</TableCell>
+                    <TableCell className="text-right tabular-nums font-semibold">{totalOrders.toLocaleString()}</TableCell>
+                    <TableCell className="text-right tabular-nums font-semibold">{totalCalls.toLocaleString()}</TableCell>
+                    <TableCell className="text-right tabular-nums font-semibold">{(totalConvRate * 100).toFixed(1)}%</TableCell>
+                  </TableRow>
+                </TableFooter>
+              </Table>
+            )
+          })()}
+        </CardContent>
+      </Card>
 
     </div>
   )

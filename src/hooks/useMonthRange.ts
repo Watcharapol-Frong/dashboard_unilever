@@ -4,7 +4,7 @@ import { useState, useMemo } from 'react'
 
 export function lastDayOfMonth(isoDate: string): string {
   const [y, m] = isoDate.split('-').map(Number)
-  return new Date(y, m, 0).toISOString().split('T')[0]
+  return new Date(Date.UTC(y, m, 0)).toISOString().split('T')[0]
 }
 
 export function formatRangeLabel(from: string | null, to: string | null): string | null {
