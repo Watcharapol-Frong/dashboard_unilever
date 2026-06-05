@@ -3,6 +3,10 @@
  * ไปที่ Extensions → Apps Script → Project Settings → Script Properties แล้วเพิ่ม:
  *   DASHBOARD_URL  =  https://your-app.vercel.app
  *   INGEST_SECRET  =  <ค่า INGEST_API_SECRET จาก Vercel env>
+ *
+ * Optional:
+ *   FALLBACK_DATE  =  2026-01-01  (ใช้เป็น threshold เมื่อ API ติดต่อไม่ได้)
+ *                     ถ้าไม่ตั้งค่าจะ throw error แทน
  ********************************/
 function getConfig_() {
   const props  = PropertiesService.getScriptProperties();
@@ -16,7 +20,11 @@ function getConfig_() {
       "  INGEST_SECRET = <secret>"
     );
   }
-  return { url: url.replace(/\/$/, ""), secret };
+  return {
+    url:          url.replace(/\/$/, ""),
+    secret,
+    fallbackDate: props.getProperty("FALLBACK_DATE") || null,
+  };
 }
 
 function exportIncrementalToStorage() {
@@ -130,31 +138,99 @@ function postToAPI_(records) {
 
 /* ================= ดึง Threshold Date จาก API ================= */
 function getThresholdDate_() {
-  const { url, secret } = getConfig_();
+  const { url, secret, fallbackDate } = getConfig_();
   const options = {
     method:             "get",
     headers:            { "Authorization": `Bearer ${secret}` },
     muteHttpExceptions: true,
   };
 
+  let statusCode = null;
+  let responseText = "";
+
   try {
     const response = UrlFetchApp.fetch(`${url}/api/data/ingest/threshold`, options);
-    if (response.getResponseCode() === 200) {
-      const data = JSON.parse(response.getContentText());
-      if (data.date) {
-        const d = new Date(data.date);
-        d.setDate(d.getDate() - 3); // overlap 3 วันเพื่อป้องกัน miss
-        return formatDateForExport_(d);
-      }
-    }
-  } catch (e) {
-    Logger.log("ไม่สามารถดึงวันที่จาก API ได้: " + e.message);
-  }
+    statusCode    = response.getResponseCode();
+    responseText  = response.getContentText();
 
-  // Fallback: 3 วันที่แล้ว
-  const fallback = new Date();
-  fallback.setDate(fallback.getDate() - 3);
-  return formatDateForExport_(fallback);
+    if (statusCode === 401) {
+      throw new Error(
+        `[threshold] 401 Unauthorized — INGEST_SECRET ไม่ตรงกับ Vercel env\n` +
+        `ตรวจสอบ: Project Settings → Script Properties → INGEST_SECRET`
+      );
+    }
+
+    if (statusCode !== 200) {
+      throw new Error(`[threshold] HTTP ${statusCode}: ${responseText}`);
+    }
+
+    const data = JSON.parse(responseText);
+    if (!data.date) {
+      // DB ยังไม่มีข้อมูล (first run) — ใช้ fallbackDate หรือ 90 วันที่แล้ว
+      const d = new Date();
+      d.setDate(d.getDate() - 90);
+      const safe = fallbackDate || formatDateForExport_(d);
+      Logger.log(`[threshold] DB ว่างเปล่า → ใช้ threshold = ${safe}`);
+      return safe;
+    }
+
+    // ถอยหลัง 3 วัน เพื่อป้องกัน miss ข้อมูลที่ sync ช้า
+    const d = new Date(data.date + "T00:00:00");
+    d.setDate(d.getDate() - 3);
+    const result = formatDateForExport_(d);
+    Logger.log(`[threshold] max DB date = ${data.date} → threshold = ${result}`);
+    return result;
+
+  } catch (e) {
+    if (statusCode !== null) {
+      // API ตอบกลับแล้วแต่เกิด error → อย่า fallback เงียบๆ
+      throw e;
+    }
+    // Network error เท่านั้นที่จะ fallback
+    Logger.log(`[threshold] Network error: ${e.message}`);
+    if (fallbackDate) {
+      Logger.log(`[threshold] ใช้ FALLBACK_DATE = ${fallbackDate}`);
+      return fallbackDate;
+    }
+    throw new Error(
+      `[threshold] ติดต่อ API ไม่ได้และไม่มี FALLBACK_DATE ตั้งไว้\n` +
+      `หยุด script เพื่อป้องกัน over-sync\n` +
+      `ถ้าต้องการ fallback ให้เพิ่ม Script Properties: FALLBACK_DATE = YYYY-MM-DD`
+    );
+  }
+}
+
+/* ================= TEST / DEBUG FUNCTIONS ================= */
+
+/**
+ * รันเพื่อตรวจสอบว่า INGEST_SECRET และ DASHBOARD_URL ถูกต้องหรือไม่
+ * ดูผลใน Execution log
+ */
+function testConnection() {
+  const { url, secret } = getConfig_();
+  Logger.log(`DASHBOARD_URL = ${url}`);
+  Logger.log(`INGEST_SECRET = ${secret.slice(0, 4)}${"*".repeat(Math.max(0, secret.length - 4))}`);
+
+  const res = UrlFetchApp.fetch(`${url}/api/data/ingest/threshold`, {
+    method:             "get",
+    headers:            { "Authorization": `Bearer ${secret}` },
+    muteHttpExceptions: true,
+  });
+  const code = res.getResponseCode();
+  const body = res.getContentText();
+  Logger.log(`HTTP ${code}: ${body}`);
+
+  if (code === 200) Logger.log("✅ เชื่อมต่อสำเร็จ");
+  else if (code === 401) Logger.log("❌ Secret ไม่ตรง — ตรวจสอบ INGEST_SECRET ใน Script Properties");
+  else Logger.log(`⚠️ Unexpected response`);
+}
+
+/**
+ * รันเพื่อดูว่า threshold ที่ได้คือวันไหน ก่อนรัน exportIncrementalToStorage จริง
+ */
+function testThreshold() {
+  const threshold = getThresholdDate_();
+  Logger.log(`threshold = ${threshold}`);
 }
 
 /* ================= HELPER FUNCTIONS ================= */
