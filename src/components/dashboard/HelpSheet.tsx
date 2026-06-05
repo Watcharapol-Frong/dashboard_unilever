@@ -276,7 +276,7 @@ function AllUsersContent() {
             If the customer orders after 14 days, the order is not counted in HOC Sales, converted revenue, or new customer numbers.
           </p>
           <Note>
-            The current attribution window is shown in the top bar. Changing it requires a Mart Rebuild — all historical numbers will recalculate.
+            To check the current value — look at the <strong>top-right corner of every page</strong>. You will see a badge like <span className="font-mono font-semibold">14-day attribution</span>. That number is what the system is currently using. Changing it requires a Mart Rebuild — all historical numbers will recalculate.
           </Note>
         </AccordionContent>
       </AccordionItem>
