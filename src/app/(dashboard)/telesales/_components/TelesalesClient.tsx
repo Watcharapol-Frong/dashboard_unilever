@@ -429,7 +429,10 @@ export default function TelesalesClient() {
           value={formatNumber(data.summary.total_leads)}
           subtitle="Total target leads in database"
           icon={Users}
-          tooltip="Total unique customers in the telesales lead pool — all MMIDs assigned for calling, regardless of call outcome."
+          tooltip={lang === 'th'
+            ? 'ลูกค้าเป้าหมายทั้งหมดในระบบ telesales — MMIDs ที่ได้รับมอบหมายให้โทรหา ไม่ว่าผลการโทรจะเป็นอย่างไร'
+            : 'Total unique customers in the telesales lead pool — all MMIDs assigned for calling, regardless of call outcome.'
+          }
         />
         <KpiCard
           title={t('telesales.reachRate', lang)}
@@ -437,7 +440,10 @@ export default function TelesalesClient() {
           subtitle={`${t('telesales.reached', lang)}: ${formatNumber(data.summary.reached)} / Total: ${formatNumber(data.summary.total_calls)}`}
           valueClassName={colorRate(reachRate)}
           icon={PhoneCall}
-          tooltip="Unique customers reached ÷ Unique customers called. 'Connected' = at least one call where the customer answered (excludes: no answer, switched off, unavailable)."
+          tooltip={lang === 'th'
+            ? "ลูกค้าที่ติดต่อได้ ÷ ลูกค้าที่โทรหาทั้งหมด 'Connected' = โทรติดอย่างน้อยหนึ่งครั้ง (ไม่รวม: ไม่รับสาย, ปิดเครื่อง, ไม่อยู่ในเครือข่าย)"
+            : "Unique customers reached ÷ Unique customers called. 'Connected' = at least one call where the customer answered (excludes: no answer, switched off, unavailable)."
+          }
         />
         <KpiCard
           title={t('telesales.convRate', lang)}
@@ -445,14 +451,20 @@ export default function TelesalesClient() {
           subtitle={`${t('telesales.ordered', lang)}: ${formatNumber(data.summary.total_converted)} / Total: ${formatNumber(data.summary.total_calls)}`}
           valueClassName={colorRate(conversionRate, [0.15, 0.08])}
           icon={UserCheck}
-          tooltip="Unique converted customers ÷ Unique customers called (Total). Includes customers who ordered without answering, so the denominator is the full target scope — not just those who picked up."
+          tooltip={lang === 'th'
+            ? 'ลูกค้าที่ convert ÷ ลูกค้าที่โทรหาทั้งหมด รวมลูกค้าที่สั่งซื้อโดยไม่รับสาย ดังนั้นตัวหารคือจำนวนลูกค้าเป้าหมายทั้งหมด ไม่ใช่แค่คนที่รับสาย'
+            : 'Unique converted customers ÷ Unique customers called (Total). Includes customers who ordered without answering, so the denominator is the full target scope — not just those who picked up.'
+          }
         />
         <KpiCard
           title={t('telesales.ordered', lang)}
           value={formatNumber(totalConvertedDisplay)}
           subtitle={`${t('kpi.newCustomers', lang)}: ${formatNumber(data.summary.new_converted ?? 0)} · ${t('kpi.repeatCustomers', lang)}: ${formatNumber(data.summary.repeat_converted ?? 0)}`}
           icon={Phone}
-          tooltip="Total conversions = New customers + Repeat customers. Counted separately so a customer with both a new and a repeat order contributes to each."
+          tooltip={lang === 'th'
+            ? 'จำนวน convert ทั้งหมด = ลูกค้าใหม่ + ลูกค้าที่ซื้อซ้ำ นับแยกกัน ดังนั้นลูกค้าที่มีทั้ง order ใหม่และซื้อซ้ำจะนับในทั้งสองกลุ่ม'
+            : 'Total conversions = New customers + Repeat customers. Counted separately so a customer with both a new and a repeat order contributes to each.'
+          }
         />
       </KpiGrid>
 

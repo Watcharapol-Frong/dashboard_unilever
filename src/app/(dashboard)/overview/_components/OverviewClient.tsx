@@ -246,7 +246,10 @@ export default function OverviewClient() {
           value={fmtBaht(kpi.hoc_sales)}
           subtitle={`${t('common.target', lang)} ${fmtBaht(kpi.sales_target)}`}
           icon={TrendingUp}
-          tooltip={`HOC Sales: ${formatTHB(kpi.hoc_sales)}\nTarget: ${formatTHB(kpi.sales_target)}\nAchievement: ${kpi.achievement.toFixed(1)}%\n\nRevenue from HOC Unilever products ordered within the attribution window (converted customers only). Excludes not-converted orders.`}
+          tooltip={lang === 'th'
+            ? `HOC Sales: ${formatTHB(kpi.hoc_sales)}\nTarget: ${formatTHB(kpi.sales_target)}\nAchievement: ${kpi.achievement.toFixed(1)}%\n\nยอดขายสินค้า HOC ของ Unilever จากลูกค้าที่สั่งซื้อภายใน attribution window (เฉพาะที่ convert) ไม่รวมคำสั่งซื้อที่ไม่ convert`
+            : `HOC Sales: ${formatTHB(kpi.hoc_sales)}\nTarget: ${formatTHB(kpi.sales_target)}\nAchievement: ${kpi.achievement.toFixed(1)}%\n\nRevenue from HOC Unilever products ordered within the attribution window (converted customers only). Excludes not-converted orders.`
+          }
         />
         <KpiCard
           title={t('kpi.achievement', lang)}
@@ -254,28 +257,40 @@ export default function OverviewClient() {
           subtitle={kpi.achievement >= 100 ? t('kpi.targetReached', lang) : t('kpi.belowTarget', lang)}
           valueClassName={colorAchievement(kpi.achievement)}
           icon={Target}
-          tooltip="HOC Sales as a percentage of the monthly sales target. Calculated per segment and summed across the selected period."
+          tooltip={lang === 'th'
+            ? 'HOC Sales คิดเป็น % ของ Target รายเดือน คำนวณรายกลุ่มและรวมตลอดช่วงที่เลือก'
+            : 'HOC Sales as a percentage of the monthly sales target. Calculated per segment and summed across the selected period.'
+          }
         />
         <KpiCard
           title={t('kpi.newCustomers', lang)}
           value={kpi.new_customers.toLocaleString()}
           subtitle={t('kpi.newBuyers', lang)}
           icon={UserPlus}
-          tooltip="Unique customers placing their first HOC order within the attribution window. Excludes first-order-not-converted."
+          tooltip={lang === 'th'
+            ? 'ลูกค้าที่สั่งซื้อ HOC ครั้งแรกภายใน attribution window ไม่รวมลูกค้าที่สั่งซื้อนอกช่วง'
+            : 'Unique customers placing their first HOC order within the attribution window. Excludes first-order-not-converted.'
+          }
         />
         <KpiCard
           title={t('kpi.repeatCustomers', lang)}
           value={kpi.retention.toLocaleString()}
           subtitle={t('kpi.repeatBuyers', lang)}
           icon={Users}
-          tooltip="Unique customers who reordered HOC products within the attribution window. Excludes retention-not-converted."
+          tooltip={lang === 'th'
+            ? 'ลูกค้าที่เคยซื้อ HOC มาก่อนและซื้อซ้ำภายใน attribution window ไม่รวมการซื้อซ้ำที่อยู่นอกช่วง'
+            : 'Unique customers who reordered HOC products within the attribution window. Excludes retention-not-converted.'
+          }
         />
         <KpiCard
           title={t('kpi.totalCalls', lang)}
           value={(callStats?.total_calls ?? allTimeCalls).toLocaleString()}
           subtitle={`${t('kpi.connected', lang)}: ${(callStats?.connected ?? 0).toLocaleString()}`}
           icon={PhoneCall}
-          tooltip="Unique customers with attributed HOC orders in the selected period. Connected = customers whose call status indicates a successful connection."
+          tooltip={lang === 'th'
+            ? 'จำนวนสายที่โทรออกในช่วงเวลาที่เลือก Connected = จำนวนสายที่ติดต่อได้สำเร็จ'
+            : 'Total calls made in the selected period. Connected = calls with a successful connection status.'
+          }
         />
         <KpiCard
           title={t('kpi.programROI', lang)}
@@ -283,7 +298,10 @@ export default function OverviewClient() {
           subtitle={t('kpi.roiMultiplier', lang)}
           valueClassName={colorRoi(roiKpi.roi)}
           icon={Calculator}
-          tooltip="HOC Sales ÷ Total Program Expense (incentives + agent costs). Always month-level — not affected by segment filter because costs are shared across all segments."
+          tooltip={lang === 'th'
+            ? 'HOC Sales ÷ ค่าใช้จ่ายรวม (incentive + ค่า agent) คำนวณจากข้อมูลรายเดือน — ไม่ได้รับผลกระทบจากการกรองกลุ่ม เพราะต้นทุนเป็นของทั้งโปรแกรม'
+            : 'HOC Sales ÷ Total Program Expense (incentives + agent costs). Always month-level — not affected by segment filter because costs are shared across all segments.'
+          }
         />
       </KpiGrid>
 

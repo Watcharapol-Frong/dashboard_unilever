@@ -159,7 +159,10 @@ export default function IncentivesClient() {
           value={latestPerHead > 0 ? formatTHB(latestPerHead) : '—'}
           subtitle="Latest month · per agent"
           icon={PiggyBank}
-          tooltip={`HOC Sales: ${formatTHB(totalSales)}\nTarget: ${formatTHB(totalTarget)}\nAchievement: ${grandAchieve.toFixed(1)}%\n\nIncentive rate per agent head for the most recent month — determined by the achievement tier (FOOD RETAILER + HORECA sales vs target). Earlier months may have a different rate.`}
+          tooltip={lang === 'th'
+            ? `HOC Sales: ${formatTHB(totalSales)}\nTarget: ${formatTHB(totalTarget)}\nAchievement: ${grandAchieve.toFixed(1)}%\n\nอัตรา incentive ต่อหัว agent สำหรับเดือนล่าสุด — กำหนดตาม tier ที่ทำได้ (ยอดขาย FOOD RETAILER + HORECA เทียบ target) เดือนก่อนหน้าอาจใช้อัตราที่ต่างกัน`
+            : `HOC Sales: ${formatTHB(totalSales)}\nTarget: ${formatTHB(totalTarget)}\nAchievement: ${grandAchieve.toFixed(1)}%\n\nIncentive rate per agent head for the most recent month — determined by the achievement tier (FOOD RETAILER + HORECA sales vs target). Earlier months may have a different rate.`
+          }
         />
         <KpiCard
           title={t('incentives.roi', lang)}
@@ -167,7 +170,10 @@ export default function IncentivesClient() {
           subtitle="Unilever HOC sales / Expense"
           valueClassName={colorRoi(grandRoi)}
           icon={TrendingUp}
-          tooltip="HOC Sales ÷ Total Program Expense across all displayed months. Total Expense = incentives + agent salaries + supervisor salaries. A value of 2.0x means every ฿1 spent returns ฿2 in HOC sales."
+          tooltip={lang === 'th'
+            ? 'HOC Sales ÷ ค่าใช้จ่ายรวมของโปรแกรมทุกเดือนที่แสดง ค่าใช้จ่ายรวม = incentive + เงินเดือน agent + เงินเดือน supervisor ค่า 2.0x หมายถึงทุก ฿1 ที่ลงทุนได้ยอดขาย HOC กลับมา ฿2'
+            : 'HOC Sales ÷ Total Program Expense across all displayed months. Total Expense = incentives + agent salaries + supervisor salaries. A value of 2.0x means every ฿1 spent returns ฿2 in HOC sales.'
+          }
         />
       </KpiGrid>
 
