@@ -8,7 +8,7 @@ import { Separator } from "@/components/ui/separator"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import {
   LayoutDashboard, PhoneCall, TrendingUp, Package, PiggyBank,
-  Upload, DatabaseZap, Shield, Users, Clock, Download,
+  Upload, DatabaseZap, Shield, Users, Clock, Download, Languages,
 } from "lucide-react"
 import type { Lang } from "@/context/LanguageContext"
 
@@ -94,6 +94,48 @@ function PageBadge({ children }: { children: React.ReactNode }) {
 function AllUsersContent({ lang }: { lang: Lang }) {
   return (
     <Accordion type="multiple" className="w-full">
+
+      {/* Language */}
+      <AccordionItem value="language">
+        <AccordionTrigger>
+          <span className="flex items-center gap-2">
+            <Languages className="h-4 w-4 text-[#003DA6]" />
+            {lang === 'th' ? 'การเปลี่ยนภาษาของระบบ' : 'Changing the System Language'}
+          </span>
+        </AccordionTrigger>
+        <AccordionContent className="space-y-3 text-sm text-muted-foreground">
+          <p>
+            {lang === 'th'
+              ? 'แดชบอร์ดรองรับ 2 ภาษา ได้แก่ ภาษาไทย (TH) และภาษาอังกฤษ (EN) สามารถเปลี่ยนได้ตลอดเวลา'
+              : 'The dashboard supports two languages — Thai (TH) and English (EN). You can switch at any time without losing your current filters or navigation.'}
+          </p>
+
+          <SectionLabel>{lang === 'th' ? 'วิธีเปลี่ยนภาษา' : 'How to switch'}</SectionLabel>
+          <ol className="space-y-2 list-decimal list-inside text-sm text-muted-foreground">
+            <li>
+              {lang === 'th'
+                ? 'คลิกที่ชื่อผู้ใช้หรือรูปโปรไฟล์ ที่มุมซ้ายล่างของ Sidebar'
+                : 'Click your name or profile picture at the bottom-left of the sidebar.'}
+            </li>
+            <li>
+              {lang === 'th'
+                ? 'เมนู Popup จะปรากฏขึ้น — มองหาแถว "Language"'
+                : 'A popup menu will appear — look for the "Language" row.'}
+            </li>
+            <li>
+              {lang === 'th'
+                ? <>คลิกปุ่ม <span className="font-mono font-semibold bg-muted px-1.5 py-0.5 rounded">TH</span> หรือ <span className="font-mono font-semibold bg-muted px-1.5 py-0.5 rounded">EN</span> เพื่อเปลี่ยนภาษา</>
+                : <>Click the <span className="font-mono font-semibold bg-muted px-1.5 py-0.5 rounded">TH</span> or <span className="font-mono font-semibold bg-muted px-1.5 py-0.5 rounded">EN</span> button to switch.</>}
+            </li>
+          </ol>
+
+          <Note>
+            {lang === 'th'
+              ? 'ระบบจดจำภาษาที่เลือกไว้ในเบราว์เซอร์ ครั้งต่อไปที่เปิดหน้าเว็บจะแสดงภาษาเดิมโดยอัตโนมัติ'
+              : 'Your language preference is saved in the browser. The next time you open the dashboard, it will automatically use the language you last selected.'}
+          </Note>
+        </AccordionContent>
+      </AccordionItem>
 
       {/* Overview */}
       <AccordionItem value="overview">
