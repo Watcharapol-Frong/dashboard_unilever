@@ -440,8 +440,8 @@ export default function ProductsClient() {
           </div>
         </CardHeader>
         <CardContent>
+          {/* Row 1 — Date range */}
           <div className="flex flex-wrap items-center gap-4">
-            {/* Month chips */}
             <MonthChipGroup
               months={months}
               rangeFrom={rangeFrom}
@@ -451,10 +451,10 @@ export default function ProductsClient() {
               onMouseEnter={setHoverMonth}
               onMouseLeave={() => setHoverMonth(null)}
             />
+          </div>
 
-            <div className="w-px h-6 bg-border hidden lg:block" />
-
-            {/* Dimension filters */}
+          {/* Row 2 — Dimension filters */}
+          <div className="flex flex-wrap items-center gap-3 mt-3">
             <MultiSelect
               label="All Brands"
               value={filterBrands}
@@ -490,7 +490,6 @@ export default function ProductsClient() {
               options={opts.subclasses.map(v => ({ value: v, label: v }))}
               width="w-[145px]"
             />
-
             <FilterSelect
               label={t('products.allOrders', lang)}
               value={filterConverted}
@@ -501,7 +500,6 @@ export default function ProductsClient() {
               ]}
               width="w-[165px]"
             />
-
             {opts.cmg_segments.length > 0 && (
               <MultiSelect
                 label={t('common.allSegments', lang)}
@@ -511,7 +509,6 @@ export default function ProductsClient() {
                 width="w-[155px]"
               />
             )}
-
             {(hasFilter || hasRange) && (
               <button onClick={clearAll} className="text-xs text-[#003DA6] hover:underline font-semibold">
                 Reset All
