@@ -17,7 +17,11 @@ import { useDashboardSWR } from '@/hooks/useDashboardSWR'
 import { useMonthRange, lastDayOfMonth } from '@/hooks/useMonthRange'
 import { MonthChipGroup } from '@/components/dashboard/MonthChipGroup'
 import { fmtBaht, fmt, formatTHB } from '@/lib/formatters'
-import { TrendingUp, Target, AlertCircle, Calendar } from 'lucide-react'
+import { TrendingUp, UserPlus, Users, CreditCard, Calendar } from 'lucide-react'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import { DataTable } from '@/components/ui/data-table'
+import { ColumnDef } from '@tanstack/react-table'
+import { Skeleton } from '@/components/ui/skeleton'
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -51,8 +55,17 @@ interface SalesData {
   months: string[]
 }
 
-type Interval  = 'monthly' | 'weekly' | 'custom'
-type ChartView = 'all' | 'converted' | 'not_converted'
+type Interval   = 'monthly' | 'weekly' | 'custom'
+type Conversion = 'all' | 'converted' | 'not_converted'
+
+type AgentRow = {
+  agent: string
+  sales_total: number
+  order_total: number
+  call_total: number
+  converted_customers: number
+  conversion_rate: number
+}
 
 // ── Chart Config ──────────────────────────────────────────────────────────────
 
@@ -126,6 +139,45 @@ function ChannelBar({ label, online, offline }: { label: string; online: number;
   )
 }
 
+// ── Agent Columns ─────────────────────────────────────────────────────────────
+
+const agentColumns: ColumnDef<AgentRow>[] = [
+  {
+    id: 'rank',
+    header: '#',
+    cell: ({ row }) => <span className="text-muted-foreground text-xs">{row.index + 1}</span>,
+  },
+  {
+    accessorKey: 'agent',
+    header: 'Agent',
+    cell: ({ row }) => <span className="font-medium text-sm">{row.original.agent}</span>,
+  },
+  {
+    accessorKey: 'sales_total',
+    header: () => <div className="text-right">HOC Sales</div>,
+    cell: ({ row }) => <div className="text-right tabular-nums text-sm font-medium">{formatTHB(row.original.sales_total)}</div>,
+  },
+  {
+    accessorKey: 'order_total',
+    header: () => <div className="text-right">Orders</div>,
+    cell: ({ row }) => <div className="text-right tabular-nums text-sm">{row.original.order_total.toLocaleString()}</div>,
+  },
+  {
+    accessorKey: 'call_total',
+    header: () => <div className="text-right">Calls</div>,
+    cell: ({ row }) => <div className="text-right tabular-nums text-sm">{row.original.call_total.toLocaleString()}</div>,
+  },
+  {
+    accessorKey: 'conversion_rate',
+    header: () => <div className="text-right">Conv. Rate</div>,
+    cell: ({ row }) => {
+      const v = row.original.conversion_rate * 100
+      const color = v >= 30 ? 'text-green-600' : v >= 15 ? 'text-yellow-600' : 'text-red-500'
+      return <div className={`text-right tabular-nums text-sm font-semibold ${color}`}>{v.toFixed(1)}%</div>
+    },
+  },
+]
+
 // ── Component ─────────────────────────────────────────────────────────────────
 
 export default function SalesClient() {
@@ -133,13 +185,13 @@ export default function SalesClient() {
     rangeFrom, rangeTo, hoverMonth, setHoverMonth,
     handleChipClick: baseHandleChipClick, clearRange, activeRangeLabel,
   } = useMonthRange()
-  const [interval,    setInterval]    = useState<Interval>('custom')
-  const [customStart, setCustomStart] = useState('2026-05-01')
-  const [customEnd,   setCustomEnd]   = useState('2026-05-31')
-  const [channel,    setChannel]    = useState<string[]>([])
-  const [cmg,        setCmg]        = useState<string[]>([])
-  const [agent,      setAgent]      = useState<string[]>([])
-  const [chartView,  setChartView]  = useState<ChartView>('all')
+  const [interval,        setInterval]        = useState<Interval>('custom')
+  const [customStart,     setCustomStart]     = useState('2026-05-01')
+  const [customEnd,       setCustomEnd]       = useState('2026-05-31')
+  const [channel,         setChannel]         = useState<string[]>([])
+  const [cmg,             setCmg]             = useState<string[]>([])
+  const [agent,           setAgent]           = useState<string[]>([])
+  const [conversionView,  setConversionView]  = useState<Conversion>('all')
 
   const handleChipClick = (m: string) => {
     if (interval === 'custom') setInterval('monthly')
@@ -174,14 +226,24 @@ export default function SalesClient() {
 
   const { data, isLoading, isValidating } = useDashboardSWR<SalesData>(apiUrl)
 
-  if (isLoading && !data) return <PageLoading cols={3} />
+  const agentsApiUrl = useMemo(() => {
+    const p = new URLSearchParams()
+    if (effectiveStart) p.set('startDate', effectiveStart)
+    if (effectiveEnd)   p.set('endDate',   effectiveEnd)
+    if (cmg.length > 0) p.set('cmg', cmg.join(','))
+    return `/api/data/overview/agents?${p.toString()}`
+  }, [effectiveStart, effectiveEnd, cmg])
+
+  const { data: agentsData, isLoading: agentsLoading } = useDashboardSWR<AgentRow[]>(agentsApiUrl)
+
+  if (isLoading && !data) return <PageLoading cols={4} />
   if (!data || data.months.length === 0) {
     return <PageEmpty message="No telesales sales data available" hint="Please build mart first." />
   }
 
   const { kpi, by_period, options, months } = data
 
-  const hasFilter = channel.length > 0 || cmg.length > 0 || agent.length > 0
+  const hasFilter = channel.length > 0 || cmg.length > 0 || agent.length > 0 || conversionView !== 'all'
   const hasRange  = !!(rangeFrom || (interval === 'custom'))
 
   const kpiPeriodLabel = kpi.current_period_label ?? null
@@ -190,16 +252,29 @@ export default function SalesClient() {
     ? `${calculatedInterval} · ${durationDays}d`
     : `${calculatedInterval} view`
 
-  // ── Chart data based on chartView ─────────────────────────────────────────
+  // ── Display values based on conversionView ────────────────────────────────
+  const displaySales   = conversionView === 'converted' ? kpi.converted_sales   : conversionView === 'not_converted' ? kpi.not_converted_sales   : kpi.total_sales
+  const displayOrders  = conversionView === 'converted' ? kpi.converted_orders  : conversionView === 'not_converted' ? kpi.not_converted_orders  : kpi.total_orders
+  const displayOnline  = conversionView === 'converted' ? kpi.converted_online  : conversionView === 'not_converted' ? kpi.not_converted_online  : kpi.total_online
+  const displayOffline = conversionView === 'converted' ? kpi.converted_offline : conversionView === 'not_converted' ? kpi.not_converted_offline : kpi.total_offline
+  const displayAvgOV   = displayOrders > 0 ? displaySales / displayOrders : 0
+
+  // ── Chart data based on conversionView ────────────────────────────────────
   const chartData = by_period.map(p => {
-    if (chartView === 'converted') {
+    if (conversionView === 'converted') {
       return { name: p.period_label, Online: p.converted_online, Offline: p.converted_offline }
     }
-    if (chartView === 'not_converted') {
+    if (conversionView === 'not_converted') {
       return { name: p.period_label, Online: p.not_converted_online, Offline: p.not_converted_offline }
     }
     return { name: p.period_label, Online: p.total_online, Offline: p.total_offline }
   })
+
+  const channelBarLabel = conversionView === 'converted'
+    ? 'Converted Orders'
+    : conversionView === 'not_converted'
+    ? 'Not Converted'
+    : 'All Orders'
 
   return (
     <div className="space-y-6">
@@ -266,10 +341,19 @@ export default function SalesClient() {
                 width="w-[150px]"
               />
 
+              <Select value={conversionView} onValueChange={v => setConversionView(v as Conversion)}>
+                <SelectTrigger className="h-7 text-xs w-[155px]"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All Customers</SelectItem>
+                  <SelectItem value="converted">Converted Only</SelectItem>
+                  <SelectItem value="not_converted">Not Converted</SelectItem>
+                </SelectContent>
+              </Select>
+
               {(hasFilter || hasRange) && (
                 <button
                   onClick={() => {
-                    setChannel([]); setCmg([]); setAgent([])
+                    setChannel([]); setCmg([]); setAgent([]); setConversionView('all')
                     clearRange(); setInterval('custom')
                     setCustomStart('2026-05-01'); setCustomEnd('2026-05-31')
                   }}
@@ -297,26 +381,38 @@ export default function SalesClient() {
       </Card>
 
       {/* ── KPI Cards ─────────────────────────────────────────────────────── */}
-      <KpiGrid cols={3}>
+      <KpiGrid cols={4}>
         <KpiCard
           title="Total Sales"
-          value={fmtBaht(kpi.total_sales)}
-          subtitle={`${fmt(kpi.total_qty)} units · ${kpi.total_orders.toLocaleString()} orders`}
+          value={fmtBaht(displaySales)}
+          subtitle={
+            conversionView === 'converted'
+              ? 'Converted orders only'
+              : conversionView === 'not_converted'
+              ? 'Not converted orders'
+              : `${fmt(kpi.total_qty)} units · ${kpi.total_orders.toLocaleString()} orders`
+          }
           icon={TrendingUp}
         />
         <KpiCard
-          title="Converted (HOC Sales)"
-          value={fmtBaht(kpi.converted_sales)}
-          subtitle={`New: ${kpi.new_customers.toLocaleString()} · Repeat: ${kpi.retention_customers.toLocaleString()}`}
-          icon={Target}
+          title="Avg Order Value"
+          value={fmtBaht(displayAvgOV)}
+          subtitle={`${displayOrders.toLocaleString()} orders`}
+          icon={CreditCard}
+        />
+        <KpiCard
+          title="New Customers"
+          value={kpi.new_customers.toLocaleString()}
+          subtitle="Converted new buyers"
+          icon={UserPlus}
           comparison={kpi.cmp_converted_sales ?? undefined}
           comparisonLabel={kpi.comparison_label ?? undefined}
         />
         <KpiCard
-          title="Not Converted"
-          value={fmtBaht(kpi.not_converted_sales)}
-          subtitle={`${kpi.not_converted_orders.toLocaleString()} orders outside attribution window`}
-          icon={AlertCircle}
+          title="Repeat Customers"
+          value={kpi.retention_customers.toLocaleString()}
+          subtitle="Converted repeat buyers"
+          icon={Users}
         />
       </KpiGrid>
 
@@ -333,24 +429,6 @@ export default function SalesClient() {
                   Updating…
                 </span>
               )}
-              {/* chartView toggle */}
-              <div className="flex items-center rounded-md border border-border overflow-hidden text-[10px] font-semibold">
-                {(['all', 'converted', 'not_converted'] as ChartView[]).map((v, i) => (
-                  <button
-                    key={v}
-                    onClick={() => setChartView(v)}
-                    className={[
-                      'px-2.5 py-1 transition-colors',
-                      i > 0 ? 'border-l border-border' : '',
-                      chartView === v
-                        ? 'bg-[#003DA6] text-white'
-                        : 'bg-background text-muted-foreground hover:bg-muted',
-                    ].join(' ')}
-                  >
-                    {v === 'all' ? 'All' : v === 'converted' ? 'Converted' : 'Not Converted'}
-                  </button>
-                ))}
-              </div>
             </div>
             <span className="text-[9px] bg-blue-50 text-[#003DA6] px-1.5 py-0.5 rounded font-bold uppercase shrink-0">
               {intervalBadge}
@@ -388,23 +466,31 @@ export default function SalesClient() {
           </CardHeader>
           <CardContent className="flex flex-col justify-center gap-6 pt-2">
             <ChannelBar
-              label="All Orders"
-              online={kpi.total_online}
-              offline={kpi.total_offline}
+              label={channelBarLabel}
+              online={displayOnline}
+              offline={displayOffline}
             />
-            <ChannelBar
-              label="Converted"
-              online={kpi.converted_online}
-              offline={kpi.converted_offline}
-            />
-            <ChannelBar
-              label="Not Converted"
-              online={kpi.not_converted_online}
-              offline={kpi.not_converted_offline}
-            />
+            <div className="text-center space-y-0.5 pt-2">
+              <div className="text-xs text-muted-foreground">Total Telesales Revenue</div>
+              <div className="text-base font-bold text-foreground">{fmtBaht(displaySales)}</div>
+            </div>
           </CardContent>
         </Card>
       </div>
+
+      {/* ── Agent Performance Leaderboard ─────────────────────────────────── */}
+      <Card>
+        <CardHeader className="pb-3">
+          <CardTitle className="text-sm font-medium">Agent Performance Leaderboard</CardTitle>
+          <p className="text-xs text-muted-foreground">HOC converted sales by agent — responds to date range and segment filters above</p>
+        </CardHeader>
+        <CardContent>
+          {agentsLoading
+            ? <Skeleton className="h-48 w-full" />
+            : <DataTable columns={agentColumns} data={agentsData ?? []} />
+          }
+        </CardContent>
+      </Card>
 
     </div>
   )

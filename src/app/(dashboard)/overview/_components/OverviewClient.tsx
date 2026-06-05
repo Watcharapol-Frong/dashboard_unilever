@@ -3,7 +3,6 @@
 import { useMemo, useState } from 'react'
 import dynamic from 'next/dynamic'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import { Skeleton } from '@/components/ui/skeleton'
 import { KpiCard } from '@/components/dashboard/KpiCard'
 import { KpiGrid } from '@/components/dashboard/KpiGrid'
 import { FilterSelect } from '@/components/dashboard/FilterSelect'
@@ -19,12 +18,10 @@ import {
   TrendingUp, Target, Users, UserPlus, PhoneCall,
   Calendar, Calculator,
 } from 'lucide-react'
-import { DataTable } from '@/components/ui/data-table'
-import { ColumnDef } from '@tanstack/react-table'
 
 const OverviewChart = dynamic(
   () => import('./OverviewChart').then(m => m.OverviewChart),
-  { ssr: false, loading: () => <Skeleton className="h-[640px] w-full rounded-xl" /> }
+  { ssr: false, loading: () => <div className="h-[640px] w-full rounded-xl bg-muted animate-pulse" /> }
 )
 
 type Agg = {
@@ -149,27 +146,6 @@ export default function OverviewClient() {
 
   const { data: callStats } = useDashboardSWR<{ total_calls: number; connected: number }>(callsApiUrl)
 
-  const agentsApiUrl = useMemo(() => {
-    const p = new URLSearchParams()
-    if (rangeFrom) {
-      p.set('startDate', rangeFrom)
-      p.set('endDate', lastDayOfMonth(rangeTo ?? rangeFrom))
-    }
-    if (filterCmg.length > 0) p.set('cmg', filterCmg.join(','))
-    return `/api/data/overview/agents?${p.toString()}`
-  }, [rangeFrom, rangeTo, filterCmg])
-
-  type AgentRow = {
-    agent: string
-    sales_total: number
-    order_total: number
-    call_total: number
-    converted_customers: number
-    conversion_rate: number
-  }
-
-  const { data: agentsData, isLoading: agentsLoading } = useDashboardSWR<AgentRow[]>(agentsApiUrl)
-
   // ROI uses month-level data regardless of CMG filter (costs are not CMG-specific)
   const roiKpi = useMemo(() => {
     const effectiveTo = rangeTo ?? (rangeFrom ? hoverMonth : null)
@@ -191,43 +167,6 @@ export default function OverviewClient() {
       return { month_label: mRows[0]?.month_label ?? month, ...agg }
     })
   }, [mappedFiltered, filterChannel])
-
-  const agentColumns: ColumnDef<AgentRow>[] = [
-    {
-      id: 'rank',
-      header: '#',
-      cell: ({ row }) => <span className="text-muted-foreground text-xs">{row.index + 1}</span>,
-    },
-    {
-      accessorKey: 'agent',
-      header: 'Agent',
-      cell: ({ row }) => <span className="font-medium text-sm">{row.original.agent}</span>,
-    },
-    {
-      accessorKey: 'sales_total',
-      header: () => <div className="text-right">HOC Sales</div>,
-      cell: ({ row }) => <div className="text-right tabular-nums text-sm font-medium">{formatTHB(row.original.sales_total)}</div>,
-    },
-    {
-      accessorKey: 'order_total',
-      header: () => <div className="text-right">Orders</div>,
-      cell: ({ row }) => <div className="text-right tabular-nums text-sm">{row.original.order_total.toLocaleString()}</div>,
-    },
-    {
-      accessorKey: 'call_total',
-      header: () => <div className="text-right">Calls</div>,
-      cell: ({ row }) => <div className="text-right tabular-nums text-sm">{row.original.call_total.toLocaleString()}</div>,
-    },
-    {
-      accessorKey: 'conversion_rate',
-      header: () => <div className="text-right">Conv. Rate</div>,
-      cell: ({ row }) => {
-        const v = row.original.conversion_rate * 100
-        const color = v >= 30 ? 'text-green-600' : v >= 15 ? 'text-yellow-600' : 'text-red-500'
-        return <div className={`text-right tabular-nums text-sm font-semibold ${color}`}>{v.toFixed(1)}%</div>
-      },
-    },
-  ]
 
   if (isLoading) return <PageLoading cols={6} />
   if (rows.length === 0) return (
@@ -355,18 +294,6 @@ export default function OverviewClient() {
         endDate={rangeTo ?? rangeFrom}
       />
 
-      <Card>
-        <CardHeader className="pb-3">
-          <CardTitle className="text-sm font-medium">Agent Performance Leaderboard</CardTitle>
-          <p className="text-xs text-muted-foreground">HOC converted sales by agent — responds to date range and segment filters above</p>
-        </CardHeader>
-        <CardContent>
-          {agentsLoading
-            ? <Skeleton className="h-48 w-full" />
-            : <DataTable columns={agentColumns} data={agentsData ?? []} />
-          }
-        </CardContent>
-      </Card>
     </div>
   )
 }
