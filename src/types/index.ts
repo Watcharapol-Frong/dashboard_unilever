@@ -131,9 +131,15 @@ export interface ProductRow {
   brands: string | null
   product_name_th: string | null
   product_name_en: string | null
+  class_name: string | null
+  subclass: string | null
+  senior_buyer_name: string | null
+  buyer_name: string | null
   is_uni_hoc_pd: boolean
   total_qty: number
   total_sales: number
+  new_customers: number
+  retention_customers: number
   pct_of_total: number
 }
 

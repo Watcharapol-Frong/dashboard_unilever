@@ -25,25 +25,9 @@ import { columns as baseProductColumns } from '../columns'
 import { Package, ShoppingCart, TrendingUp, BarChart2, Calendar, UserPlus, Users } from 'lucide-react'
 import { ColumnDef } from '@tanstack/react-table'
 import { DataTableColumnHeader } from '@/components/ui/data-table-column-header'
+import { ProductRow } from '@/types'
 
 // ── Types ─────────────────────────────────────────────────────────────────────
-
-interface ExtProductRow {
-  prod_num: string
-  brands: string | null
-  product_name_th: string | null
-  product_name_en: string | null
-  class_name: string | null
-  subclass: string | null
-  senior_buyer_name: string | null
-  buyer_name: string | null
-  is_uni_hoc_pd: boolean
-  total_qty: number
-  total_sales: number
-  new_customers: number
-  retention_customers: number
-  pct_of_total: number
-}
 
 interface BrandRow {
   brands: string
@@ -81,7 +65,7 @@ interface ProductOptions {
 }
 
 interface ProductData {
-  by_product: ExtProductRow[]
+  by_product: ProductRow[]
   by_brand: BrandRow[]
   by_buyer: BuyerRow[]
   by_brand_trend: Record<string, string | number>[]
@@ -109,7 +93,7 @@ function getSegment(p: { new_customers: number; retention_customers: number }): 
 
 // ── New vs Retention columns ──────────────────────────────────────────────────
 
-const newVsRetentionColumns: ColumnDef<ExtProductRow>[] = [
+const newVsRetentionColumns: ColumnDef<ProductRow>[] = [
   {
     accessorKey: 'prod_num',
     header: ({ column }) => <DataTableColumnHeader column={column} title="Product #" />,
@@ -621,7 +605,7 @@ export default function ProductsClient() {
             {/* ── Top SKUs ────────────────────────────────────────────── */}
             <TabsContent value="products" className="pt-2">
               <DataTable
-                columns={baseProductColumns as ColumnDef<ExtProductRow>[]}
+                columns={baseProductColumns as ColumnDef<ProductRow>[]}
                 data={filteredProducts}
                 searchValue={prodSearch}
                 onSearchChange={setProdSearch}
