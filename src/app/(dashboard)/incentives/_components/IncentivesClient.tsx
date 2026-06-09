@@ -1,6 +1,8 @@
 'use client'
 
 import { useMemo, useState } from 'react'
+import { useLanguage } from '@/context/LanguageContext'
+import { t } from '@/lib/i18n'
 import { ComposedChart, Bar, Line, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip } from 'recharts'
 import { Card, CardContent } from '@/components/ui/card'
 import { KpiCard } from '@/components/dashboard/KpiCard'
@@ -77,7 +79,7 @@ const summaryColumns: ColumnDef<MonthlySummary>[] = [
                   <Info className="h-3.5 w-3.5 text-amber-500 cursor-default shrink-0" />
                 </TooltipTrigger>
                 <TooltipContent side="right" className="max-w-[260px] text-xs">
-                  DISTRIBUTOR CMG is excluded from HOC Sales, Achievement %, Incentive, and ROI calculations from May 2025 onwards.
+                  DISTRIBUTOR CMG is excluded from HOC Sales, Achievement %, Incentive, and ROI calculations from May 2026 onwards. FOOD RETAILER, HORECA, and END USER are included.
                 </TooltipContent>
               </Tooltip>
             </TooltipProvider>
@@ -123,6 +125,7 @@ const summaryColumns: ColumnDef<MonthlySummary>[] = [
 ]
 
 export default function IncentivesClient() {
+  const { lang } = useLanguage()
   const { data, isLoading } = useDashboardSWR<IncentivesKpi>('/api/data/incentives')
   const [activeTab, setActiveTab] = useState('summary')
 
@@ -137,7 +140,7 @@ export default function IncentivesClient() {
 
   if (isLoading) return <PageLoading />
   if (!data || data.monthly_summary.length === 0) {
-    return <PageEmpty message="No incentive data available" hint="Please upload agent headcounts, costs, targets & incentives data and rebuild mart." />
+    return <PageEmpty message={t('incentives.noData', lang)} hint={t('common.buildFirst', lang)} />
   }
 
   const totalExpense   = data.monthly_summary.reduce((sum, m) => sum + m.total_expense,         0)
@@ -152,19 +155,25 @@ export default function IncentivesClient() {
     <div className="space-y-6">
       <KpiGrid cols={2}>
         <KpiCard
-          title="Incentive Per Head"
+          title={t('incentives.incentivePaid', lang)}
           value={latestPerHead > 0 ? formatTHB(latestPerHead) : '—'}
           subtitle="Latest month · per agent"
           icon={PiggyBank}
-          tooltip={`HOC Sales: ${formatTHB(totalSales)}\nTarget: ${formatTHB(totalTarget)}\nAchievement: ${grandAchieve.toFixed(1)}%\n\nIncentive rate per agent head for the most recent month — determined by the achievement tier (FOOD RETAILER + HORECA sales vs target). Earlier months may have a different rate.`}
+          tooltip={lang === 'th'
+            ? `HOC Sales: ${formatTHB(totalSales)}\nTarget: ${formatTHB(totalTarget)}\nAchievement: ${grandAchieve.toFixed(1)}%\n\nอัตรา incentive ต่อหัว agent สำหรับเดือนล่าสุด — กำหนดตาม tier ที่ทำได้ (ยอดขาย FOOD RETAILER + HORECA เทียบ target) เดือนก่อนหน้าอาจใช้อัตราที่ต่างกัน`
+            : `HOC Sales: ${formatTHB(totalSales)}\nTarget: ${formatTHB(totalTarget)}\nAchievement: ${grandAchieve.toFixed(1)}%\n\nIncentive rate per agent head for the most recent month — determined by the achievement tier (FOOD RETAILER + HORECA sales vs target). Earlier months may have a different rate.`
+          }
         />
         <KpiCard
-          title="Overall Program ROI"
+          title={t('incentives.roi', lang)}
           value={grandRoi > 0 ? `${grandRoi.toFixed(2)}x` : '—'}
           subtitle="Unilever HOC sales / Expense"
           valueClassName={colorRoi(grandRoi)}
           icon={TrendingUp}
-          tooltip="HOC Sales ÷ Total Program Expense across all displayed months. Total Expense = incentives + agent salaries + supervisor salaries. A value of 2.0x means every ฿1 spent returns ฿2 in HOC sales."
+          tooltip={lang === 'th'
+            ? 'HOC Sales ÷ ค่าใช้จ่ายรวมของโปรแกรมทุกเดือนที่แสดง ค่าใช้จ่ายรวม = incentive + เงินเดือน agent + เงินเดือน supervisor ค่า 2.0x หมายถึงทุก ฿1 ที่ลงทุนได้ยอดขาย HOC กลับมา ฿2'
+            : 'HOC Sales ÷ Total Program Expense across all displayed months. Total Expense = incentives + agent salaries + supervisor salaries. A value of 2.0x means every ฿1 spent returns ฿2 in HOC sales.'
+          }
         />
       </KpiGrid>
 

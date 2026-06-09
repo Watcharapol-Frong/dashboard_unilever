@@ -30,60 +30,55 @@ import {
   SidebarMenuItem,
   SidebarRail,
 } from "@/components/ui/sidebar"
-
-const navMain = [
-  {
-    title: "Overview",
-    url: "/overview",
-    icon: IconDashboard,
-  },
-  {
-    title: "Sales",
-    url: "#",
-    icon: IconShoppingCart,
-    items: [
-      { title: "Sales Performance", url: "/sales" },
-      { title: "Orders",            url: "/sales/orders" },
-    ],
-  },
-  {
-    title: "Telesales",
-    url: "#",
-    icon: IconPhoneCall,
-    items: [
-      { title: "Telesales Overview", url: "/telesales" },
-      { title: "Call Log",           url: "/telesales/call-log" },
-    ],
-  },
-  {
-    title: "Products",
-    url: "/products",
-    icon: IconPackage,
-  },
-  {
-    title: "Programs",
-    url: "#",
-    icon: IconGift,
-    items: [
-      { title: "Incentives & Bonuses", url: "/incentives" },
-    ],
-  },
-]
-
-const navSecondary = [
-  { title: "Get Help", url: "#", icon: IconHelp },
-]
-
-const adminDocuments = [
-  { name: "Leads",    url: "/leads",    icon: IconUsers },
-  { name: "Data Hub", url: "/data-hub", icon: IconUpload },
-  { name: "Exports",  url: "/exports",  icon: IconFileExport, desktopOnly: true },
-]
+import { useLanguage } from "@/context/LanguageContext"
+import { t } from "@/lib/i18n"
 
 export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
   const pathname = usePathname()
   const { user } = useUser()
   const isAdmin = user?.publicMetadata?.role === 'admin'
+  const { lang } = useLanguage()
+
+  const navMain = [
+    { title: t('nav.overview', lang),  url: '/overview',  icon: IconDashboard },
+    {
+      title: t('nav.sales', lang),
+      url: '#',
+      icon: IconShoppingCart,
+      items: [
+        { title: t('nav.salesPerformance', lang), url: '/sales' },
+        { title: t('nav.orders', lang),           url: '/sales/orders' },
+      ],
+    },
+    {
+      title: t('nav.telesales', lang),
+      url: '#',
+      icon: IconPhoneCall,
+      items: [
+        { title: t('nav.telesalesOverview', lang), url: '/telesales' },
+        { title: t('nav.callLog', lang),           url: '/telesales/call-log' },
+      ],
+    },
+    { title: t('nav.products', lang),  url: '/products',  icon: IconPackage },
+    {
+      title: t('nav.programs', lang),
+      url: '#',
+      icon: IconGift,
+      items: [
+        { title: t('nav.incentives', lang), url: '/incentives' },
+      ],
+    },
+  ]
+
+  const navSecondary = [
+    { title: t('nav.getHelp', lang), url: '#', icon: IconHelp },
+  ]
+
+  const adminDocuments = [
+    { name: t('nav.leads', lang),   url: '/leads',    icon: IconUsers },
+    { name: t('nav.dataHub', lang), url: '/data-hub', icon: IconUpload },
+    { name: t('nav.exports', lang), url: '/exports',  icon: IconFileExport, desktopOnly: true },
+  ]
 
   const activeNavMain = navMain.map(item => {
     const hasActiveSubItem = item.items?.some(sub => pathname === sub.url)

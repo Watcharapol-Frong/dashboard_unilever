@@ -54,6 +54,8 @@ export const CACHE = {
   SHORT:  'public, s-maxage=60, stale-while-revalidate=120',
   /** 5 min CDN / 10 min stale — default for most data routes */
   MEDIUM: 'public, s-maxage=300, stale-while-revalidate=600',
+  /** 10 min CDN / 20 min stale — expensive aggregations (funnel charts) */
+  FUNNEL: 'public, s-maxage=600, stale-while-revalidate=1200',
   /** 1 h CDN / 2 h stale — stable master data (e.g. product options) */
   LONG:   'public, s-maxage=3600, stale-while-revalidate=7200',
   /** Disable caching — real-time status endpoints */

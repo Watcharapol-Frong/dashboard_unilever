@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server'
 import { withAuth } from '@/lib/auth'
-import { queryOne } from '@/lib/db'
+import { query } from '@/lib/db'
 import { setCacheHeader } from '@/lib/query'
 
 export const dynamic = 'force-dynamic'
@@ -13,41 +13,32 @@ export async function GET(request: Request) {
     const cmg       = (searchParams.get('cmg') || '').split(',').filter(Boolean)
 
     const params: any[] = []
-    const conds: string[] = ['tc.first_connected_date IS NOT NULL']
+    const conds: string[] = []
 
     const push = (v: any) => { params.push(v); return params.length }
 
-    if (startDate) conds.push(`tc.first_connected_date >= $${push(startDate)}::date`)
-    if (endDate)   conds.push(`tc.first_connected_date <= $${push(endDate)}::date`)
+    if (startDate) conds.push(`order_date >= $${push(startDate)}::date`)
+    if (endDate)   conds.push(`order_date <= $${push(endDate)}::date`)
+    if (cmg.length > 0) conds.push(`primary_cmg = ANY($${push(cmg)})`)
 
-    const convConds: string[] = [`customer_type IN ('new_customer', 'retention')`]
-    if (cmg.length > 0) convConds.push(`dynamic_cmg = ANY($${push(cmg)})`)
+    const where = conds.length > 0 ? `WHERE ${conds.join(' AND ')}` : ''
 
-    const where = `WHERE ${conds.join(' AND ')}`
-
-    const [callsRow, convRow] = await Promise.all([
-      queryOne<{ total_calls: string }>(`
-        SELECT COUNT(DISTINCT tc.mmid)::text AS total_calls
-        FROM telesales_calls tc
-        ${where}
-      `, params),
-      queryOne<{ converted: string }>(`
-        WITH converted_mmids AS (
-          SELECT DISTINCT mmid FROM sales_hoc_orders
-          WHERE ${convConds.join(' AND ')}
-        )
-        SELECT COUNT(DISTINCT tc.mmid)::text AS converted
-        FROM telesales_calls tc
-        JOIN converted_mmids cm ON cm.mmid = tc.mmid
-        ${where}
-      `, params),
-    ])
+    const row = await query<{ total_calls: string; connected: string }>(`
+      SELECT
+        COUNT(DISTINCT mmid)::text AS total_calls,
+        COUNT(DISTINCT mmid) FILTER (
+          WHERE call_status NOT LIKE 'ไม่รับสาย%'
+            AND call_status IS DISTINCT FROM 'ปิดเครื่อง/ติดต่อไม่ได้'
+        )::text AS connected
+      FROM sales_hoc_orders
+      ${where}
+    `, params)
 
     const res = NextResponse.json({
       ok: true,
       data: {
-        total_calls: Number(callsRow?.total_calls ?? 0),
-        converted:   Number(convRow?.converted    ?? 0),
+        total_calls: Number(row[0]?.total_calls ?? 0),
+        connected:   Number(row[0]?.connected   ?? 0),
       },
     })
     setCacheHeader(res, 'MEDIUM')

@@ -45,6 +45,28 @@ export const columns: ColumnDef<ProductRow>[] = [
     ),
   },
   {
+    accessorKey: "new_customers",
+    header: ({ column }) => (
+      <DataTableColumnHeader column={column} title="New Customers" className="justify-end" />
+    ),
+    cell: ({ row }) => (
+      <div className="text-right font-semibold text-emerald-600">
+        {formatNumber(row.original.new_customers)}
+      </div>
+    ),
+  },
+  {
+    accessorKey: "retention_customers",
+    header: ({ column }) => (
+      <DataTableColumnHeader column={column} title="Repeat" className="justify-end" />
+    ),
+    cell: ({ row }) => (
+      <div className="text-right font-semibold text-teal-600">
+        {formatNumber(row.original.retention_customers)}
+      </div>
+    ),
+  },
+  {
     accessorKey: "total_qty",
     header: ({ column }) => (
       <DataTableColumnHeader column={column} title="Qty Sold" className="justify-end" />

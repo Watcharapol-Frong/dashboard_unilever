@@ -15,8 +15,9 @@ export async function GET() {
         senior_buyer_name: string | null
         buyer_name: string | null
         subclass: string | null
+        dynamic_cmg: string | null
       }>(`
-        SELECT DISTINCT m.brands, m.class_name, p.senior_buyer_name, p.buyer_name, m.subclass
+        SELECT DISTINCT m.brands, m.class_name, p.senior_buyer_name, p.buyer_name, m.subclass, m.dynamic_cmg
         FROM sales_hoc_orders m
         LEFT JOIN products p ON m.prod_num = p.prod_num
         ORDER BY m.brands, m.class_name
@@ -32,12 +33,13 @@ export async function GET() {
     const res = NextResponse.json({
       ok: true,
       data: {
-        brands:        unique(rows.map(r => r.brands)).sort(),
-        class_names:   unique(rows.map(r => r.class_name)).sort(),
+        brands:       unique(rows.map(r => r.brands)).sort(),
+        class_names:  unique(rows.map(r => r.class_name)).sort(),
         senior_buyers: unique(rows.map(r => r.senior_buyer_name)).sort(),
-        buyers:        unique(rows.map(r => r.buyer_name)).sort(),
-        subclasses:    unique(rows.map(r => r.subclass)).sort(),
-        months:        monthsRaw.map(r => r.month),
+        buyers:       unique(rows.map(r => r.buyer_name)).sort(),
+        subclasses:   unique(rows.map(r => r.subclass)).sort(),
+        cmg_segments: unique(rows.map(r => r.dynamic_cmg)).sort(),
+        months:       monthsRaw.map(r => r.month),
       },
     })
     setCacheHeader(res, 'LONG')

@@ -1,8 +1,17 @@
 /************ CONFIG ************
  * อย่า hardcode secret ที่นี่
  * ไปที่ Extensions → Apps Script → Project Settings → Script Properties แล้วเพิ่ม:
- *   DASHBOARD_URL  =  https://your-app.vercel.app
- *   INGEST_SECRET  =  <ค่า INGEST_API_SECRET จาก Vercel env>
+ *
+ *   DASHBOARD_URL          =  https://your-app.vercel.app
+ *   INGEST_SECRET          =  <ค่า INGEST_API_SECRET จาก Vercel env>
+ *
+ * ถ้า Vercel Security Checkpoint block request (HTTP 429):
+ *   VERCEL_BYPASS_SECRET   =  <ค่าจาก Vercel Dashboard → Settings → Deployment Protection
+ *                              → "Protection Bypass for Automation" → copy secret>
+ *
+ * Optional:
+ *   FALLBACK_DATE          =  2026-01-01  (ใช้เป็น threshold เมื่อ API ติดต่อไม่ได้)
+ *                             ถ้าไม่ตั้งค่าจะ throw error แทน
  ********************************/
 function getConfig_() {
   const props  = PropertiesService.getScriptProperties();
@@ -16,7 +25,23 @@ function getConfig_() {
       "  INGEST_SECRET = <secret>"
     );
   }
-  return { url: url.replace(/\/$/, ""), secret };
+  return {
+    url:           url.replace(/\/$/, ""),
+    secret,
+    bypassSecret:  props.getProperty("VERCEL_BYPASS_SECRET") || null,
+    fallbackDate:  props.getProperty("FALLBACK_DATE") || null,
+  };
+}
+
+/** สร้าง headers ที่ใช้กับทุก request — รวม bypass secret ถ้ามี */
+function buildHeaders_(secret, bypassSecret) {
+  const h = {
+    "Authorization": `Bearer ${secret}`,
+    "Content-Type":  "application/json",
+    "User-Agent":    "GoogleAppsScript-DashboardSync/1.0",
+  };
+  if (bypassSecret) h["x-vercel-protection-bypass"] = bypassSecret;
+  return h;
 }
 
 function exportIncrementalToStorage() {
@@ -103,10 +128,10 @@ function exportIncrementalToStorage() {
 
 /* ================= POST ไปยัง Next.js API ================= */
 function postToAPI_(records) {
-  const { url, secret } = getConfig_();
+  const { url, secret, bypassSecret } = getConfig_();
   const options = {
     method:             "post",
-    headers:            { "Authorization": `Bearer ${secret}`, "Content-Type": "application/json" },
+    headers:            buildHeaders_(secret, bypassSecret),
     payload:            JSON.stringify({ records }),
     muteHttpExceptions: true,
   };
@@ -130,32 +155,164 @@ function postToAPI_(records) {
 
 /* ================= ดึง Threshold Date จาก API ================= */
 function getThresholdDate_() {
-  const { url, secret } = getConfig_();
+  const { url, secret, bypassSecret, fallbackDate } = getConfig_();
   const options = {
     method:             "get",
-    headers:            { "Authorization": `Bearer ${secret}` },
+    headers:            buildHeaders_(secret, bypassSecret),
     muteHttpExceptions: true,
   };
 
+  let statusCode = null;
+  let responseText = "";
+
   try {
     const response = UrlFetchApp.fetch(`${url}/api/data/ingest/threshold`, options);
-    if (response.getResponseCode() === 200) {
-      const data = JSON.parse(response.getContentText());
-      if (data.date) {
-        const d = new Date(data.date);
-        d.setDate(d.getDate() - 3); // overlap 3 วันเพื่อป้องกัน miss
-        return formatDateForExport_(d);
-      }
-    }
-  } catch (e) {
-    Logger.log("ไม่สามารถดึงวันที่จาก API ได้: " + e.message);
-  }
+    statusCode    = response.getResponseCode();
+    responseText  = response.getContentText();
 
-  // Fallback: 3 วันที่แล้ว
-  const fallback = new Date();
-  fallback.setDate(fallback.getDate() - 3);
-  return formatDateForExport_(fallback);
+    if (statusCode === 401) {
+      throw new Error(
+        `[threshold] 401 Unauthorized — INGEST_SECRET ไม่ตรงกับ Vercel env\n` +
+        `ตรวจสอบ: Project Settings → Script Properties → INGEST_SECRET`
+      );
+    }
+
+    if (statusCode !== 200) {
+      throw new Error(`[threshold] HTTP ${statusCode}: ${responseText}`);
+    }
+
+    const data = JSON.parse(responseText);
+    if (!data.date) {
+      // DB ยังไม่มีข้อมูล (first run) — ใช้ fallbackDate หรือ 90 วันที่แล้ว
+      const d = new Date();
+      d.setDate(d.getDate() - 90);
+      const safe = fallbackDate || formatDateForExport_(d);
+      Logger.log(`[threshold] DB ว่างเปล่า → ใช้ threshold = ${safe}`);
+      return safe;
+    }
+
+    // ถอยหลัง 3 วัน เพื่อป้องกัน miss ข้อมูลที่ sync ช้า
+    const d = new Date(data.date + "T00:00:00");
+    d.setDate(d.getDate() - 3);
+    const result = formatDateForExport_(d);
+    Logger.log(`[threshold] max DB date = ${data.date} → threshold = ${result}`);
+    return result;
+
+  } catch (e) {
+    if (statusCode !== null) {
+      // API ตอบกลับแล้วแต่เกิด error → อย่า fallback เงียบๆ
+      throw e;
+    }
+    // Network error เท่านั้นที่จะ fallback
+    Logger.log(`[threshold] Network error: ${e.message}`);
+    if (fallbackDate) {
+      Logger.log(`[threshold] ใช้ FALLBACK_DATE = ${fallbackDate}`);
+      return fallbackDate;
+    }
+    throw new Error(
+      `[threshold] ติดต่อ API ไม่ได้และไม่มี FALLBACK_DATE ตั้งไว้\n` +
+      `หยุด script เพื่อป้องกัน over-sync\n` +
+      `ถ้าต้องการ fallback ให้เพิ่ม Script Properties: FALLBACK_DATE = YYYY-MM-DD`
+    );
+  }
 }
+
+/* ================= TEST / DEBUG FUNCTIONS ================= */
+
+/**
+ * รันเพื่อตรวจสอบว่า INGEST_SECRET และ DASHBOARD_URL ถูกต้องหรือไม่
+ * ดูผลใน Execution log
+ */
+function testConnection() {
+  const { url, secret, bypassSecret } = getConfig_();
+  Logger.log(`DASHBOARD_URL        = ${url}`);
+  Logger.log(`INGEST_SECRET        = ${secret.slice(0, 4)}${"*".repeat(Math.max(0, secret.length - 4))}`);
+  Logger.log(`VERCEL_BYPASS_SECRET = ${bypassSecret ? bypassSecret.slice(0, 4) + "****" : "(not set)"}`);
+
+  const res = UrlFetchApp.fetch(`${url}/api/data/ingest/threshold`, {
+    method:             "get",
+    headers:            buildHeaders_(secret, bypassSecret),
+    muteHttpExceptions: true,
+  });
+  const code = res.getResponseCode();
+  const body = res.getContentText();
+  Logger.log(`HTTP ${code}: ${body}`);
+
+  if (code === 200) Logger.log("✅ เชื่อมต่อสำเร็จ");
+  else if (code === 401) Logger.log("❌ Secret ไม่ตรง — ตรวจสอบ INGEST_SECRET ใน Script Properties");
+  else Logger.log(`⚠️ Unexpected response`);
+}
+
+/**
+ * Debug: แสดง 5 records แรกจากทุก Lead sheet
+ * พร้อมบอกว่าแต่ละ row ถูกกรองออกด้วยเหตุผลอะไร
+ */
+function debugLeadSheets() {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const mapSheet = ss.getSheetByName("schema_map");
+  if (!mapSheet) { Logger.log("❌ ไม่พบแท็บ schema_map"); return; }
+  const columnDictionary = buildColumnDictionary_(mapSheet);
+
+  Logger.log("=== schema_map keys ===");
+  Logger.log(JSON.stringify(Object.keys(columnDictionary).slice(0, 20)));
+
+  const thresholdDateStr = getThresholdDate_();
+
+  const allSheets = ss.getSheets();
+  allSheets.forEach(sheet => {
+    const sheetName = sheet.getName();
+    if (!sheetName.startsWith("Lead")) return;
+
+    Logger.log(`\n=== Sheet: ${sheetName} ===`);
+    const data = sheet.getDataRange().getValues();
+    if (data.length < 2) { Logger.log("  (ข้อมูลน้อยกว่า 2 แถว)"); return; }
+
+    const headerRowIndex = findHeaderRow_(data);
+    if (headerRowIndex === -1) { Logger.log("  (หา header row ไม่เจอ)"); return; }
+
+    const rawHeaders = data[headerRowIndex];
+    Logger.log(`  header row index = ${headerRowIndex}`);
+    Logger.log(`  raw headers = ${JSON.stringify(rawHeaders.slice(0, 10))}`);
+
+    const headerMapping = mapHeadersToTarget_(rawHeaders, columnDictionary);
+    Logger.log(`  mapped fields = ${JSON.stringify(headerMapping)}`);
+
+    let shown = 0;
+    for (let r = headerRowIndex + 1; r < data.length && shown < 5; r++) {
+      const row = data[r];
+      if (isRowEmpty_(row)) continue;
+
+      let record = { lead_customers: sheetName.replace(/^Lead\s*/i, "").trim() };
+      let hasCoreData = false;
+
+      Object.keys(headerMapping).forEach(targetField => {
+        const colIndex = headerMapping[targetField];
+        let val = row[colIndex];
+        if (targetField === "first_connected_date" && val !== "") {
+          const parsedDate = parseDateFlexible_(val);
+          val = parsedDate ? formatDateForExport_(parsedDate) : "";
+        } else if (val instanceof Date) {
+          val = formatDateForExport_(val);
+        } else {
+          val = String(val || "").trim();
+        }
+        if (targetField === "mmid") val = cleanMMID_(val);
+        if (targetField === "mobile") val = cleanMobile_(val);
+        record[targetField] = val;
+        if (targetField === "mmid" && val !== "") hasCoreData = true;
+      });
+
+      const contactDate = record["first_connected_date"];
+      const passDate = contactDate && contactDate > thresholdDateStr;
+
+      Logger.log(`  row ${r}: mmid=${record["mmid"] || "(empty)"} | first_connected_date=${contactDate || "(empty)"} | hasCoreData=${hasCoreData} | passDate=${passDate} (threshold=${thresholdDateStr})`);
+      shown++;
+    }
+    if (shown === 0) Logger.log("  (ทุก row ว่างเปล่า)");
+  });
+}
+
+
 
 /* ================= HELPER FUNCTIONS ================= */
 

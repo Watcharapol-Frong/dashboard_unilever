@@ -7,6 +7,9 @@ export const dynamic = 'force-dynamic'
 
 type Interval = 'daily' | 'weekly' | 'monthly'
 
+const CONV     = "customer_type IN ('new_customer','retention')"
+const NOT_CONV = "customer_type IN ('first_order_not_converted','retention_not_converted')"
+
 function periodExpr(interval: Interval) {
   if (interval === 'daily')  return 'order_date'
   if (interval === 'weekly') return "DATE_TRUNC('week', order_date)::date"
@@ -25,7 +28,6 @@ function buildWhere(
   channel: string[],
   cmg: string[],
   agent: string[],
-  conversion: string,
 ) {
   const conditions: string[] = []
   const params: any[] = []
@@ -34,51 +36,52 @@ function buildWhere(
   addFilter(params, conditions, channel, 'channel')
   addFilter(params, conditions, cmg, 'dynamic_cmg')
   addFilter(params, conditions, agent, 'agent')
-  if (conversion === 'converted') {
-    conditions.push(`customer_type IN ('new_customer', 'retention')`)
-  } else if (conversion === 'not_converted') {
-    conditions.push(`customer_type IN ('first_order_not_converted', 'retention_not_converted')`)
-  }
   return { where: toWhere(conditions), params }
 }
 
 async function fetchKpis(where: string, params: any[]) {
   return queryOne<{
-    total_sales: string; online_sales: string; offline_sales: string
-    total_orders: string; new_customers: string; retention_customers: string; total_qty: string
+    total_sales: string; total_online: string; total_offline: string
+    total_orders: string; total_qty: string
+    converted_sales: string; converted_online: string; converted_offline: string
+    converted_orders: string; new_customers: string; retention_customers: string
+    not_converted_sales: string; not_converted_online: string; not_converted_offline: string
+    not_converted_orders: string
   }>(`
     SELECT
-      COALESCE(SUM(sales_in_vat), 0)::text                                                       AS total_sales,
-      COALESCE(SUM(CASE WHEN channel='online'  THEN sales_in_vat ELSE 0 END), 0)::text           AS online_sales,
-      COALESCE(SUM(CASE WHEN channel='offline' THEN sales_in_vat ELSE 0 END), 0)::text           AS offline_sales,
-      COUNT(DISTINCT order_number)::text                                                          AS total_orders,
-      COUNT(DISTINCT mmid) FILTER (WHERE customer_type IN ('new_customer','first_order_not_converted'))::text AS new_customers,
-      COUNT(DISTINCT mmid) FILTER (WHERE customer_type IN ('retention','retention_not_converted'))::text       AS retention_customers,
-      COALESCE(SUM(sales_qty), 0)::text                                                          AS total_qty
+      COALESCE(SUM(sales_in_vat), 0)::text                                                                         AS total_sales,
+      COALESCE(SUM(CASE WHEN channel='online'  THEN sales_in_vat ELSE 0 END), 0)::text                             AS total_online,
+      COALESCE(SUM(CASE WHEN channel='offline' THEN sales_in_vat ELSE 0 END), 0)::text                             AS total_offline,
+      COUNT(DISTINCT order_number)::text                                                                            AS total_orders,
+      COALESCE(SUM(sales_qty), 0)::text                                                                            AS total_qty,
+
+      COALESCE(SUM(sales_in_vat)             FILTER (WHERE ${CONV}), 0)::text                                      AS converted_sales,
+      COALESCE(SUM(CASE WHEN channel='online'  THEN sales_in_vat ELSE 0 END) FILTER (WHERE ${CONV}), 0)::text     AS converted_online,
+      COALESCE(SUM(CASE WHEN channel='offline' THEN sales_in_vat ELSE 0 END) FILTER (WHERE ${CONV}), 0)::text     AS converted_offline,
+      COUNT(DISTINCT order_number)           FILTER (WHERE ${CONV})::text                                          AS converted_orders,
+      COUNT(DISTINCT mmid)                   FILTER (WHERE customer_type = 'new_customer')::text                   AS new_customers,
+      COUNT(DISTINCT mmid)                   FILTER (WHERE customer_type = 'retention')::text                      AS retention_customers,
+
+      COALESCE(SUM(sales_in_vat)             FILTER (WHERE ${NOT_CONV}), 0)::text                                  AS not_converted_sales,
+      COALESCE(SUM(CASE WHEN channel='online'  THEN sales_in_vat ELSE 0 END) FILTER (WHERE ${NOT_CONV}), 0)::text AS not_converted_online,
+      COALESCE(SUM(CASE WHEN channel='offline' THEN sales_in_vat ELSE 0 END) FILTER (WHERE ${NOT_CONV}), 0)::text AS not_converted_offline,
+      COUNT(DISTINCT order_number)           FILTER (WHERE ${NOT_CONV})::text                                      AS not_converted_orders
     FROM sales_hoc_orders
     ${where}
   `, params)
 }
 
-// Returns last 2 complete periods (most-recent first) — full KPI fields for each
+// Returns last 2 complete periods (most-recent first) — period + period_label + converted_sales for scope
 async function fetchLastTwoPeriods(interval: Interval, where: string, params: any[]) {
   const grp = periodExpr(interval)
   const lbl = labelExpr(interval)
   return query<{
-    period: string; period_label: string
-    total_sales: string; online_sales: string; offline_sales: string
-    total_orders: string; new_customers: string; retention_customers: string; total_qty: string
+    period: string; period_label: string; converted_sales: string
   }>(`
     SELECT
       (${grp})::text AS period,
-      ${lbl} AS period_label,
-      COALESCE(SUM(sales_in_vat), 0)::text                                                       AS total_sales,
-      COALESCE(SUM(CASE WHEN channel='online'  THEN sales_in_vat ELSE 0 END), 0)::text           AS online_sales,
-      COALESCE(SUM(CASE WHEN channel='offline' THEN sales_in_vat ELSE 0 END), 0)::text           AS offline_sales,
-      COUNT(DISTINCT order_number)::text                                                          AS total_orders,
-      COUNT(DISTINCT mmid) FILTER (WHERE customer_type IN ('new_customer','first_order_not_converted'))::text AS new_customers,
-      COUNT(DISTINCT mmid) FILTER (WHERE customer_type IN ('retention','retention_not_converted'))::text       AS retention_customers,
-      COALESCE(SUM(sales_qty), 0)::text                                                          AS total_qty
+      ${lbl}         AS period_label,
+      COALESCE(SUM(sales_in_vat) FILTER (WHERE ${CONV}), 0)::text AS converted_sales
     FROM sales_hoc_orders
     ${where}
     GROUP BY ${grp}
@@ -109,18 +112,16 @@ export async function GET(request: Request) {
     const rawInterval = searchParams.get('interval') ?? 'monthly'
     const interval: Interval =
       rawInterval === 'daily' ? 'daily' : rawInterval === 'weekly' ? 'weekly' : 'monthly'
-    const startDate  = searchParams.get('startDate')
-    const endDate    = searchParams.get('endDate')
-    const channel    = (searchParams.get('channel') || '').split(',').filter(Boolean)
-    const cmg        = (searchParams.get('cmg')     || '').split(',').filter(Boolean)
-    const agent      = (searchParams.get('agent')   || '').split(',').filter(Boolean)
-    const conversion = searchParams.get('conversion') || 'all'
-    const orderSearch = searchParams.get('search')?.trim() || ''
+    const startDate = searchParams.get('startDate')
+    const endDate   = searchParams.get('endDate')
+    const channel   = (searchParams.get('channel') || '').split(',').filter(Boolean)
+    const cmg       = (searchParams.get('cmg')     || '').split(',').filter(Boolean)
+    const agent     = (searchParams.get('agent')   || '').split(',').filter(Boolean)
 
     const hasDateRange = !!(startDate && endDate)
 
-    const noDate = buildWhere(null, null, channel, cmg, agent, conversion)
-    const curr   = buildWhere(startDate, endDate, channel, cmg, agent, conversion)
+    const noDate = buildWhere(null, null, channel, cmg, agent)
+    const curr   = buildWhere(startDate, endDate, channel, cmg, agent)
 
     const grpBy = periodExpr(interval)
     const lbl   = labelExpr(interval)
@@ -137,7 +138,7 @@ export async function GET(request: Request) {
       prevWhere = buildWhere(
         ps.toISOString().split('T')[0],
         pe.toISOString().split('T')[0],
-        channel, cmg, agent, conversion,
+        channel, cmg, agent,
       )
       comparisonLabel = 'vs preceding period'
     } else {
@@ -145,75 +146,64 @@ export async function GET(request: Request) {
     }
 
     // ── Phase 1 (no date range): pre-fetch latest 2 periods ──────────────────
-    // Must run before Phase 2 so we can scope the trend to the same period as KPI
     let preloadedPeriods: Awaited<ReturnType<typeof fetchLastTwoPeriods>> | null = null
-    let trendFilter = hasDateRange ? curr : noDate  // default, overridden below
+    let trendFilter = hasDateRange ? curr : noDate
 
     if (!hasDateRange) {
       preloadedPeriods = await fetchLastTwoPeriods(interval, noDate.where, noDate.params)
       const r0 = preloadedPeriods[0]
       if (r0) {
         const [ps, pe] = periodBoundaries(r0.period, interval)
-        trendFilter = buildWhere(ps, pe, channel, cmg, agent, conversion)
+        trendFilter = buildWhere(ps, pe, channel, cmg, agent)
       }
     }
 
     // ── Phase 2: Fetch all remaining data in parallel ─────────────────────────
-    const [currKpiOrNull, prevKpi, periodsRaw, ordersRaw, optsRaw, monthsRaw] = await Promise.all([
-      // Current KPI: date-scoped when range provided; null when no range (use r0 instead)
-      hasDateRange ? fetchKpis(curr.where, curr.params) : Promise.resolve(null),
+    const [currKpiOrNull, prevKpi, periodsRaw, cmgOptsRaw, agentOptsRaw, monthsRaw] = await Promise.all([
+      // Current KPI: date-scoped when range provided; null when no range (use preloaded scope)
+      hasDateRange
+        ? fetchKpis(curr.where, curr.params)
+        : fetchKpis(trendFilter.where, trendFilter.params),
 
       // Previous KPI: only needed for date-range comparison
-      hasDateRange && prevWhere ? fetchKpis(prevWhere.where, prevWhere.params) : Promise.resolve(null),
+      hasDateRange && prevWhere
+        ? fetchKpis(prevWhere.where, prevWhere.params)
+        : Promise.resolve(null),
 
-      // Trend — scoped to latest period when no date range (consistent with KPI)
-      query<{ period: string; period_label: string; online: string; offline: string }>(`
+      // Trend — per-period breakdown for all groups
+      query<{
+        period: string; period_label: string
+        total_online: string; total_offline: string
+        converted_online: string; converted_offline: string
+        not_converted_online: string; not_converted_offline: string
+      }>(`
         SELECT
-          ${grpBy} AS period,
-          ${lbl}   AS period_label,
-          COALESCE(SUM(CASE WHEN channel='online'  THEN sales_in_vat ELSE 0 END), 0)::text AS online,
-          COALESCE(SUM(CASE WHEN channel='offline' THEN sales_in_vat ELSE 0 END), 0)::text AS offline
+          (${grpBy})::text AS period,
+          ${lbl}           AS period_label,
+          COALESCE(SUM(CASE WHEN channel='online'  THEN sales_in_vat ELSE 0 END), 0)::text                             AS total_online,
+          COALESCE(SUM(CASE WHEN channel='offline' THEN sales_in_vat ELSE 0 END), 0)::text                             AS total_offline,
+          COALESCE(SUM(CASE WHEN channel='online'  THEN sales_in_vat ELSE 0 END) FILTER (WHERE ${CONV}), 0)::text     AS converted_online,
+          COALESCE(SUM(CASE WHEN channel='offline' THEN sales_in_vat ELSE 0 END) FILTER (WHERE ${CONV}), 0)::text     AS converted_offline,
+          COALESCE(SUM(CASE WHEN channel='online'  THEN sales_in_vat ELSE 0 END) FILTER (WHERE ${NOT_CONV}), 0)::text AS not_converted_online,
+          COALESCE(SUM(CASE WHEN channel='offline' THEN sales_in_vat ELSE 0 END) FILTER (WHERE ${NOT_CONV}), 0)::text AS not_converted_offline
         FROM sales_hoc_orders
         ${trendFilter.where}
         GROUP BY ${grpBy}
         ORDER BY ${grpBy}
       `, trendFilter.params),
 
-      // Recent orders — 500 most recent when no search; full match (up to 2000) when searching
-      (() => {
-        const ordersParams = [...curr.params]
-        let ordersWhere    = curr.where
-        if (orderSearch) {
-          ordersParams.push(`%${orderSearch}%`)
-          const n          = ordersParams.length
-          const searchCond = `(mmid ILIKE $${n} OR order_number ILIKE $${n})`
-          ordersWhere = curr.where ? `${curr.where} AND ${searchCond}` : `WHERE ${searchCond}`
-        }
-        // When a date range is explicitly set (or search active), remove the cap so
-        // the full filtered result set is returned. Without any date bounds we fall
-        // back to 500 to avoid returning the entire order history.
-        const ordersLimit = orderSearch ? 'LIMIT 2000' : hasDateRange ? '' : 'LIMIT 500'
-        return query<{
-          order_number: string; order_date: string; mmid: string; prod_num: string
-          sales_qty: string; sales_in_vat: string; dynamic_cmg: string
-          channel: string; agent: string; customer_type: string
-        }>(`
-          SELECT order_number, order_date::text, mmid, prod_num,
-                 sales_qty::text, sales_in_vat::text, dynamic_cmg,
-                 channel, agent, customer_type
-          FROM sales_hoc_orders
-          ${ordersWhere}
-          ORDER BY order_date DESC, order_number DESC
-          ${ordersLimit}
-        `, ordersParams)
-      })(),
-
-      // Filter options (unfiltered)
-      query<{ cmg: string; agent: string }>(`
-        SELECT DISTINCT dynamic_cmg AS cmg, agent
+      // Filter options — separate queries so CMG list is not limited to rows with non-null agents
+      query<{ cmg: string }>(`
+        SELECT DISTINCT dynamic_cmg AS cmg
         FROM sales_hoc_orders
-        WHERE dynamic_cmg IS NOT NULL AND agent IS NOT NULL
-        ORDER BY dynamic_cmg, agent
+        WHERE dynamic_cmg IS NOT NULL
+        ORDER BY dynamic_cmg
+      `),
+      query<{ agent: string }>(`
+        SELECT DISTINCT agent
+        FROM sales_hoc_orders
+        WHERE agent IS NOT NULL
+        ORDER BY agent
       `),
 
       // Available months for chips (unfiltered)
@@ -224,79 +214,55 @@ export async function GET(request: Request) {
 
     // ── Parse current KPI ─────────────────────────────────────────────────────
     type KpiRow = {
-      total_sales: number; online_sales: number; offline_sales: number
-      total_orders: number; new_customers: number; retention_customers: number; total_qty: number
+      total_sales: number; total_online: number; total_offline: number
+      total_orders: number; total_qty: number
+      converted_sales: number; converted_online: number; converted_offline: number
+      converted_orders: number; new_customers: number; retention_customers: number
+      not_converted_sales: number; not_converted_online: number; not_converted_offline: number
+      not_converted_orders: number
     }
 
-    let c: KpiRow
     let currentPeriodLabel: string | null = null
     let previousPeriodLabel: string | null = null
 
-    if (hasDateRange) {
-      const kp = currKpiOrNull as Awaited<ReturnType<typeof fetchKpis>>
-      c = {
-        total_sales:         Number(kp?.total_sales         ?? 0),
-        online_sales:        Number(kp?.online_sales        ?? 0),
-        offline_sales:       Number(kp?.offline_sales       ?? 0),
-        total_orders:        Number(kp?.total_orders        ?? 0),
-        new_customers:       Number(kp?.new_customers       ?? 0),
-        retention_customers: Number(kp?.retention_customers ?? 0),
-        total_qty:           Number(kp?.total_qty           ?? 0),
-      }
-    } else {
-      const rows = preloadedPeriods!
-      const r0 = rows.length > 0 ? rows[0] : null
-      c = {
-        total_sales:         Number(r0?.total_sales         ?? 0),
-        online_sales:        Number(r0?.online_sales        ?? 0),
-        offline_sales:       Number(r0?.offline_sales       ?? 0),
-        total_orders:        Number(r0?.total_orders        ?? 0),
-        new_customers:       Number(r0?.new_customers       ?? 0),
-        retention_customers: Number(r0?.retention_customers ?? 0),
-        total_qty:           Number(r0?.total_qty           ?? 0),
-      }
-      currentPeriodLabel  = r0?.period_label ?? null
-      previousPeriodLabel = rows.length >= 2 ? (rows[1].period_label ?? null) : null
+    const kp = currKpiOrNull
+    const c: KpiRow = {
+      total_sales:           Number(kp?.total_sales           ?? 0),
+      total_online:          Number(kp?.total_online          ?? 0),
+      total_offline:         Number(kp?.total_offline         ?? 0),
+      total_orders:          Number(kp?.total_orders          ?? 0),
+      total_qty:             Number(kp?.total_qty             ?? 0),
+      converted_sales:       Number(kp?.converted_sales       ?? 0),
+      converted_online:      Number(kp?.converted_online      ?? 0),
+      converted_offline:     Number(kp?.converted_offline     ?? 0),
+      converted_orders:      Number(kp?.converted_orders      ?? 0),
+      new_customers:         Number(kp?.new_customers         ?? 0),
+      retention_customers:   Number(kp?.retention_customers   ?? 0),
+      not_converted_sales:   Number(kp?.not_converted_sales   ?? 0),
+      not_converted_online:  Number(kp?.not_converted_online  ?? 0),
+      not_converted_offline: Number(kp?.not_converted_offline ?? 0),
+      not_converted_orders:  Number(kp?.not_converted_orders  ?? 0),
     }
 
-    const avgOV = c.total_orders > 0 ? c.total_sales / c.total_orders : 0
+    if (!hasDateRange && preloadedPeriods) {
+      const r0 = preloadedPeriods[0]
+      currentPeriodLabel  = r0?.period_label ?? null
+      previousPeriodLabel = preloadedPeriods.length >= 2 ? (preloadedPeriods[1].period_label ?? null) : null
+    }
 
-    // ── Parse comparison ──────────────────────────────────────────────────────
-    let cmpSales: number | null = null
-    let cmpOrders: number | null = null
-    let cmpNew: number | null = null
-    let cmpRetention: number | null = null
-    let cmpAov: number | null = null
+    const avgOV = c.converted_orders > 0 ? c.converted_sales / c.converted_orders : 0
+
+    // ── Parse comparison (converted_sales vs previous period) ─────────────────
+    let cmpConvertedSales: number | null = null
 
     if (hasDateRange) {
-      const p = prevKpi as Awaited<ReturnType<typeof fetchKpis>>
+      const p = prevKpi
       if (p) {
-        const ps   = Number(p.total_sales         ?? 0)
-        const po   = Number(p.total_orders        ?? 0)
-        const pn   = Number(p.new_customers       ?? 0)
-        const pr   = Number(p.retention_customers ?? 0)
-        const paov = po > 0 ? ps / po : 0
-        cmpSales     = cmpRatio(c.total_sales,        ps)
-        cmpOrders    = cmpRatio(c.total_orders,       po)
-        cmpNew       = cmpRatio(c.new_customers,      pn)
-        cmpRetention = cmpRatio(c.retention_customers, pr)
-        cmpAov       = cmpRatio(avgOV,                paov)
+        cmpConvertedSales = cmpRatio(c.converted_sales, Number(p.converted_sales ?? 0))
       }
-    } else {
-      const rows = preloadedPeriods!
-      if (rows.length >= 2) {
-        const r1   = rows[1]
-        const ps   = Number(r1.total_sales         ?? 0)
-        const po   = Number(r1.total_orders        ?? 0)
-        const pn   = Number(r1.new_customers       ?? 0)
-        const pr   = Number(r1.retention_customers ?? 0)
-        const paov = po > 0 ? ps / po : 0
-        cmpSales     = cmpRatio(c.total_sales,        ps)
-        cmpOrders    = cmpRatio(c.total_orders,       po)
-        cmpNew       = cmpRatio(c.new_customers,      pn)
-        cmpRetention = cmpRatio(c.retention_customers, pr)
-        cmpAov       = cmpRatio(avgOV,                paov)
-      }
+    } else if (preloadedPeriods && preloadedPeriods.length >= 2) {
+      const prevConv = Number(preloadedPeriods[1].converted_sales ?? 0)
+      cmpConvertedSales = cmpRatio(c.converted_sales, prevConv)
     }
 
     const res = NextResponse.json({
@@ -304,38 +270,25 @@ export async function GET(request: Request) {
       data: {
         kpi: {
           ...c,
-          avg_order_value:         avgOV,
-          cmp_total_sales:         cmpSales,
-          cmp_total_orders:        cmpOrders,
-          cmp_new_customers:       cmpNew,
-          cmp_retention_customers: cmpRetention,
-          cmp_avg_order_value:     cmpAov,
-          comparison_label:        comparisonLabel,
-          current_period_label:    currentPeriodLabel,
-          previous_period_label:   previousPeriodLabel,
+          avg_order_value:       avgOV,
+          cmp_converted_sales:   cmpConvertedSales,
+          comparison_label:      comparisonLabel,
+          current_period_label:  currentPeriodLabel,
+          previous_period_label: previousPeriodLabel,
         },
         by_period: periodsRaw.map(r => ({
-          period:       r.period,
-          period_label: r.period_label,
-          online:       Number(r.online),
-          offline:      Number(r.offline),
-          total:        Number(r.online) + Number(r.offline),
-        })),
-        recent_orders: ordersRaw.map(o => ({
-          order_number:  o.order_number,
-          order_date:    o.order_date,
-          mmid:          o.mmid,
-          prod_num:      o.prod_num,
-          sales_qty:     Number(o.sales_qty),
-          sales_in_vat:  Number(o.sales_in_vat),
-          dynamic_cmg:   o.dynamic_cmg,
-          channel:       o.channel === 'online' ? 'Online' : 'Offline',
-          agent:         o.agent,
-          customer_type: o.customer_type,
+          period:                r.period,
+          period_label:          r.period_label,
+          total_online:          Number(r.total_online),
+          total_offline:         Number(r.total_offline),
+          converted_online:      Number(r.converted_online),
+          converted_offline:     Number(r.converted_offline),
+          not_converted_online:  Number(r.not_converted_online),
+          not_converted_offline: Number(r.not_converted_offline),
         })),
         options: {
-          cmg:    [...new Set(optsRaw.map(o => o.cmg))].filter(Boolean).sort(),
-          agents: [...new Set(optsRaw.map(o => o.agent))].filter(Boolean).sort(),
+          cmg:    cmgOptsRaw.map(o => o.cmg).filter(Boolean).sort(),
+          agents: agentOptsRaw.map(o => o.agent).filter(Boolean).sort(),
         },
         months: monthsRaw.map(r => r.month),
       },

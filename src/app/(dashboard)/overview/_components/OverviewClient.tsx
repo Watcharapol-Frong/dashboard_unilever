@@ -3,7 +3,6 @@
 import { useMemo, useState } from 'react'
 import dynamic from 'next/dynamic'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import { Skeleton } from '@/components/ui/skeleton'
 import { KpiCard } from '@/components/dashboard/KpiCard'
 import { KpiGrid } from '@/components/dashboard/KpiGrid'
 import { FilterSelect } from '@/components/dashboard/FilterSelect'
@@ -19,10 +18,12 @@ import {
   TrendingUp, Target, Users, UserPlus, PhoneCall,
   Calendar, Calculator,
 } from 'lucide-react'
+import { useLanguage } from '@/context/LanguageContext'
+import { t } from '@/lib/i18n'
 
 const OverviewChart = dynamic(
   () => import('./OverviewChart').then(m => m.OverviewChart),
-  { ssr: false, loading: () => <Skeleton className="h-[640px] w-full rounded-xl" /> }
+  { ssr: false, loading: () => <div className="h-[640px] w-full rounded-xl bg-muted animate-pulse" /> }
 )
 
 type Agg = {
@@ -79,6 +80,7 @@ interface OverviewData {
 }
 
 export default function OverviewClient() {
+  const { lang } = useLanguage()
   const { data, isLoading } = useDashboardSWR<OverviewData>('/api/data/overview')
   const rows         = data?.rows         ?? []
   const allTimeCalls = data?.all_time_calls ?? 0
@@ -145,7 +147,7 @@ export default function OverviewClient() {
     return `/api/data/overview/calls?${p.toString()}`
   }, [rangeFrom, rangeTo, filterCmg])
 
-  const { data: callStats } = useDashboardSWR<{ total_calls: number; converted: number }>(callsApiUrl)
+  const { data: callStats } = useDashboardSWR<{ total_calls: number; connected: number }>(callsApiUrl)
 
   // ROI uses month-level data regardless of CMG filter (costs are not CMG-specific)
   const roiKpi = useMemo(() => {
@@ -171,7 +173,7 @@ export default function OverviewClient() {
 
   if (isLoading) return <PageLoading cols={6} />
   if (rows.length === 0) return (
-    <PageEmpty message="No data available" hint="Please run Build Mart first" />
+    <PageEmpty message={t('common.noData', lang)} hint={t('common.buildFirst', lang)} />
   )
 
   return (
@@ -182,7 +184,7 @@ export default function OverviewClient() {
         <CardHeader className="pb-3">
           <div className="flex items-center gap-2">
             <Calendar className="h-4 w-4 text-[#003DA6]" />
-            <CardTitle className="text-sm font-medium">Filter & Range Selection</CardTitle>
+            <CardTitle className="text-sm font-medium">{t('common.filterRange', lang)}</CardTitle>
           </div>
         </CardHeader>
         <CardContent>
@@ -200,7 +202,7 @@ export default function OverviewClient() {
             <div className="w-px h-6 bg-border hidden lg:block" />
 
             <MultiSelect
-              label="All Segments"
+              label={t('common.allSegments', lang)}
               value={filterCmg}
               onChange={setFilterCmg}
               options={cmgOptions.map(v => ({ value: v, label: v }))}
@@ -208,12 +210,12 @@ export default function OverviewClient() {
             />
 
             <FilterSelect
-              label="All Channels"
+              label={t('common.allChannels', lang)}
               value={filterChannel}
               onChange={setFilterChannel}
               options={[
-                { value: 'online', label: 'Online Sales' },
-                { value: 'offline', label: 'Offline Sales' },
+                { value: 'online', label: t('common.onlineSales', lang) },
+                { value: 'offline', label: t('common.offlineSales', lang) },
               ]}
               width="w-full sm:w-48"
             />
@@ -223,15 +225,15 @@ export default function OverviewClient() {
                 onClick={() => { clearRange(); setFilterCmg([]); setFilterChannel('all') }}
                 className="text-xs text-[#003DA6] hover:underline font-semibold"
               >
-                Reset Filters
+                {t('common.resetFilters', lang)}
               </button>
             )}
           </div>
 
           <p className="text-xs text-muted-foreground mt-3">
             {rangeFrom
-              ? <>Showing: <span className="font-medium text-foreground">{activeRangeLabel}</span></>
-              : <>Showing: <span className="font-medium text-foreground">all available periods</span> — select month chips to filter by period</>
+              ? <>{t('common.showing', lang)}: <span className="font-medium text-foreground">{activeRangeLabel}</span></>
+              : <>{t('common.showing', lang)}: <span className="font-medium text-foreground">{t('common.allPeriods', lang)}</span> — {t('common.selectChips', lang)}</>
             }
           </p>
         </CardContent>
@@ -240,48 +242,66 @@ export default function OverviewClient() {
       {/* KPI Cards */}
       <KpiGrid cols={6}>
         <KpiCard
-          title="HOC Sales"
+          title={t('kpi.hocSales', lang)}
           value={fmtBaht(kpi.hoc_sales)}
-          subtitle={`Target ${fmtBaht(kpi.sales_target)}`}
+          subtitle={`${t('common.target', lang)} ${fmtBaht(kpi.sales_target)}`}
           icon={TrendingUp}
-          tooltip={`HOC Sales: ${formatTHB(kpi.hoc_sales)}\nTarget: ${formatTHB(kpi.sales_target)}\nAchievement: ${kpi.achievement.toFixed(1)}%\n\nRevenue from HOC Unilever products ordered within the attribution window (converted customers only). Excludes not-converted orders.`}
+          tooltip={lang === 'th'
+            ? `HOC Sales: ${formatTHB(kpi.hoc_sales)}\nTarget: ${formatTHB(kpi.sales_target)}\nAchievement: ${kpi.achievement.toFixed(1)}%\n\nยอดขายสินค้า HOC ของ Unilever จากลูกค้าที่สั่งซื้อภายใน attribution window (เฉพาะที่ convert) ไม่รวมคำสั่งซื้อที่ไม่ convert`
+            : `HOC Sales: ${formatTHB(kpi.hoc_sales)}\nTarget: ${formatTHB(kpi.sales_target)}\nAchievement: ${kpi.achievement.toFixed(1)}%\n\nRevenue from HOC Unilever products ordered within the attribution window (converted customers only). Excludes not-converted orders.`
+          }
         />
         <KpiCard
-          title="Achievement"
+          title={t('kpi.achievement', lang)}
           value={`${kpi.achievement.toFixed(1)}%`}
-          subtitle={kpi.achievement >= 100 ? 'Target reached ✓' : 'Below target'}
+          subtitle={kpi.achievement >= 100 ? t('kpi.targetReached', lang) : t('kpi.belowTarget', lang)}
           valueClassName={colorAchievement(kpi.achievement)}
           icon={Target}
-          tooltip="HOC Sales as a percentage of the monthly sales target. Calculated per segment and summed across the selected period."
+          tooltip={lang === 'th'
+            ? 'HOC Sales คิดเป็น % ของ Target รายเดือน คำนวณรายกลุ่มและรวมตลอดช่วงที่เลือก'
+            : 'HOC Sales as a percentage of the monthly sales target. Calculated per segment and summed across the selected period.'
+          }
         />
         <KpiCard
-          title="New Customers"
+          title={t('kpi.newCustomers', lang)}
           value={kpi.new_customers.toLocaleString()}
-          subtitle="Telesales new buyers"
+          subtitle={t('kpi.newBuyers', lang)}
           icon={UserPlus}
-          tooltip="Unique customers placing their first HOC order within the attribution window. Excludes first-order-not-converted."
+          tooltip={lang === 'th'
+            ? 'ลูกค้าที่สั่งซื้อ HOC ครั้งแรกภายใน attribution window ไม่รวมลูกค้าที่สั่งซื้อนอกช่วง'
+            : 'Unique customers placing their first HOC order within the attribution window. Excludes first-order-not-converted.'
+          }
         />
         <KpiCard
-          title="Repeat Customers"
+          title={t('kpi.repeatCustomers', lang)}
           value={kpi.retention.toLocaleString()}
-          subtitle="Telesales repeat buyers"
+          subtitle={t('kpi.repeatBuyers', lang)}
           icon={Users}
-          tooltip="Unique customers who reordered HOC products within the attribution window. Excludes retention-not-converted."
+          tooltip={lang === 'th'
+            ? 'ลูกค้าที่เคยซื้อ HOC มาก่อนและซื้อซ้ำภายใน attribution window ไม่รวมการซื้อซ้ำที่อยู่นอกช่วง'
+            : 'Unique customers who reordered HOC products within the attribution window. Excludes retention-not-converted.'
+          }
         />
         <KpiCard
-          title="Total Calls"
+          title={t('kpi.totalCalls', lang)}
           value={(callStats?.total_calls ?? allTimeCalls).toLocaleString()}
-          subtitle={`New + Repeat: ${(kpi.new_customers + kpi.retention).toLocaleString()}`}
+          subtitle={`${t('kpi.connected', lang)}: ${(callStats?.connected ?? 0).toLocaleString()}`}
           icon={PhoneCall}
-          tooltip={`Unique customers called (1 per MMID) — updates with date range filter only. Calls are not segment-attributable so the value does not change with segment filter.\n\nNew + Repeat (subtitle) = the same values as the New Customers and Repeat Customers cards — responds to both date range and segment filter.`}
+          tooltip={lang === 'th'
+            ? 'จำนวนสายที่โทรออกในช่วงเวลาที่เลือก Connected = จำนวนสายที่ติดต่อได้สำเร็จ'
+            : 'Total calls made in the selected period. Connected = calls with a successful connection status.'
+          }
         />
         <KpiCard
-          title="Program ROI"
+          title={t('kpi.programROI', lang)}
           value={roiKpi.roi > 0 ? `${roiKpi.roi.toFixed(2)}x` : '—'}
-          subtitle="Sales / Expense multiplier"
+          subtitle={t('kpi.roiMultiplier', lang)}
           valueClassName={colorRoi(roiKpi.roi)}
           icon={Calculator}
-          tooltip="HOC Sales ÷ Total Program Expense (incentives + agent costs). Always month-level — not affected by segment filter because costs are shared across all segments."
+          tooltip={lang === 'th'
+            ? 'HOC Sales ÷ ค่าใช้จ่ายรวม (incentive + ค่า agent) คำนวณจากข้อมูลรายเดือน — ไม่ได้รับผลกระทบจากการกรองกลุ่ม เพราะต้นทุนเป็นของทั้งโปรแกรม'
+            : 'HOC Sales ÷ Total Program Expense (incentives + agent costs). Always month-level — not affected by segment filter because costs are shared across all segments.'
+          }
         />
       </KpiGrid>
 
@@ -294,6 +314,7 @@ export default function OverviewClient() {
         startDate={rangeFrom}
         endDate={rangeTo ?? rangeFrom}
       />
+
     </div>
   )
 }

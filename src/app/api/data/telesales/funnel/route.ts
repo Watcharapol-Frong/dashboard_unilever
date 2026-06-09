@@ -42,7 +42,8 @@ export async function GET(request: Request) {
       const NO_SEG    = '__no_segment__'
       const realCmg   = cmg.filter(c => c !== NO_SEG)
       const inclNoSeg = cmg.includes(NO_SEG)
-      const noSegSql  = `mmid NOT IN (SELECT DISTINCT mmid FROM mart_telesales_orders WHERE primary_cmg IS NOT NULL)`
+      // Use NOT EXISTS for better performance than NOT IN subquery
+      const noSegSql  = `NOT EXISTS (SELECT 1 FROM mart_telesales_orders WHERE mmid = telesales_calls.mmid AND primary_cmg IS NOT NULL)`
 
       if (realCmg.length > 0) {
         params.push(realCmg)
@@ -56,10 +57,9 @@ export async function GET(request: Request) {
 
     const whereClause = 'WHERE ' + conditions.join(' AND ')
 
-    // mart_telesales_orders channel/cmg filter
+    // sales_hoc_orders channel filter (CMG filtering handled by call_stats)
     const orderExtraConditions: string[] = []
     if (channelParamIdx !== null) orderExtraConditions.push(`channel = ANY($${channelParamIdx})`)
-    if (cmgParamIdx !== null)     orderExtraConditions.push(`dynamic_cmg = ANY($${cmgParamIdx})`)
     const orderExtra = orderExtraConditions.length ? 'AND ' + orderExtraConditions.join(' AND ') : ''
 
     const row = await queryOne<{
@@ -243,7 +243,9 @@ export async function GET(request: Request) {
     }
 
     const res = NextResponse.json({ ok: true, data: { nodes, links, summary } })
-    setCacheHeader(res, 'MEDIUM')
+    // Cache funnel for 10 min — it's expensive to compute (GROUP BY all mmids + engagement classification)
+    // Users get instant cached response on repeat filters, stale data for 20 min
+    setCacheHeader(res, 'FUNNEL')
     return res
   })
 }
