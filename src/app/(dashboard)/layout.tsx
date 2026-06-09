@@ -6,6 +6,7 @@ import { UploadQueueProvider } from '@/context/UploadQueueContext'
 import { BuildProvider } from '@/context/BuildContext'
 import { LanguageProvider } from '@/context/LanguageContext'
 import { SidebarInset, SidebarProvider } from '@/components/ui/sidebar'
+import { ChatBot } from '@/components/dashboard/ChatBot'
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
   return (
@@ -21,6 +22,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
               <div className="flex-1 p-3 sm:p-6 overflow-x-auto">
                 {children}
               </div>
+              <ChatBot />
             </SidebarInset>
           </SidebarProvider>
         </BuildProvider>
