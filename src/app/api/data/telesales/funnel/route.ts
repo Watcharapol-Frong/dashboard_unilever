@@ -33,7 +33,8 @@ export async function GET(request: Request) {
     let channelParamIdx: number | null = null
     let cmgParamIdx: number | null = null
 
-    if (channel.length > 0) {
+    const hasChannel = channel.length > 0
+    if (hasChannel) {
       params.push(channel)
       channelParamIdx = params.length
       conditions.push(`mmid IN (SELECT DISTINCT mmid FROM sales_hoc_orders WHERE channel = ANY($${channelParamIdx}))`)
@@ -42,16 +43,29 @@ export async function GET(request: Request) {
       const NO_SEG    = '__no_segment__'
       const realCmg   = cmg.filter(c => c !== NO_SEG)
       const inclNoSeg = cmg.includes(NO_SEG)
-      // Use NOT EXISTS for better performance than NOT IN subquery
-      const noSegSql  = `NOT EXISTS (SELECT 1 FROM mart_telesales_orders WHERE mmid = telesales_calls.mmid AND primary_cmg IS NOT NULL)`
 
-      if (realCmg.length > 0) {
-        params.push(realCmg)
-        cmgParamIdx = params.length
-        const inSql = `mmid IN (SELECT DISTINCT mmid FROM mart_telesales_orders WHERE primary_cmg = ANY($${cmgParamIdx}))`
-        conditions.push(inclNoSeg ? `(${inSql} OR ${noSegSql})` : inSql)
-      } else if (inclNoSeg) {
-        conditions.push(noSegSql)
+      if (hasChannel) {
+        // If channel is selected, __no_segment__ cannot have any matches
+        if (realCmg.length > 0) {
+          params.push(realCmg)
+          cmgParamIdx = params.length
+          conditions.push(`mmid IN (SELECT DISTINCT mmid FROM mart_telesales_orders WHERE primary_cmg = ANY($${cmgParamIdx}))`)
+        } else {
+          // Only __no_segment__ selected with channel filter -> impossible, return 0 rows
+          conditions.push('1 = 0')
+        }
+      } else {
+        // No channel filter -> use fast NOT EXISTS
+        const noSegSql = `NOT EXISTS (SELECT 1 FROM mart_telesales_orders WHERE mmid = telesales_calls.mmid AND primary_cmg IS NOT NULL)`
+
+        if (realCmg.length > 0) {
+          params.push(realCmg)
+          cmgParamIdx = params.length
+          const inSql = `mmid IN (SELECT DISTINCT mmid FROM mart_telesales_orders WHERE primary_cmg = ANY($${cmgParamIdx}))`
+          conditions.push(inclNoSeg ? `(${inSql} OR ${noSegSql})` : inSql)
+        } else if (inclNoSeg) {
+          conditions.push(noSegSql)
+        }
       }
     }
 

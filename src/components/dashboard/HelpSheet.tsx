@@ -8,7 +8,7 @@ import { Separator } from "@/components/ui/separator"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import {
   LayoutDashboard, PhoneCall, TrendingUp, Package, PiggyBank,
-  Upload, DatabaseZap, Shield, Users, Clock, Download, Languages,
+  Upload, DatabaseZap, Shield, Users, Clock, Download, Languages, Sparkles,
 } from "lucide-react"
 import type { Lang } from "@/context/LanguageContext"
 
@@ -451,6 +451,42 @@ function AllUsersContent({ lang }: { lang: Lang }) {
               ? <>ค่า Attribution Window แสดงที่มุมขวาบนทุกหน้า เช่น <span className="font-mono font-semibold">14-day attribution</span> — การเปลี่ยนค่านี้ต้อง Build Mart ใหม่ทุกครั้ง</>
               : <>To check the current value — look at the <strong>top-right corner of every page</strong>. You will see a badge like <span className="font-mono font-semibold">14-day attribution</span>. That number is what the system is currently using. Changing it requires a Mart Rebuild — all historical numbers will recalculate.</>}
           </Note>
+        </AccordionContent>
+      </AccordionItem>
+
+      {/* AI Assistant */}
+      <AccordionItem value="ai-assistant">
+        <AccordionTrigger>
+          <span className="flex items-center gap-2">
+            <Sparkles className="h-4 w-4 text-[#003DA6]" />
+            {lang === 'th' ? 'ผู้ช่วย AI (AI Assistant)' : 'AI Assistant Guide'}
+          </span>
+        </AccordionTrigger>
+        <AccordionContent className="space-y-3 text-sm text-muted-foreground">
+          <p>
+            {lang === 'th'
+              ? 'ระบบแชทผู้ช่วยวิเคราะห์ข้อมูลเชิงลึกสำหรับผู้บริหาร สามารถสอบถามสถิติต่าง ๆ จากฐานข้อมูล CockroachDB โดยใช้ภาษาพูดธรรมชาติได้ทันที'
+              : 'An intelligent companion for query analysis, allowing you to fetch operational metrics directly from the CockroachDB database using natural language.'}
+          </p>
+
+          <SectionLabel>{lang === 'th' ? 'ขอบเขตข้อมูล (Data Scope)' : 'Data Scope Focus'}</SectionLabel>
+          <p>
+            {lang === 'th'
+              ? <>ระบบผู้ช่วย AI ถูกตั้งค่าให้อ้างอิงและสรุปผลยอดขาย **Unilever Homecare** (สินค้ากลุ่มผงซักฟอก น้ำยาปรับผ้านุ่ม น้ำยาล้างจาน น้ำยาทำความสะอาด) เป็นค่าเริ่มต้น เว้นแต่ผู้ใช้งานจะระบุให้สรุปยอดขายทั้งหมดทุกแบรนด์อย่างเจาะจง</>
+              : <>The AI assistant prioritizes **Unilever Homecare Sales** (Detergent, Softener, Dishwash, and Cleaning Chemicals) as the default data scope for any sales summary requests, unless you explicitly ask for overall/total sales metrics.</>}
+          </p>
+
+          <SectionLabel>{lang === 'th' ? 'ฟีเจอร์และการใช้งาน' : 'Features & Controls'}</SectionLabel>
+          <Term label={lang === 'th' ? 'การปรับขนาดหน้าต่าง' : 'Resizing'}>
+            {lang === 'th'
+              ? 'ลากจากขอบซ้ายสุดของแผงหน้าต่างแชทเพื่อยืดขยายหน้าต่างให้กว้างขึ้น เพื่อให้อ่านตารางและข้อมูลรายละเอียดยอดขายสะดวกขึ้น'
+              : 'Drag the left edge of the chatbox horizontally to expand the window width for easier reading of database tables.'}
+          </Term>
+          <Term label={lang === 'th' ? 'การรีเซ็ตการสนทนา' : 'Resetting Chat'}>
+            {lang === 'th'
+              ? 'คลิกปุ่มรีเฟรช 🔄 ที่หัวข้อแชท (Header) เพื่อล้างหน้าต่างสนทนาและล้างหน่วยความจำเดิมของ AI เพื่อเริ่มต้นหัวข้อใหม่'
+              : 'Click the refresh button 🔄 in the chat header to reset conversation history and start a fresh session.'}
+          </Term>
         </AccordionContent>
       </AccordionItem>
 

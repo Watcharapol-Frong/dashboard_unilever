@@ -1,15 +1,24 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { Loader2 } from 'lucide-react'
+import { useAuth } from '@clerk/nextjs'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Field, FieldDescription, FieldGroup, FieldLabel } from '@/components/ui/field'
 
 export default function RegisterPage() {
   const router = useRouter()
+  const { isSignedIn, isLoaded: isAuthLoaded } = useAuth()
+
+  useEffect(() => {
+    if (isAuthLoaded && isSignedIn) {
+      router.push('/overview')
+    }
+  }, [isAuthLoaded, isSignedIn, router])
+
   const [firstName,  setFirstName]  = useState('')
   const [lastName,   setLastName]   = useState('')
   const [email,      setEmail]      = useState('')

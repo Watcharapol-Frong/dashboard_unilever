@@ -531,7 +531,7 @@ export default function ProductsClient() {
       {/* ── Brand Revenue Trend ───────────────────────────────────────────── */}
       <Card>
         <CardHeader>
-          <CardTitle className="text-sm font-medium">Revenue Trend by Brand (Top 5)</CardTitle>
+          <CardTitle className="text-sm font-medium">Brand Sales Trend (Top 5)</CardTitle>
           <p className="text-xs text-muted-foreground mt-0.5">
             Monthly telesales revenue per brand — track momentum over time
           </p>
