@@ -39,6 +39,24 @@ export const columns: ColumnDef<RecentOrder>[] = [
     cell: ({ row }) => row.original.agent ?? "-",
   },
   {
+    accessorKey: "call_status",
+    header: "Call Status",
+    cell: ({ row }) => {
+      const raw = row.original.call_status
+      if (!raw) return <span className="text-muted-foreground">—</span>
+      const isOrder    = raw === 'สั่งซื้อสินค้าเรียบร้อย' || raw === 'สั่งสินค้าอื่นๆ'
+      const isNoAnswer = raw.startsWith('ไม่รับสาย') || raw === 'ปิดเครื่อง/ติดต่อไม่ได้'
+      return (
+        <Badge
+          variant={isOrder ? 'default' : isNoAnswer ? 'secondary' : 'outline'}
+          className="text-[10px] whitespace-nowrap px-1.5 py-0"
+        >
+          {raw}
+        </Badge>
+      )
+    },
+  },
+  {
     accessorKey: "sales_qty",
     header: ({ column }) => (
       <DataTableColumnHeader column={column} title="Qty" className="justify-end" />

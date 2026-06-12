@@ -44,6 +44,7 @@ const dict: Record<string, Record<Lang, string>> = {
   'common.allSegments':         { en: 'All Segments',                 th: 'ทุกกลุ่ม' },
   'common.allChannels':         { en: 'All Channels',                 th: 'ทุกช่องทาง' },
   'common.allAgents':           { en: 'All Agents',                   th: 'ทุก Agent' },
+  'common.allStatuses':         { en: 'All Statuses',                 th: 'ทุกสถานะ' },
   'common.allCustomers':        { en: 'All Customers',                th: 'ลูกค้าทั้งหมด' },
   'common.online':              { en: 'Online',                       th: 'ออนไลน์' },
   'common.offline':             { en: 'Offline',                      th: 'ออฟไลน์' },

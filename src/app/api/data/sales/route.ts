@@ -30,6 +30,7 @@ function buildWhere(
   agent: string[],
   filterConv?: string | null,
   search?: string | null,
+  callStatus: string[] = [],
 ) {
   const conditions: string[] = []
   const params: any[] = []
@@ -38,6 +39,7 @@ function buildWhere(
   addFilter(params, conditions, channel, 'channel')
   addFilter(params, conditions, cmg, 'dynamic_cmg')
   addFilter(params, conditions, agent, 'agent')
+  addFilter(params, conditions, callStatus, 'call_status')
 
   if (filterConv === 'converted') {
     conditions.push(CONV)
@@ -86,11 +88,13 @@ async function fetchKpis(where: string, params: any[]) {
   `, params)
 }
 
-async function fetchRecentOrders(where: string, params: any[]) {
+async function fetchRecentOrders(where: string, params: any[], hasFilter = false) {
+  const limit = hasFilter ? '' : 'LIMIT 1000'
   return query<{
     order_number: string; order_date: string; mmid: string | null
     prod_num: string | null; sales_qty: number; sales_in_vat: number
     dynamic_cmg: string | null; channel: string; agent: string | null
+    call_status: string | null
   }>(`
     SELECT
       order_number,
@@ -101,11 +105,12 @@ async function fetchRecentOrders(where: string, params: any[]) {
       sales_in_vat,
       dynamic_cmg,
       channel,
-      agent
+      agent,
+      call_status
     FROM sales_hoc_orders
     ${where}
     ORDER BY order_date DESC, order_number DESC
-    LIMIT 1000
+    ${limit}
   `, params)
 }
 
@@ -155,16 +160,18 @@ export async function GET(request: Request) {
     const channel   = (searchParams.get('channel') || '').split(',').filter(Boolean)
     const cmg       = (searchParams.get('cmg')     || '').split(',').filter(Boolean)
     const agent     = (searchParams.get('agent')   || '').split(',').filter(Boolean)
+    const callStatus = (searchParams.get('callStatus') || '').split(',').filter(Boolean)
     const filterConv = searchParams.get('filterConv') || searchParams.get('conversion')
     const search     = searchParams.get('search')
 
     const hasDateRange = !!(startDate && endDate)
+    const hasFilter = channel.length > 0 || cmg.length > 0 || agent.length > 0 || callStatus.length > 0 || !!filterConv || !!search
 
-    const noDate = buildWhere(null, null, channel, cmg, agent, filterConv, search)
-    const curr   = buildWhere(startDate, endDate, channel, cmg, agent, filterConv, search)
+    const noDate = buildWhere(null, null, channel, cmg, agent, filterConv, search, callStatus)
+    const curr   = buildWhere(startDate, endDate, channel, cmg, agent, filterConv, search, callStatus)
 
-    const grpBy = periodExpr(interval)
-    const lbl   = labelExpr(interval)
+    const grBy = periodExpr(interval)
+    const lbl  = labelExpr(interval)
 
     // Previous period for explicit date range
     let prevWhere: ReturnType<typeof buildWhere> | null = null
@@ -178,7 +185,7 @@ export async function GET(request: Request) {
       prevWhere = buildWhere(
         ps.toISOString().split('T')[0],
         pe.toISOString().split('T')[0],
-        channel, cmg, agent, filterConv, search,
+        channel, cmg, agent, filterConv, search, callStatus
       )
       comparisonLabel = 'vs preceding period'
     } else {
@@ -194,7 +201,7 @@ export async function GET(request: Request) {
       const r0 = preloadedPeriods[0]
       if (r0) {
         const [ps, pe] = periodBoundaries(r0.period, interval)
-        trendFilter = buildWhere(ps, pe, channel, cmg, agent, filterConv, search)
+        trendFilter = buildWhere(ps, pe, channel, cmg, agent, filterConv, search, callStatus)
       }
     }
 
@@ -218,7 +225,7 @@ export async function GET(request: Request) {
         not_converted_online: string; not_converted_offline: string
       }>(`
         SELECT
-          (${grpBy})::text AS period,
+          (${grBy})::text AS period,
           ${lbl}           AS period_label,
           COALESCE(SUM(CASE WHEN channel='online'  THEN sales_in_vat ELSE 0 END), 0)::text                             AS total_online,
           COALESCE(SUM(CASE WHEN channel='offline' THEN sales_in_vat ELSE 0 END), 0)::text                             AS total_offline,
@@ -228,8 +235,8 @@ export async function GET(request: Request) {
           COALESCE(SUM(CASE WHEN channel='offline' THEN sales_in_vat ELSE 0 END) FILTER (WHERE ${NOT_CONV}), 0)::text AS not_converted_offline
         FROM sales_hoc_orders
         ${trendFilter.where}
-        GROUP BY ${grpBy}
-        ORDER BY ${grpBy}
+        GROUP BY ${grBy}
+        ORDER BY ${grBy}
       `, trendFilter.params),
 
       // Filter options — separate queries so CMG list is not limited to rows with non-null agents
@@ -251,9 +258,9 @@ export async function GET(request: Request) {
         SELECT DISTINCT month::text AS month FROM sales_hoc_orders ORDER BY month
       `),
 
-      // Recent orders (only when daily or searched)
-      (interval === 'daily' || search)
-        ? fetchRecentOrders(curr.where, curr.params)
+      // Recent orders (only when daily or searched or filtered)
+      (interval === 'daily' || search || hasFilter)
+        ? fetchRecentOrders(trendFilter.where, trendFilter.params, hasFilter || hasDateRange)
         : Promise.resolve([]),
     ])
 

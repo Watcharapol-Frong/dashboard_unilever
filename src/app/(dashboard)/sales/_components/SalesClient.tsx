@@ -144,6 +144,27 @@ function ChannelBar({ label, online, offline }: { label: string; online: number;
 
 // ── Component ─────────────────────────────────────────────────────────────────
 
+// ── Call status options (Thai DB values) ──────────────────────────────────────
+
+const CALL_STATUS_OPTIONS = [
+  'สั่งซื้อสินค้าเรียบร้อย',
+  'สั่งสินค้าอื่นๆ',
+  'เสนอราคาแล้ว อยู่ระหว่างรอการยืนยันคำสั่งซื้อ',
+  'นัดหมายติดต่อกลับ',
+  'ไม่สะดวกคุย',
+  'ไม่รับสาย 1',
+  'ไม่รับสาย 2',
+  'ไม่รับสาย 3',
+  'ไม่รับสาย',
+  'ไม่รับสาย/สายว่างแต่ไม่รับ',
+  'ยังไม่ต้องการสินค้า',
+  'ปิดเครื่อง/ติดต่อไม่ได้',
+  'สายไม่ว่าง',
+  'เบอร์ผิด/ไม่มีสัญญาน',
+  'สายว่างไม่มีคนรับ',
+  'เบอร์บ้านไม่มีคนรับ',
+]
+
 export default function SalesClient() {
   const { lang } = useLanguage()
   const {
@@ -151,11 +172,12 @@ export default function SalesClient() {
     handleChipClick: baseHandleChipClick, clearRange, activeRangeLabel,
   } = useMonthRange()
   const [interval,        setInterval]        = useState<Interval>('custom')
-  const [customStart,     setCustomStart]     = useState('')
-  const [customEnd,       setCustomEnd]       = useState('')
+  const [customStart,     setCustomStart]     = useState('2026-05-01')
+  const [customEnd,       setCustomEnd]       = useState('2026-05-31')
   const [channel,         setChannel]         = useState<string[]>([])
   const [cmg,             setCmg]             = useState<string[]>([])
   const [agent,           setAgent]           = useState<string[]>([])
+  const [callStatus,      setCallStatus]      = useState<string[]>([])
   const [filterConv,      setFilterConv]      = useState<Conversion>('all')
 
   const handleChipClick = (m: string) => {
@@ -184,11 +206,12 @@ export default function SalesClient() {
     if (channel.length > 0) p.set('channel',   channel.join(','))
     if (cmg.length > 0)     p.set('cmg',       cmg.join(','))
     if (agent.length > 0)   p.set('agent',     agent.join(','))
+    if (callStatus.length > 0) p.set('callStatus', callStatus.join(','))
     if (filterConv !== 'all') p.set('filterConv', filterConv)
     if (effectiveStart)     p.set('startDate', effectiveStart)
     if (effectiveEnd)       p.set('endDate',   effectiveEnd)
     return `/api/data/sales?${p.toString()}`
-  }, [calculatedInterval, channel, cmg, agent, filterConv, effectiveStart, effectiveEnd])
+  }, [calculatedInterval, channel, cmg, agent, callStatus, filterConv, effectiveStart, effectiveEnd])
 
   const { data, isLoading, isValidating } = useDashboardSWR<SalesData>(apiUrl)
 
@@ -209,7 +232,7 @@ export default function SalesClient() {
 
   const { kpi, by_period, options, months } = data
 
-  const hasFilter = channel.length > 0 || cmg.length > 0 || agent.length > 0 || filterConv !== 'all'
+  const hasFilter = channel.length > 0 || cmg.length > 0 || agent.length > 0 || callStatus.length > 0 || filterConv !== 'all'
   const hasRange  = !!(rangeFrom || (interval === 'custom'))
 
   const kpiPeriodLabel = kpi.current_period_label ?? null
@@ -302,6 +325,13 @@ export default function SalesClient() {
                 options={options.agents.map(v => ({ value: v, label: v }))}
                 width="w-[150px]"
               />
+              <MultiSelect
+                label={t('common.allStatuses', lang)}
+                value={callStatus}
+                onChange={setCallStatus}
+                options={CALL_STATUS_OPTIONS.map(v => ({ value: v, label: v }))}
+                width="w-[160px]"
+              />
 
               <Select value={filterConv} onValueChange={v => setFilterConv(v as Conversion)}>
                 <SelectTrigger className="h-7 text-xs w-[155px]"><SelectValue /></SelectTrigger>
@@ -315,9 +345,9 @@ export default function SalesClient() {
               {(hasFilter || hasRange) && (
                 <button
                   onClick={() => {
-                    setChannel([]); setCmg([]); setAgent([]); setFilterConv('all')
+                    setChannel([]); setCmg([]); setAgent([]); setCallStatus([]); setFilterConv('all')
                     clearRange(); setInterval('custom')
-                    setCustomStart(''); setCustomEnd('')
+                    setCustomStart('2026-05-01'); setCustomEnd('2026-05-31')
                   }}
                   className="text-xs text-[#003DA6] hover:underline font-semibold"
                 >
