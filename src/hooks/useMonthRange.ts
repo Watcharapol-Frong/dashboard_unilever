@@ -44,7 +44,7 @@ export function useMonthRange() {
 
   const activeRangeLabel = useMemo(() => formatRangeLabel(rangeFrom, rangeTo), [rangeFrom, rangeTo])
 
-  const effectiveStart = rangeFrom
+  const effectiveStart = rangeFrom ? `${rangeFrom}-01` : null
   const effectiveEnd   = rangeFrom ? lastDayOfMonth(rangeTo ?? rangeFrom) : null
 
   return {
