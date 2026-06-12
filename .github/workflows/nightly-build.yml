@@ -1,0 +1,38 @@
+name: Nightly Mart Build
+
+on:
+  schedule:
+    # 02:00 AM ICT (UTC+7) = 19:00 UTC
+    - cron: '0 19 * * *'
+  workflow_dispatch:
+    inputs:
+      attribution_days:
+        description: 'Attribution window in days (default: 14)'
+        required: false
+        default: '14'
+
+jobs:
+  build-mart:
+    name: Rebuild mart tables
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run mart build
+        env:
+          DATABASE_URL:      ${{ secrets.DATABASE_URL }}
+          ATTRIBUTION_DAYS:  ${{ inputs.attribution_days || '14' }}
+          NODE_ENV:          production
+        run: npx tsx scripts/build-mart.ts
