@@ -32,6 +32,7 @@ A production-grade operational analytics platform for the Unilever HOC (House of
 | **Incentives** | Finance | Monthly incentive payouts · tier configuration · programme ROI |
 | **Data Hub** *(admin)* | Admin | CSV upload pipeline · ETL status monitoring · mart rebuild with configurable attribution window |
 | **Exports** *(admin)* | Admin | Custom pivot exports to CSV/XLSX at month/week/day/order-line granularity |
+| **AI Assistant** | All users | Context-aware chatbot powered by Dify for data-driven insights |
 
 ---
 
@@ -56,6 +57,12 @@ A production-grade operational analytics platform for the Unilever HOC (House of
 │  · Raw tables (leads, sales, …) │  │  · AES-256-GCM encrypted     │
 │  · Mart tables (aggregated KPIs)│  │  · Multipart upload          │
 └─────────────────────────────────┘  └─────────────────────────────┘
+
+┌──────────────────────────────────────────────────────────────────┐
+│  AI Integration (Dify)                                           │
+│  · SSE streaming chat interface                                  │
+│  · Context-aware assistant via /api/chat                         │
+└──────────────────────────────────────────────────────────────────┘
 
 External sync:
   Google Apps Script → POST /api/data/ingest/telesales-activity
@@ -136,6 +143,7 @@ Mart rebuild (on demand, admin):
 | Charts | [Recharts](https://recharts.org) |
 | Tables | [TanStack Table v8](https://tanstack.com/table) |
 | Excel generation | [ExcelJS](https://github.com/exceljs/exceljs) |
+| AI Platform | [Dify](https://dify.ai) — LLM orchestration & RAG |
 | Deployment | [Vercel](https://vercel.com) |
 
 ---
@@ -319,6 +327,7 @@ All endpoints live under `/api/data/`. Authenticated endpoints require a valid C
 | `POST` | `/api/data/upload/replay` | Admin | Re-process R2 backups into DB |
 | `POST` | `/api/data/ingest/telesales-activity` | Bearer | GAS: upsert call records |
 | `GET` | `/api/data/ingest/threshold` | Bearer | GAS: latest `first_connected_date` |
+| `POST` | `/api/chat` | User | Proxy request to Dify AI for streaming chat |
 | `POST` | `/api/auth/register` | Public* | Invite-code-gated user registration |
 
 \* Rate-limited (5 req/IP/min) and invite-code protected.
