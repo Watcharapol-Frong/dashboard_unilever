@@ -172,8 +172,8 @@ export default function SalesClient() {
     handleChipClick: baseHandleChipClick, clearRange, activeRangeLabel,
   } = useMonthRange()
   const [interval,        setInterval]        = useState<Interval>('monthly')
-  const [customStart,     setCustomStart]     = useState('2026-05-01')
-  const [customEnd,       setCustomEnd]       = useState('2026-05-31')
+  const [customStart,     setCustomStart]     = useState('')
+  const [customEnd,       setCustomEnd]       = useState('')
   const [channel,         setChannel]         = useState<string[]>([])
   const [cmg,             setCmg]             = useState<string[]>([])
   const [agent,           setAgent]           = useState<string[]>([])
@@ -347,7 +347,7 @@ export default function SalesClient() {
                   onClick={() => {
                     setChannel([]); setCmg([]); setAgent([]); setCallStatus([]); setFilterConv('all')
                     clearRange(); setInterval('custom')
-                    setCustomStart('2026-05-01'); setCustomEnd('2026-05-31')
+                    setCustomStart(''); setCustomEnd('')
                   }}
                   className="text-xs text-[#003DA6] hover:underline font-semibold"
                 >
