@@ -115,6 +115,7 @@ export interface RecentOrder {
   dynamic_cmg: string | null
   channel: string
   agent: string | null
+  call_status: string | null
 }
 
 export interface ProductKpi {
