@@ -4,13 +4,17 @@ import { NextResponse } from 'next/server'
 export class ForbiddenError extends Error {}
 export class UnauthorizedError extends Error {}
 
+const DEV_MODE = process.env.DEV_MODE === 'true' && process.env.NODE_ENV === 'development'
+
 export async function requireAdmin(): Promise<void> {
+  if (DEV_MODE) return
   const { userId, sessionClaims } = await auth()
   if (!userId) throw new UnauthorizedError()
   if (sessionClaims?.publicMetadata?.role !== 'admin') throw new ForbiddenError()
 }
 
 export async function requireAuth(): Promise<void> {
+  if (DEV_MODE) return
   const { userId } = await auth()
   if (!userId) throw new UnauthorizedError()
 }

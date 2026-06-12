@@ -3,6 +3,10 @@ import { NextResponse } from 'next/server'
 
 export const ADMIN_PATHS = ['/leads', '/data-hub', '/exports']
 
+// Dev mode: bypass all auth when DEV_MODE=true in .env.local (development only)
+// This flag has zero effect in production — NODE_ENV=production disables it entirely.
+const DEV_MODE = process.env.DEV_MODE === 'true' && process.env.NODE_ENV === 'development'
+
 const isProtectedRoute = createRouteMatcher([
   '/overview(.*)', '/sales(.*)', '/telesales(.*)',
   '/products(.*)', '/leads(.*)', '/incentives(.*)', '/data-hub(.*)', '/exports(.*)',
@@ -17,6 +21,9 @@ const isAdminOnlyRoute = createRouteMatcher([
 ])
 
 export default clerkMiddleware(async (auth, request) => {
+  // ── Dev Mode: skip all auth checks, treat as admin ───────────────────────────
+  if (DEV_MODE) return NextResponse.next()
+
   // ── Step 1: Resolve auth state once — avoids two round-trips to Clerk ────────
   const { userId, sessionClaims, redirectToSignIn } = await auth()
 
