@@ -34,7 +34,7 @@ export default function OrdersClient() {
   const [channel,         setChannel]         = useState<string[]>([])
   const [cmg,             setCmg]             = useState<string[]>([])
   const [agent,           setAgent]           = useState<string[]>([])
-  const [conversion,      setConversion]      = useState<Conversion>('all')
+  const [filterConv,      setFilterConv]      = useState<Conversion>('all')
   const [orderSearch,     setOrderSearch]     = useState('')
   const [debouncedSearch, setDebouncedSearch] = useState('')
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
@@ -65,12 +65,12 @@ export default function OrdersClient() {
     if (channel.length > 0)   p.set('channel',    channel.join(','))
     if (cmg.length > 0)       p.set('cmg',        cmg.join(','))
     if (agent.length > 0)     p.set('agent',      agent.join(','))
-    if (conversion !== 'all') p.set('conversion', conversion)
+    if (filterConv !== 'all') p.set('filterConv', filterConv)
     if (effectiveStart)       p.set('startDate',  effectiveStart)
     if (effectiveEnd)         p.set('endDate',    effectiveEnd)
     if (debouncedSearch)      p.set('search',     debouncedSearch)
     return `/api/data/sales?${p.toString()}`
-  }, [channel, cmg, agent, conversion, effectiveStart, effectiveEnd, debouncedSearch])
+  }, [channel, cmg, agent, filterConv, effectiveStart, effectiveEnd, debouncedSearch])
 
   const { data, isLoading } = useDashboardSWR<SalesData>(apiUrl)
 
@@ -80,7 +80,7 @@ export default function OrdersClient() {
   }
 
   const { recent_orders, options, months } = data
-  const hasFilter = channel.length > 0 || cmg.length > 0 || agent.length > 0 || conversion !== 'all'
+  const hasFilter = channel.length > 0 || cmg.length > 0 || agent.length > 0 || filterConv !== 'all'
   const hasRange  = !!(rangeFrom || interval === 'custom')
 
   return (
@@ -143,7 +143,7 @@ export default function OrdersClient() {
                 options={options.agents.map(v => ({ value: v, label: v }))}
                 width="w-[150px]"
               />
-              <Select value={conversion} onValueChange={v => setConversion(v as Conversion)}>
+              <Select value={filterConv} onValueChange={v => setFilterConv(v as Conversion)}>
                 <SelectTrigger className="h-7 text-xs w-[155px]">
                   <SelectValue placeholder="All Customers" />
                 </SelectTrigger>
@@ -157,7 +157,7 @@ export default function OrdersClient() {
               {(hasFilter || hasRange) && (
                 <button
                   onClick={() => {
-                    setChannel([]); setCmg([]); setAgent([]); setConversion('all')
+                    setChannel([]); setCmg([]); setAgent([]); setFilterConv('all')
                     clearRange(); setInterval('custom')
                     setCustomStart('2026-05-01'); setCustomEnd('2026-05-31')
                   }}

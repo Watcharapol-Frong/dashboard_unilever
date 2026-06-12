@@ -29,6 +29,7 @@ function buildWhere(
   cmg: string[],
   agent: string[],
   filterConv?: string | null,
+  search?: string | null,
 ) {
   const conditions: string[] = []
   const params: any[] = []
@@ -42,6 +43,12 @@ function buildWhere(
     conditions.push(CONV)
   } else if (filterConv === 'not_converted') {
     conditions.push(NOT_CONV)
+  }
+
+  if (search) {
+    const s = `$${params.length + 1}`
+    params.push(`%${search}%`)
+    conditions.push(`(order_number ILIKE ${s} OR mmid ILIKE ${s})`)
   }
 
   return { where: toWhere(conditions), params }
@@ -76,6 +83,29 @@ async function fetchKpis(where: string, params: any[]) {
       COUNT(DISTINCT order_number)           FILTER (WHERE ${NOT_CONV})::text                                      AS not_converted_orders
     FROM sales_hoc_orders
     ${where}
+  `, params)
+}
+
+async function fetchRecentOrders(where: string, params: any[]) {
+  return query<{
+    order_number: string; order_date: string; mmid: string | null
+    prod_num: string | null; sales_qty: number; sales_in_vat: number
+    dynamic_cmg: string | null; channel: string; agent: string | null
+  }>(`
+    SELECT
+      order_number,
+      order_date::text,
+      mmid,
+      prod_num,
+      sales_qty,
+      sales_in_vat,
+      dynamic_cmg,
+      channel,
+      agent
+    FROM sales_hoc_orders
+    ${where}
+    ORDER BY order_date DESC, order_number DESC
+    LIMIT 1000
   `, params)
 }
 
@@ -125,12 +155,13 @@ export async function GET(request: Request) {
     const channel   = (searchParams.get('channel') || '').split(',').filter(Boolean)
     const cmg       = (searchParams.get('cmg')     || '').split(',').filter(Boolean)
     const agent     = (searchParams.get('agent')   || '').split(',').filter(Boolean)
-    const filterConv = searchParams.get('filterConv')
+    const filterConv = searchParams.get('filterConv') || searchParams.get('conversion')
+    const search     = searchParams.get('search')
 
     const hasDateRange = !!(startDate && endDate)
 
-    const noDate = buildWhere(null, null, channel, cmg, agent, filterConv)
-    const curr   = buildWhere(startDate, endDate, channel, cmg, agent, filterConv)
+    const noDate = buildWhere(null, null, channel, cmg, agent, filterConv, search)
+    const curr   = buildWhere(startDate, endDate, channel, cmg, agent, filterConv, search)
 
     const grpBy = periodExpr(interval)
     const lbl   = labelExpr(interval)
@@ -147,7 +178,7 @@ export async function GET(request: Request) {
       prevWhere = buildWhere(
         ps.toISOString().split('T')[0],
         pe.toISOString().split('T')[0],
-        channel, cmg, agent, filterConv,
+        channel, cmg, agent, filterConv, search,
       )
       comparisonLabel = 'vs preceding period'
     } else {
@@ -163,12 +194,12 @@ export async function GET(request: Request) {
       const r0 = preloadedPeriods[0]
       if (r0) {
         const [ps, pe] = periodBoundaries(r0.period, interval)
-        trendFilter = buildWhere(ps, pe, channel, cmg, agent, filterConv)
+        trendFilter = buildWhere(ps, pe, channel, cmg, agent, filterConv, search)
       }
     }
 
     // ── Phase 2: Fetch all remaining data in parallel ─────────────────────────
-    const [currKpiOrNull, prevKpi, periodsRaw, cmgOptsRaw, agentOptsRaw, monthsRaw] = await Promise.all([
+    const [currKpiOrNull, prevKpi, periodsRaw, cmgOptsRaw, agentOptsRaw, monthsRaw, recentOrdersRaw] = await Promise.all([
       // Current KPI: date-scoped when range provided; null when no range (use preloaded scope)
       hasDateRange
         ? fetchKpis(curr.where, curr.params)
@@ -219,6 +250,11 @@ export async function GET(request: Request) {
       query<{ month: string }>(`
         SELECT DISTINCT month::text AS month FROM sales_hoc_orders ORDER BY month
       `),
+
+      // Recent orders (only when daily or searched)
+      (interval === 'daily' || search)
+        ? fetchRecentOrders(curr.where, curr.params)
+        : Promise.resolve([]),
     ])
 
     // ── Parse current KPI ─────────────────────────────────────────────────────
@@ -300,6 +336,11 @@ export async function GET(request: Request) {
           agents: agentOptsRaw.map(o => o.agent).filter(Boolean).sort(),
         },
         months: monthsRaw.map(r => r.month),
+        recent_orders: recentOrdersRaw.map(r => ({
+          ...r,
+          sales_qty: Number(r.sales_qty),
+          sales_in_vat: Number(r.sales_in_vat),
+        })),
       },
     })
     setCacheHeader(res, 'MEDIUM')
