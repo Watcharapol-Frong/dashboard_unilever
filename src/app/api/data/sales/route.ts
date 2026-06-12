@@ -28,6 +28,7 @@ function buildWhere(
   channel: string[],
   cmg: string[],
   agent: string[],
+  filterConv?: string | null,
 ) {
   const conditions: string[] = []
   const params: any[] = []
@@ -36,6 +37,13 @@ function buildWhere(
   addFilter(params, conditions, channel, 'channel')
   addFilter(params, conditions, cmg, 'dynamic_cmg')
   addFilter(params, conditions, agent, 'agent')
+
+  if (filterConv === 'converted') {
+    conditions.push(CONV)
+  } else if (filterConv === 'not_converted') {
+    conditions.push(NOT_CONV)
+  }
+
   return { where: toWhere(conditions), params }
 }
 
@@ -117,11 +125,12 @@ export async function GET(request: Request) {
     const channel   = (searchParams.get('channel') || '').split(',').filter(Boolean)
     const cmg       = (searchParams.get('cmg')     || '').split(',').filter(Boolean)
     const agent     = (searchParams.get('agent')   || '').split(',').filter(Boolean)
+    const filterConv = searchParams.get('filterConv')
 
     const hasDateRange = !!(startDate && endDate)
 
-    const noDate = buildWhere(null, null, channel, cmg, agent)
-    const curr   = buildWhere(startDate, endDate, channel, cmg, agent)
+    const noDate = buildWhere(null, null, channel, cmg, agent, filterConv)
+    const curr   = buildWhere(startDate, endDate, channel, cmg, agent, filterConv)
 
     const grpBy = periodExpr(interval)
     const lbl   = labelExpr(interval)
@@ -138,7 +147,7 @@ export async function GET(request: Request) {
       prevWhere = buildWhere(
         ps.toISOString().split('T')[0],
         pe.toISOString().split('T')[0],
-        channel, cmg, agent,
+        channel, cmg, agent, filterConv,
       )
       comparisonLabel = 'vs preceding period'
     } else {
@@ -154,7 +163,7 @@ export async function GET(request: Request) {
       const r0 = preloadedPeriods[0]
       if (r0) {
         const [ps, pe] = periodBoundaries(r0.period, interval)
-        trendFilter = buildWhere(ps, pe, channel, cmg, agent)
+        trendFilter = buildWhere(ps, pe, channel, cmg, agent, filterConv)
       }
     }
 

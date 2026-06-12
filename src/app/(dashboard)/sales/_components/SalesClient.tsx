@@ -156,7 +156,7 @@ export default function SalesClient() {
   const [channel,         setChannel]         = useState<string[]>([])
   const [cmg,             setCmg]             = useState<string[]>([])
   const [agent,           setAgent]           = useState<string[]>([])
-  const [conversionView,  setConversionView]  = useState<Conversion>('all')
+  const [filterConv,      setFilterConv]      = useState<Conversion>('all')
 
   const handleChipClick = (m: string) => {
     if (interval === 'custom') setInterval('monthly')
@@ -184,10 +184,11 @@ export default function SalesClient() {
     if (channel.length > 0) p.set('channel',   channel.join(','))
     if (cmg.length > 0)     p.set('cmg',       cmg.join(','))
     if (agent.length > 0)   p.set('agent',     agent.join(','))
+    if (filterConv !== 'all') p.set('filterConv', filterConv)
     if (effectiveStart)     p.set('startDate', effectiveStart)
     if (effectiveEnd)       p.set('endDate',   effectiveEnd)
     return `/api/data/sales?${p.toString()}`
-  }, [calculatedInterval, channel, cmg, agent, effectiveStart, effectiveEnd])
+  }, [calculatedInterval, channel, cmg, agent, filterConv, effectiveStart, effectiveEnd])
 
   const { data, isLoading, isValidating } = useDashboardSWR<SalesData>(apiUrl)
 
@@ -208,7 +209,7 @@ export default function SalesClient() {
 
   const { kpi, by_period, options, months } = data
 
-  const hasFilter = channel.length > 0 || cmg.length > 0 || agent.length > 0 || conversionView !== 'all'
+  const hasFilter = channel.length > 0 || cmg.length > 0 || agent.length > 0 || filterConv !== 'all'
   const hasRange  = !!(rangeFrom || (interval === 'custom'))
 
   const kpiPeriodLabel = kpi.current_period_label ?? null
@@ -217,27 +218,23 @@ export default function SalesClient() {
     ? `${calculatedInterval} · ${durationDays}d`
     : `${calculatedInterval} view`
 
-  // ── Display values based on conversionView ────────────────────────────────
-  const displaySales   = conversionView === 'converted' ? kpi.converted_sales   : conversionView === 'not_converted' ? kpi.not_converted_sales   : kpi.total_sales
-  const displayOrders  = conversionView === 'converted' ? kpi.converted_orders  : conversionView === 'not_converted' ? kpi.not_converted_orders  : kpi.total_orders
-  const displayOnline  = conversionView === 'converted' ? kpi.converted_online  : conversionView === 'not_converted' ? kpi.not_converted_online  : kpi.total_online
-  const displayOffline = conversionView === 'converted' ? kpi.converted_offline : conversionView === 'not_converted' ? kpi.not_converted_offline : kpi.total_offline
+  // ── Display values based on server response (already filtered) ─────────────
+  const displaySales   = kpi.total_sales
+  const displayOrders  = kpi.total_orders
+  const displayOnline  = kpi.total_online
+  const displayOffline = kpi.total_offline
   const displayAvgOV   = displayOrders > 0 ? displaySales / displayOrders : 0
 
-  // ── Chart data based on conversionView ────────────────────────────────────
-  const chartData = by_period.map(p => {
-    if (conversionView === 'converted') {
-      return { name: p.period_label, Online: p.converted_online, Offline: p.converted_offline }
-    }
-    if (conversionView === 'not_converted') {
-      return { name: p.period_label, Online: p.not_converted_online, Offline: p.not_converted_offline }
-    }
-    return { name: p.period_label, Online: p.total_online, Offline: p.total_offline }
-  })
+  // ── Chart data based on server response ───────────────────────────────────
+  const chartData = by_period.map(p => ({
+    name:    p.period_label,
+    Online:  p.total_online,
+    Offline: p.total_offline,
+  }))
 
-  const channelBarLabel = conversionView === 'converted'
+  const channelBarLabel = filterConv === 'converted'
     ? t('sales.convertedOrders', lang)
-    : conversionView === 'not_converted'
+    : filterConv === 'not_converted'
     ? t('sales.notConverted', lang)
     : t('sales.allOrders', lang)
 
@@ -306,7 +303,7 @@ export default function SalesClient() {
                 width="w-[150px]"
               />
 
-              <Select value={conversionView} onValueChange={v => setConversionView(v as Conversion)}>
+              <Select value={filterConv} onValueChange={v => setFilterConv(v as Conversion)}>
                 <SelectTrigger className="h-7 text-xs w-[155px]"><SelectValue /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="all">{t('common.allCustomers', lang)}</SelectItem>
@@ -318,7 +315,7 @@ export default function SalesClient() {
               {(hasFilter || hasRange) && (
                 <button
                   onClick={() => {
-                    setChannel([]); setCmg([]); setAgent([]); setConversionView('all')
+                    setChannel([]); setCmg([]); setAgent([]); setFilterConv('all')
                     clearRange(); setInterval('custom')
                     setCustomStart('2026-05-01'); setCustomEnd('2026-05-31')
                   }}
@@ -351,9 +348,9 @@ export default function SalesClient() {
           title={t('sales.totalSales', lang)}
           value={fmtBaht(displaySales)}
           subtitle={
-            conversionView === 'converted'
+            filterConv === 'converted'
               ? t('sales.convertedOrdersOnly', lang)
-              : conversionView === 'not_converted'
+              : filterConv === 'not_converted'
               ? t('sales.notConvertedOrders', lang)
               : `${fmt(kpi.total_qty)} ${t('common.units', lang)} · ${kpi.total_orders.toLocaleString()} ${t('common.orders', lang)}`
           }
