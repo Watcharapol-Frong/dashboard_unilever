@@ -29,8 +29,8 @@ export default function OrdersClient() {
   } = useMonthRange()
 
   const [interval,        setInterval]        = useState<Interval>('custom')
-  const [customStart,     setCustomStart]     = useState('2026-05-01')
-  const [customEnd,       setCustomEnd]       = useState('2026-05-31')
+  const [customStart,     setCustomStart]     = useState('')
+  const [customEnd,       setCustomEnd]       = useState('')
   const [channel,         setChannel]         = useState<string[]>([])
   const [cmg,             setCmg]             = useState<string[]>([])
   const [agent,           setAgent]           = useState<string[]>([])
@@ -55,10 +55,10 @@ export default function OrdersClient() {
     return Math.ceil(Math.abs(new Date(customEnd).getTime() - new Date(customStart).getTime()) / 86_400_000)
   }, [interval, customStart, customEnd])
 
-  const effectiveStart = rangeFrom ?? (interval === 'custom' ? customStart : null)
+  const effectiveStart = rangeFrom ?? (interval === 'custom' && customStart ? customStart : null)
   const effectiveEnd   = rangeFrom
     ? lastDayOfMonth(rangeTo ?? rangeFrom)
-    : (interval === 'custom' ? customEnd : null)
+    : (interval === 'custom' && customEnd ? customEnd : null)
 
   const apiUrl = useMemo(() => {
     const p = new URLSearchParams({ interval: 'daily' })
@@ -159,7 +159,7 @@ export default function OrdersClient() {
                   onClick={() => {
                     setChannel([]); setCmg([]); setAgent([]); setFilterConv('all')
                     clearRange(); setInterval('custom')
-                    setCustomStart('2026-05-01'); setCustomEnd('2026-05-31')
+                    setCustomStart(''); setCustomEnd('')
                   }}
                   className="text-xs text-[#003DA6] hover:underline font-semibold"
                 >
