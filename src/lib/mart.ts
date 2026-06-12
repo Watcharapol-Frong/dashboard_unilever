@@ -1,48 +1,53 @@
 import { query, queryOne, queryRowCount } from '@/lib/db'
 import { reachedCond } from '@/lib/metrics'
 
+// Ensures all schema extensions exist — called at build time and on server startup.
+// Safe to call multiple times (all DDL is IF NOT EXISTS / ADD COLUMN IF NOT EXISTS).
+export async function ensureSchemaExtensions(): Promise<void> {
+  await Promise.all([
+    query(`
+      CREATE TABLE IF NOT EXISTS mmid_cmg_map (
+        mmid                  TEXT NOT NULL PRIMARY KEY,
+        primary_cmg           TEXT,
+        first_connected_date  DATE
+      )
+    `),
+    query(`
+      CREATE TABLE IF NOT EXISTS mart_builds (
+        id               BIGSERIAL    PRIMARY KEY,
+        started_at       TIMESTAMPTZ  NOT NULL DEFAULT NOW(),
+        finished_at      TIMESTAMPTZ,
+        attribution_days INTEGER,
+        duration_ms      INTEGER,
+        status           TEXT         NOT NULL DEFAULT 'running',
+        row_counts       JSONB,
+        error_message    TEXT
+      )
+    `),
+    query(`ALTER TABLE upload_batches ADD COLUMN IF NOT EXISTS file_hash TEXT`).catch(() => {}),
+    query(`
+      CREATE UNIQUE INDEX IF NOT EXISTS idx_ub_file_hash
+        ON upload_batches (file_hash)
+        WHERE file_hash IS NOT NULL
+    `).catch(() => {}),
+  ])
+}
+
 export async function buildMartMain(attributionDays = 14): Promise<number> {
-  // ── 1. Rebuild mart_telesales_orders (ALL orders for called mmids, any product) ──
-
-  await query(`DROP TABLE IF EXISTS mart_telesales_orders`)
-
+  // ── 1. mmid_cmg_map — tiny lookup: mmid → primary_cmg + first_connected_date ──
+  await query(`DROP TABLE IF EXISTS mmid_cmg_map`)
   await query(`
-    CREATE TABLE mart_telesales_orders (
-      mmid                  TEXT        NOT NULL,
-      order_number          TEXT        NOT NULL,
-      order_date            DATE        NOT NULL,
-      channel               TEXT,
-      prod_num              TEXT        NOT NULL,
-      sales_qty             NUMERIC,
-      sales_in_vat          NUMERIC,
-      dynamic_cmg           TEXT,
+    CREATE TABLE mmid_cmg_map (
+      mmid                  TEXT NOT NULL PRIMARY KEY,
       primary_cmg           TEXT,
-      first_connected_date  DATE,
-      agent                 TEXT,
-      call_status           TEXT,
-      lead_customers        TEXT,
-      days_to_order         INTEGER,
-      product_name_th       TEXT,
-      product_name_en       TEXT,
-      brands                TEXT,
-      class_name            TEXT,
-      subclass              TEXT,
-      is_hoc_unilever       BOOLEAN     NOT NULL DEFAULT FALSE,
-      month                 DATE,
-      month_label           TEXT,
-      week_label            TEXT,
-      refreshed_at          TIMESTAMPTZ DEFAULT NOW(),
-      PRIMARY KEY (mmid, order_number, prod_num)
+      first_connected_date  DATE
     )
   `)
-
   await query(`
     WITH all_sales AS (
-      SELECT order_number, prod_num, order_date, 'online' AS channel, mmid, dynamic_cmg, sales_qty, sales_in_vat
-      FROM online_sales WHERE mmid IS NOT NULL
+      SELECT mmid, dynamic_cmg FROM online_sales  WHERE mmid IS NOT NULL
       UNION ALL
-      SELECT order_number, prod_num, order_date, 'offline' AS channel, mmid, dynamic_cmg, sales_qty, sales_in_vat
-      FROM offline_sales WHERE mmid IS NOT NULL
+      SELECT mmid, dynamic_cmg FROM offline_sales WHERE mmid IS NOT NULL
     ),
     cmg_priority AS (
       SELECT mmid,
@@ -54,37 +59,17 @@ export async function buildMartMain(attributionDays = 14): Promise<number> {
         END AS primary_cmg
       FROM all_sales GROUP BY mmid
     )
-    INSERT INTO mart_telesales_orders (
-      mmid, order_number, order_date, channel, prod_num, sales_qty, sales_in_vat,
-      dynamic_cmg, primary_cmg, first_connected_date, agent, call_status, lead_customers,
-      days_to_order, product_name_th, product_name_en, brands, class_name, subclass,
-      is_hoc_unilever, month, month_label, week_label, refreshed_at
-    )
-    SELECT
-      tc.mmid, s.order_number, s.order_date, s.channel, s.prod_num,
-      s.sales_qty, s.sales_in_vat,
-      s.dynamic_cmg, COALESCE(cp.primary_cmg, s.dynamic_cmg),
-      tc.first_connected_date, tc.agent, tc.call_status, tc.lead_customers,
-      (s.order_date - tc.first_connected_date)::INT,
-      p.product_name_th, p.product_name_en, p.brands, p.class_name, p.subclass,
-      (p.product_name_en IS NOT NULL),
-      DATE_TRUNC('month', s.order_date)::date,
-      TO_CHAR(DATE_TRUNC('month', s.order_date)::date, 'FMMonth'),
-      'W' || LPAD(EXTRACT(WEEK FROM s.order_date)::TEXT, 2, '0')
-        || '-' || TO_CHAR(DATE_TRUNC('week', s.order_date)::DATE, 'DD/Mon')
-        || '-' || TO_CHAR(DATE_TRUNC('week', s.order_date)::DATE + 6, 'DD/Mon'),
-      NOW()
+    INSERT INTO mmid_cmg_map (mmid, primary_cmg, first_connected_date)
+    SELECT tc.mmid, cp.primary_cmg, tc.first_connected_date
     FROM telesales_calls tc
-    JOIN all_sales s ON s.mmid = tc.mmid AND s.order_date >= tc.first_connected_date
-    LEFT JOIN products p ON p.prod_num = s.prod_num
     LEFT JOIN cmg_priority cp ON cp.mmid = tc.mmid
     WHERE tc.first_connected_date IS NOT NULL
   `)
 
-  // ── 2. Rebuild sales_hoc_orders (HOC-only attributed orders, full attribution logic) ──
-
+  // ── 2. sales_hoc_orders — HOC-attributed orders built directly from source tables ──
+  // Replaces the old two-step approach (mart_telesales_orders → filter HOC → apply window).
+  // is_hoc_unilever ≡ product exists in products table with a product_name_en.
   await query(`DROP TABLE IF EXISTS sales_hoc_orders`)
-
   await query(`
     CREATE TABLE sales_hoc_orders (
       mmid                  TEXT        NOT NULL,
@@ -101,8 +86,6 @@ export async function buildMartMain(attributionDays = 14): Promise<number> {
       call_status           TEXT,
       lead_customers        TEXT,
       days_to_order         INTEGER,
-      order_seq_in_window   INTEGER,
-      is_first_ever_order   BOOLEAN,
       customer_type         TEXT,
       product_name_th       TEXT,
       product_name_en       TEXT,
@@ -118,60 +101,90 @@ export async function buildMartMain(attributionDays = 14): Promise<number> {
   `)
 
   const rowCount = await queryRowCount(`
-    WITH hoc_base AS (
-      SELECT * FROM mart_telesales_orders WHERE is_hoc_unilever = TRUE
+    WITH all_sales AS (
+      SELECT order_number, prod_num, order_date, 'online'  AS channel, mmid, dynamic_cmg, sales_qty, sales_in_vat
+      FROM online_sales  WHERE mmid IS NOT NULL
+      UNION ALL
+      SELECT order_number, prod_num, order_date, 'offline' AS channel, mmid, dynamic_cmg, sales_qty, sales_in_vat
+      FROM offline_sales WHERE mmid IS NOT NULL
+    ),
+    attributed AS (
+      SELECT
+        tc.mmid, s.order_number, s.order_date, s.channel, s.prod_num,
+        s.sales_qty, s.sales_in_vat, s.dynamic_cmg,
+        mc.primary_cmg,
+        tc.first_connected_date, tc.agent, tc.call_status, tc.lead_customers,
+        (s.order_date - tc.first_connected_date)::INT AS days_to_order,
+        p.product_name_th, p.product_name_en, p.brands, p.class_name, p.subclass,
+        DATE_TRUNC('month', s.order_date)::date AS month,
+        TO_CHAR(DATE_TRUNC('month', s.order_date)::date, 'FMMonth') AS month_label,
+        'W' || LPAD(EXTRACT(WEEK FROM s.order_date)::TEXT, 2, '0')
+          || '-' || TO_CHAR(DATE_TRUNC('week', s.order_date)::DATE, 'DD/Mon')
+          || '-' || TO_CHAR(DATE_TRUNC('week', s.order_date)::DATE + 6, 'DD/Mon') AS week_label
+      FROM telesales_calls tc
+      JOIN all_sales       s  ON  s.mmid = tc.mmid
+                               AND s.order_date >= tc.first_connected_date
+      JOIN products        p  ON  p.prod_num = s.prod_num
+                               AND p.product_name_en IS NOT NULL
+      JOIN mmid_cmg_map   mc  ON mc.mmid = tc.mmid
+      WHERE tc.first_connected_date IS NOT NULL
     ),
     first_orders AS (
-      SELECT mmid, MIN(order_date) AS first_order_date FROM hoc_base GROUP BY mmid
-    ),
-    ranked AS (
-      SELECT b.*, fo.first_order_date,
-        ROW_NUMBER() OVER (PARTITION BY b.mmid ORDER BY b.order_date, b.order_number) AS order_seq_in_window
-      FROM hoc_base b JOIN first_orders fo ON fo.mmid = b.mmid
+      SELECT mmid, MIN(order_date) AS first_order_date FROM attributed GROUP BY mmid
     )
     INSERT INTO sales_hoc_orders (
       mmid, order_number, order_date, channel, prod_num, sales_qty, sales_in_vat,
       dynamic_cmg, primary_cmg, first_connected_date, agent, call_status, lead_customers,
-      days_to_order, order_seq_in_window, is_first_ever_order, customer_type,
+      days_to_order, customer_type,
       product_name_th, product_name_en, brands, class_name, subclass,
       month, month_label, week_label, refreshed_at
     )
     SELECT
-      mmid, order_number, order_date, channel, prod_num, sales_qty, sales_in_vat,
-      dynamic_cmg, primary_cmg, first_connected_date, agent, call_status, lead_customers,
-      days_to_order, order_seq_in_window,
-      (order_date = first_order_date) AS is_first_ever_order,
+      a.mmid, a.order_number, a.order_date, a.channel, a.prod_num,
+      a.sales_qty, a.sales_in_vat, a.dynamic_cmg, a.primary_cmg,
+      a.first_connected_date, a.agent, a.call_status, a.lead_customers,
+      a.days_to_order,
       CASE
-        WHEN days_to_order > $1 AND order_date = first_order_date THEN 'first_order_not_converted'
-        WHEN days_to_order > $1                                   THEN 'retention_not_converted'
-        WHEN order_date = first_order_date                        THEN 'new_customer'
-        ELSE                                                           'retention'
-      END AS customer_type,
-      product_name_th, product_name_en, brands, class_name, subclass,
-      month, month_label, week_label, NOW()
-    FROM ranked
+        WHEN a.days_to_order > $1 AND a.order_date = fo.first_order_date THEN 'first_order_not_converted'
+        WHEN a.days_to_order > $1                                         THEN 'retention_not_converted'
+        WHEN a.order_date    = fo.first_order_date                        THEN 'new_customer'
+        ELSE                                                                    'retention'
+      END,
+      a.product_name_th, a.product_name_en, a.brands, a.class_name, a.subclass,
+      a.month, a.month_label, a.week_label, NOW()
+    FROM attributed a
+    JOIN first_orders fo ON fo.mmid = a.mmid
   `, [attributionDays])
+
+  // Indexes — parallel, post-populate
+  await Promise.all([
+    query(`CREATE INDEX IF NOT EXISTS idx_sho_month_dcmg ON sales_hoc_orders (month, dynamic_cmg)`),
+    query(`CREATE INDEX IF NOT EXISTS idx_sho_month_pcmg ON sales_hoc_orders (month, primary_cmg)`),
+    query(`CREATE INDEX IF NOT EXISTS idx_sho_mmid       ON sales_hoc_orders (mmid)`),
+    query(`CREATE INDEX IF NOT EXISTS idx_sho_ctype      ON sales_hoc_orders (customer_type)`),
+    query(`CREATE INDEX IF NOT EXISTS idx_sho_agent      ON sales_hoc_orders (agent)`),
+    query(`CREATE INDEX IF NOT EXISTS idx_sho_date       ON sales_hoc_orders (order_date)`),
+    query(`CREATE INDEX IF NOT EXISTS idx_mcm_pcmg       ON mmid_cmg_map (primary_cmg)`),
+  ])
 
   return rowCount
 }
 
 export async function buildMartPerformance(attributionDays = 14): Promise<number> {
-  // Drop old single table if it exists (migration cleanup)
   await query(`DROP TABLE IF EXISTS mart_performance`)
   await query(`DROP TABLE IF EXISTS mart_performance_cmg`)
   await query(`DROP TABLE IF EXISTS mart_performance_month`)
 
+  // Trimmed schema: removed not_conv_new / not_conv_retention (never queried by any route)
   await query(`
     CREATE TABLE mart_performance_cmg (
-      month              DATE NOT NULL,
-      dynamic_cmg        TEXT NOT NULL,
+      month              DATE    NOT NULL,
+      dynamic_cmg        TEXT    NOT NULL,
       total_calls        INTEGER,
       reached            INTEGER,
       ordered            INTEGER,
       new_customers      INTEGER,
       retention          INTEGER,
-      not_conv_new       INTEGER,
-      not_conv_retention INTEGER,
       hoc_orders         INTEGER,
       hoc_sales          NUMERIC,
       sales_target       NUMERIC,
@@ -181,17 +194,14 @@ export async function buildMartPerformance(attributionDays = 14): Promise<number
     )
   `)
 
+  // Trimmed schema: removed individual cost/headcount breakdowns (total_expense already encodes them)
   await query(`
     CREATE TABLE mart_performance_month (
-      month               DATE NOT NULL,
+      month               DATE    NOT NULL,
       total_calls         INTEGER,
       reached             INTEGER,
       incentive_per_head  NUMERIC,
       total_incentive     NUMERIC,
-      cost_per_agent      NUMERIC,
-      cost_per_supervisor NUMERIC,
-      supervisor_count    INTEGER,
-      agent_count         INTEGER,
       total_agent_cost    NUMERIC,
       total_expense       NUMERIC,
       roi                 NUMERIC,
@@ -201,19 +211,16 @@ export async function buildMartPerformance(attributionDays = 14): Promise<number
     )
   `)
 
-  // Build mart_performance_cmg — CMG-specific metrics (sales_hoc_orders + calls via primary_cmg)
-  // Customer counts (new_customers, retention) use primary_cmg so each mmid is counted in exactly
-  // one CMG row — prevents double-counting when users filter multiple CMGs in the Overview page.
-  // Sales amounts use dynamic_cmg (the order's actual segment tag).
+  // Build mart_performance_cmg
+  // customer_counts use primary_cmg so each mmid counts in exactly one CMG row.
+  // sales_amounts  use dynamic_cmg (the order's actual segment tag).
   await query(`
     WITH customer_metrics AS (
       SELECT
         month, primary_cmg AS dynamic_cmg,
-        COUNT(DISTINCT mmid) FILTER (WHERE customer_type IN ('new_customer','retention'))         AS ordered,
-        COUNT(DISTINCT mmid) FILTER (WHERE customer_type = 'new_customer')                       AS new_customers,
-        COUNT(DISTINCT mmid) FILTER (WHERE customer_type = 'retention')                          AS retention,
-        COUNT(DISTINCT mmid) FILTER (WHERE customer_type = 'first_order_not_converted')          AS not_conv_new,
-        COUNT(DISTINCT mmid) FILTER (WHERE customer_type = 'retention_not_converted')            AS not_conv_retention
+        COUNT(DISTINCT mmid) FILTER (WHERE customer_type IN ('new_customer','retention'))  AS ordered,
+        COUNT(DISTINCT mmid) FILTER (WHERE customer_type = 'new_customer')                AS new_customers,
+        COUNT(DISTINCT mmid) FILTER (WHERE customer_type = 'retention')                   AS retention
       FROM sales_hoc_orders
       WHERE primary_cmg IS NOT NULL
       GROUP BY month, primary_cmg
@@ -230,19 +237,14 @@ export async function buildMartPerformance(attributionDays = 14): Promise<number
       SELECT
         COALESCE(cm.month, sm.month)             AS month,
         COALESCE(cm.dynamic_cmg, sm.dynamic_cmg) AS dynamic_cmg,
-        COALESCE(cm.ordered, 0)           AS ordered,
-        COALESCE(cm.new_customers, 0)     AS new_customers,
-        COALESCE(cm.retention, 0)         AS retention,
-        COALESCE(cm.not_conv_new, 0)      AS not_conv_new,
-        COALESCE(cm.not_conv_retention, 0) AS not_conv_retention,
-        COALESCE(sm.hoc_orders, 0)        AS hoc_orders,
-        COALESCE(sm.hoc_sales, 0)         AS hoc_sales
+        COALESCE(cm.ordered, 0)       AS ordered,
+        COALESCE(cm.new_customers, 0) AS new_customers,
+        COALESCE(cm.retention, 0)     AS retention,
+        COALESCE(sm.hoc_orders, 0)    AS hoc_orders,
+        COALESCE(sm.hoc_sales, 0)     AS hoc_sales
       FROM customer_metrics cm
       FULL OUTER JOIN sales_metrics sm
         ON sm.month = cm.month AND sm.dynamic_cmg = cm.dynamic_cmg
-    ),
-    mmid_cmg AS (
-      SELECT DISTINCT mmid, primary_cmg FROM mart_telesales_orders WHERE primary_cmg IS NOT NULL
     ),
     calls_cmg AS (
       SELECT
@@ -251,30 +253,30 @@ export async function buildMartPerformance(attributionDays = 14): Promise<number
         COUNT(DISTINCT tc.mmid) AS total_calls,
         COUNT(DISTINCT tc.mmid) FILTER (WHERE ${reachedCond('tc')}) AS reached
       FROM telesales_calls tc
-      JOIN mmid_cmg mc ON mc.mmid = tc.mmid
-      WHERE tc.first_connected_date IS NOT NULL
+      JOIN mmid_cmg_map mc ON mc.mmid = tc.mmid
+      WHERE tc.first_connected_date IS NOT NULL AND mc.primary_cmg IS NOT NULL
       GROUP BY 1, 2
     )
     INSERT INTO mart_performance_cmg (
       month, dynamic_cmg, total_calls, reached, ordered, new_customers, retention,
-      not_conv_new, not_conv_retention, hoc_orders, hoc_sales,
-      sales_target, achievement_ratio
+      hoc_orders, hoc_sales, sales_target, achievement_ratio
     )
     SELECT
       tm.month, tm.dynamic_cmg,
       COALESCE(cc.total_calls, 0), COALESCE(cc.reached, 0),
       tm.ordered, tm.new_customers, tm.retention,
-      tm.not_conv_new, tm.not_conv_retention,
       tm.hoc_orders, tm.hoc_sales,
-      COALESCE(tg.sales_target, 0) AS sales_target,
+      COALESCE(tg.sales_target, 0),
       CASE WHEN COALESCE(tg.sales_target, 0) > 0
-           THEN tm.hoc_sales / tg.sales_target ELSE 0 END AS achievement_ratio
+           THEN tm.hoc_sales / tg.sales_target ELSE 0 END
     FROM telesales_metrics tm
     LEFT JOIN calls_cmg cc ON cc.month = tm.month AND cc.dynamic_cmg = tm.dynamic_cmg
-    LEFT JOIN targets tg ON tg.month = tm.month AND tg.dynamic_cmg = tm.dynamic_cmg
+    LEFT JOIN targets   tg ON tg.month = tm.month AND tg.dynamic_cmg = tm.dynamic_cmg
   `)
 
-  // Build mart_performance_month — month-level metrics (calls, costs, ROI)
+  // Build mart_performance_month
+  // Before May 2026: all CMGs count toward incentive (DISTRIBUTOR included).
+  // From May 2026:   DISTRIBUTOR excluded; FOOD RETAILER + HORECA + END USER count.
   await query(`
     WITH tier_calls AS (
       SELECT
@@ -286,13 +288,11 @@ export async function buildMartPerformance(attributionDays = 14): Promise<number
       GROUP BY 1
     ),
     month_sales AS (
-      -- Before May 2026: all CMGs count toward incentive (DISTRIBUTOR included)
-      -- From May 2026:   DISTRIBUTOR excluded; FOOD RETAILER + HORECA + END USER count
       SELECT month,
         SUM(hoc_sales) FILTER (
           WHERE month < '2026-05-01'
              OR dynamic_cmg IN ('FOOD RETAILER', 'HORECA', 'END USER')
-        )              AS incentive_hoc_sales,
+        ) AS incentive_hoc_sales,
         SUM(hoc_sales) AS total_hoc_sales
       FROM mart_performance_cmg
       GROUP BY month
@@ -322,10 +322,8 @@ export async function buildMartPerformance(attributionDays = 14): Promise<number
       SELECT
         ms.month,
         ROUND(
-          -- ROI numerator uses incentive-eligible sales (FOOD RETAILER + HORECA only)
-          -- to be consistent with the achievement % calculation
           ms.incentive_hoc_sales / NULLIF(
-            COALESCE(ah.agent_count, 0)      * COALESCE(mi.incentive_per_head, 0)
+            COALESCE(ah.agent_count, 0)        * COALESCE(mi.incentive_per_head, 0)
             + COALESCE(ah.supervisor_count, 0) * COALESCE(co.cost_per_supervisor, 0)
             + COALESCE(ah.agent_count, 0)      * COALESCE(co.cost_per_agent, 0)
           , 0), 2
@@ -338,8 +336,6 @@ export async function buildMartPerformance(attributionDays = 14): Promise<number
     INSERT INTO mart_performance_month (
       month, total_calls, reached,
       incentive_per_head, total_incentive,
-      cost_per_agent, cost_per_supervisor,
-      supervisor_count, agent_count,
       total_agent_cost, total_expense, roi, attribution_days
     )
     SELECT
@@ -347,16 +343,12 @@ export async function buildMartPerformance(attributionDays = 14): Promise<number
       tc.total_calls,
       tc.reached,
       COALESCE(mi.incentive_per_head, 0),
-      COALESCE(ah.agent_count, 0) * COALESCE(mi.incentive_per_head, 0)          AS total_incentive,
-      co.cost_per_agent,
-      co.cost_per_supervisor,
-      ah.supervisor_count,
-      ah.agent_count,
+      COALESCE(ah.agent_count, 0) * COALESCE(mi.incentive_per_head, 0)            AS total_incentive,
       COALESCE(ah.supervisor_count, 0) * COALESCE(co.cost_per_supervisor, 0)
-        + COALESCE(ah.agent_count, 0)   * COALESCE(co.cost_per_agent, 0)        AS total_agent_cost,
-      COALESCE(ah.agent_count, 0)      * COALESCE(mi.incentive_per_head, 0)
+        + COALESCE(ah.agent_count, 0)  * COALESCE(co.cost_per_agent, 0)           AS total_agent_cost,
+      COALESCE(ah.agent_count, 0)        * COALESCE(mi.incentive_per_head, 0)
         + COALESCE(ah.supervisor_count, 0) * COALESCE(co.cost_per_supervisor, 0)
-        + COALESCE(ah.agent_count, 0)      * COALESCE(co.cost_per_agent, 0)     AS total_expense,
+        + COALESCE(ah.agent_count, 0)      * COALESCE(co.cost_per_agent, 0)       AS total_expense,
       mr.roi,
       ${attributionDays}
     FROM tier_calls tc
@@ -366,13 +358,50 @@ export async function buildMartPerformance(attributionDays = 14): Promise<number
     LEFT JOIN month_roi       mr ON mr.month = tc.month
   `)
 
-  const row = await queryOne<{ cnt: string }>(`SELECT COUNT(*) AS cnt FROM mart_performance_cmg`)
-    .catch(() => null)
+  await Promise.all([
+    query(`CREATE INDEX IF NOT EXISTS idx_mpc_month   ON mart_performance_cmg (month)`),
+    query(`CREATE INDEX IF NOT EXISTS idx_mpc_dcmg    ON mart_performance_cmg (dynamic_cmg)`),
+    query(`CREATE INDEX IF NOT EXISTS idx_mpm_month   ON mart_performance_month (month)`),
+  ])
+
+  const row = await queryOne<{ cnt: string }>(`SELECT COUNT(*) AS cnt FROM mart_performance_cmg`).catch(() => null)
   return Number(row?.cnt ?? 0)
 }
 
 export async function refreshAllMarts(attributionDays = 14): Promise<{ mart_main: number; performance: number }> {
-  const mart_main   = await buildMartMain(attributionDays)
-  const performance = await buildMartPerformance(attributionDays)
-  return { mart_main, performance }
+  await ensureSchemaExtensions()
+
+  const startedAt = Date.now()
+  const buildRecord = await queryOne<{ id: string }>(
+    `INSERT INTO mart_builds (started_at, attribution_days, status) VALUES (NOW(), $1, 'running') RETURNING id`,
+    [attributionDays]
+  ).catch(() => null)
+  const buildId = buildRecord?.id ?? null
+
+  try {
+    const mart_main   = await buildMartMain(attributionDays)
+    const performance = await buildMartPerformance(attributionDays)
+    const duration    = Date.now() - startedAt
+
+    if (buildId) {
+      await query(
+        `UPDATE mart_builds
+         SET finished_at = NOW(), status = 'success', duration_ms = $1, row_counts = $2
+         WHERE id = $3`,
+        [duration, JSON.stringify({ sales_hoc_orders: mart_main, mart_performance_cmg: performance }), buildId]
+      ).catch(() => {})
+    }
+
+    return { mart_main, performance }
+  } catch (err) {
+    if (buildId) {
+      await query(
+        `UPDATE mart_builds
+         SET finished_at = NOW(), status = 'failed', duration_ms = $1, error_message = $2
+         WHERE id = $3`,
+        [Date.now() - startedAt, (err as Error).message, buildId]
+      ).catch(() => {})
+    }
+    throw err
+  }
 }

@@ -58,9 +58,9 @@ function buildFilters(
         // If channel is selected, __no_segment__ cannot have any matches
         if (realCmg.length > 0) {
           const i = push(realCmg)
-          bare.push(`mmid IN (SELECT DISTINCT mmid FROM mart_telesales_orders WHERE primary_cmg = ANY($${i}))`)
-          prefixed.push(`tc.mmid IN (SELECT DISTINCT mmid FROM mart_telesales_orders WHERE primary_cmg = ANY($${i}))`)
-          orderConds.push(`mmid IN (SELECT DISTINCT mmid FROM mart_telesales_orders WHERE primary_cmg = ANY($${i}))`)
+          bare.push(`mmid IN (SELECT mmid FROM mmid_cmg_map WHERE primary_cmg = ANY($${i}))`)
+          prefixed.push(`tc.mmid IN (SELECT mmid FROM mmid_cmg_map WHERE primary_cmg = ANY($${i}))`)
+          orderConds.push(`mmid IN (SELECT mmid FROM mmid_cmg_map WHERE primary_cmg = ANY($${i}))`)
         } else {
           // Only __no_segment__ selected with channel filter -> impossible, return 0 rows
           bare.push('1 = 0')
@@ -68,16 +68,16 @@ function buildFilters(
         }
       } else {
         // No channel filter -> use fast NOT EXISTS
-        const noSegSql  = `NOT EXISTS (SELECT 1 FROM mart_telesales_orders WHERE mmid = telesales_calls.mmid AND primary_cmg IS NOT NULL)`
-        const noSegSqlTc = `NOT EXISTS (SELECT 1 FROM mart_telesales_orders WHERE mmid = tc.mmid AND primary_cmg IS NOT NULL)`
+        const noSegSql   = `NOT EXISTS (SELECT 1 FROM mmid_cmg_map WHERE mmid = telesales_calls.mmid AND primary_cmg IS NOT NULL)`
+        const noSegSqlTc = `NOT EXISTS (SELECT 1 FROM mmid_cmg_map WHERE mmid = tc.mmid AND primary_cmg IS NOT NULL)`
 
         if (realCmg.length > 0) {
           const i = push(realCmg)
-          const inSql   = `mmid IN (SELECT DISTINCT mmid FROM mart_telesales_orders WHERE primary_cmg = ANY($${i}))`
-          const inSqlTc = `tc.mmid IN (SELECT DISTINCT mmid FROM mart_telesales_orders WHERE primary_cmg = ANY($${i}))`
+          const inSql   = `mmid IN (SELECT mmid FROM mmid_cmg_map WHERE primary_cmg = ANY($${i}))`
+          const inSqlTc = `tc.mmid IN (SELECT mmid FROM mmid_cmg_map WHERE primary_cmg = ANY($${i}))`
           bare.push(inclNoSeg     ? `(${inSql} OR ${noSegSql})`     : inSql)
           prefixed.push(inclNoSeg ? `(${inSqlTc} OR ${noSegSqlTc})` : inSqlTc)
-          orderConds.push(`mmid IN (SELECT DISTINCT mmid FROM mart_telesales_orders WHERE primary_cmg = ANY($${i}))`)
+          orderConds.push(`mmid IN (SELECT mmid FROM mmid_cmg_map WHERE primary_cmg = ANY($${i}))`)
         } else if (inclNoSeg) {
           bare.push(noSegSql)
           prefixed.push(noSegSqlTc)
@@ -199,7 +199,7 @@ export async function GET(request: Request) {
         FROM telesales_calls WHERE first_connected_date IS NOT NULL ORDER BY month
       `),
       query<{ cmg: string }>(`
-        SELECT DISTINCT primary_cmg AS cmg FROM mart_telesales_orders
+        SELECT DISTINCT primary_cmg AS cmg FROM mmid_cmg_map
         WHERE primary_cmg IS NOT NULL ORDER BY primary_cmg
       `),
       query<{ agent: string }>(`

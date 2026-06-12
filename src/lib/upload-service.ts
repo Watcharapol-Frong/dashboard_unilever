@@ -18,6 +18,12 @@ export interface UploadResult {
   error?: string
 }
 
+async function computeFileHash(text: string): Promise<string> {
+  const data = new TextEncoder().encode(text)
+  const buf  = await globalThis.crypto.subtle.digest('SHA-256', data)
+  return Array.from(new Uint8Array(buf)).map(b => b.toString(16).padStart(2, '0')).join('')
+}
+
 export async function processUpload(type: UploadFileType, file: File): Promise<UploadResult> {
   return processUploadFromText(type, await file.text(), file.name)
 }
@@ -48,47 +54,40 @@ async function processUploadFromText(type: UploadFileType, text: string, filenam
   })
 
   if (parseErrors.length > 0) {
-    return { 
-      ok: false, 
-      error: 'CSV parse error', 
-      errors: parseErrors.map(e => e.message), 
-      row_count: 0, 
-      error_count: 0, 
-      storage_path: '' 
-    }
+    return { ok: false, error: 'CSV parse error', errors: parseErrors.map(e => e.message), row_count: 0, error_count: 0, storage_path: '' }
   }
-
   if (rows.length === 0) {
-    return { 
-      ok: false, 
-      error: 'File is empty', 
-      errors: [], 
-      row_count: 0, 
-      error_count: 0, 
-      storage_path: '' 
-    }
+    return { ok: false, error: 'File is empty', errors: [], row_count: 0, error_count: 0, storage_path: '' }
   }
 
   // 2. Validate headers
   const headers = Object.keys(rows[0])
   const { ok, error: headerError, extraColumns } = validateHeaders(headers, type)
   if (!ok) {
-    return { 
-      ok: false, 
-      error: headerError || 'Header validation failed', 
-      row_count: 0, 
-      error_count: 0, 
-      storage_path: '', 
-      errors: [] 
+    return { ok: false, error: headerError || 'Header validation failed', row_count: 0, error_count: 0, storage_path: '', errors: [] }
+  }
+
+  // 3. Duplicate-file check via SHA-256 content hash
+  const fileHash = await computeFileHash(text)
+  const duplicate = await queryOne<{ id: string }>(
+    `SELECT id FROM upload_batches WHERE file_hash = $1 LIMIT 1`,
+    [fileHash]
+  ).catch(() => null)  // column may not exist on older schema — skip dedup gracefully
+  if (duplicate) {
+    return {
+      ok: false,
+      error: 'This exact file has already been uploaded. Re-upload only if the source data changed.',
+      row_count: 0,
+      error_count: 0,
+      errors: [],
+      storage_path: '',
     }
   }
 
-  // 3. Upload to R2 (Encrypted)
+  // 4. Upload to R2 (AES-256-GCM encrypted)
   const storagePath = generateStoragePath(type)
   const encryptionKey = process.env.STORAGE_ENCRYPTION_KEY
-  if (!encryptionKey) {
-    throw new Error('Server configuration error (encryption key missing)')
-  }
+  if (!encryptionKey) throw new Error('Server configuration error (encryption key missing)')
 
   const encryptedBuffer = encrypt(text, encryptionKey)
   try {
@@ -98,18 +97,25 @@ async function processUploadFromText(type: UploadFileType, text: string, filenam
     throw new Error(`Storage error: ${(err as Error).message}`)
   }
 
-  // 4. Create upload_batch record
+  // 5. Create upload_batch record (include hash — column guaranteed by ensureSchemaExtensions)
   const batch = await queryOne<{ id: string }>(
-    `INSERT INTO upload_batches (table_name, filename, storage_path, status, uploaded_by)
-     VALUES ($1, $2, $3, 'failed', $4) RETURNING id`,
-    [cfg.table, filename, storagePath, uploadedBy ?? null]
+    `INSERT INTO upload_batches (table_name, filename, storage_path, status, uploaded_by, file_hash)
+     VALUES ($1, $2, $3, 'failed', $4, $5) RETURNING id`,
+    [cfg.table, filename, storagePath, uploadedBy ?? null, fileHash]
+  ).catch(() =>
+    // Fallback for deployments where file_hash column not yet added
+    queryOne<{ id: string }>(
+      `INSERT INTO upload_batches (table_name, filename, storage_path, status, uploaded_by)
+       VALUES ($1, $2, $3, 'failed', $4) RETURNING id`,
+      [cfg.table, filename, storagePath, uploadedBy ?? null]
+    )
   )
   if (!batch) throw new Error('Failed to create batch record')
 
-  // 5. ETL: transform rows
+  // 6. ETL: transform rows
   const { transformed, errors: etlErrors } = transformRows(rows, type, batch.id)
 
-  // 6. Deduplicate + Upsert
+  // 7. Deduplicate + Upsert
   const conflictKey = cfg.conflictKey
   let upsertRows = transformed
 
@@ -134,10 +140,7 @@ async function processUploadFromText(type: UploadFileType, text: string, filenam
 
     const values: unknown[] = []
     const valuePlaceholders = chunk.map((row) => {
-      const rowVals = cols.map(c => { 
-        values.push(row[c])
-        return `$${values.length}` 
-      })
+      const rowVals = cols.map(c => { values.push(row[c]); return `$${values.length}` })
       return `(${rowVals.join(', ')})`
     })
 
@@ -145,10 +148,11 @@ async function processUploadFromText(type: UploadFileType, text: string, filenam
       ? `ON CONFLICT (${conflictCols.join(', ')}) DO UPDATE SET ${updateCols.map(c => `${c} = EXCLUDED.${c}`).join(', ')}`
       : `ON CONFLICT (${conflictCols.join(', ')}) DO NOTHING`
 
-    const sql = `INSERT INTO ${cfg.table} (${cols.join(', ')}) VALUES ${valuePlaceholders.join(', ')} ${onConflict}`
-    
     try {
-      await query(sql, values)
+      await query(
+        `INSERT INTO ${cfg.table} (${cols.join(', ')}) VALUES ${valuePlaceholders.join(', ')} ${onConflict}`,
+        values
+      )
     } catch (err) {
       console.error(`[upload-service] upsert error at chunk ${i}:`, err)
       dbError = (err as Error).message
@@ -156,14 +160,14 @@ async function processUploadFromText(type: UploadFileType, text: string, filenam
     }
   }
 
-  // 7. Update batch status
+  // 8. Update batch status
   const finalStatus = dbError ? 'failed' : etlErrors.length > 0 ? 'partial' : 'success'
   await query(
     `UPDATE upload_batches SET row_count=$1, error_count=$2, status=$3 WHERE id=$4`,
     [upsertRows.length, etlErrors.length, finalStatus, batch.id]
   )
 
-  // ── 8. Update table_summaries — recount from DB to stay accurate after UPSERT dedup ──
+  // 9. Update table_summaries — recount from DB to stay accurate after UPSERT dedup
   if (!dbError) {
     try {
       const tableName = type === 'telesales' ? 'telesales_calls' : type
@@ -198,22 +202,8 @@ async function processUploadFromText(type: UploadFileType, text: string, filenam
   }
 
   if (dbError) {
-    return {
-      ok: false,
-      error: dbError,
-      row_count: upsertRows.length,
-      error_count: etlErrors.length,
-      errors: etlErrors,
-      storage_path: storagePath
-    }
+    return { ok: false, error: dbError, row_count: upsertRows.length, error_count: etlErrors.length, errors: etlErrors, storage_path: storagePath }
   }
 
-  return {
-    ok: true,
-    row_count: upsertRows.length,
-    error_count: etlErrors.length,
-    errors: etlErrors,
-    storage_path: storagePath,
-    extra_columns: extraColumns,
-  }
+  return { ok: true, row_count: upsertRows.length, error_count: etlErrors.length, errors: etlErrors, storage_path: storagePath, extra_columns: extraColumns }
 }

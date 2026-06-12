@@ -50,19 +50,19 @@ export async function GET(request: Request) {
         if (realCmg.length > 0) {
           params.push(realCmg)
           cmgParamIdx = params.length
-          conditions.push(`mmid IN (SELECT DISTINCT mmid FROM mart_telesales_orders WHERE primary_cmg = ANY($${cmgParamIdx}))`)
+          conditions.push(`mmid IN (SELECT DISTINCT mmid FROM mmid_cmg_map WHERE primary_cmg = ANY($${cmgParamIdx}))`)
         } else {
           // Only __no_segment__ selected with channel filter -> impossible, return 0 rows
           conditions.push('1 = 0')
         }
       } else {
         // No channel filter -> use fast NOT EXISTS
-        const noSegSql = `NOT EXISTS (SELECT 1 FROM mart_telesales_orders WHERE mmid = telesales_calls.mmid AND primary_cmg IS NOT NULL)`
+        const noSegSql = `NOT EXISTS (SELECT 1 FROM mmid_cmg_map WHERE mmid = telesales_calls.mmid AND primary_cmg IS NOT NULL)`
 
         if (realCmg.length > 0) {
           params.push(realCmg)
           cmgParamIdx = params.length
-          const inSql = `mmid IN (SELECT DISTINCT mmid FROM mart_telesales_orders WHERE primary_cmg = ANY($${cmgParamIdx}))`
+          const inSql = `mmid IN (SELECT DISTINCT mmid FROM mmid_cmg_map WHERE primary_cmg = ANY($${cmgParamIdx}))`
           conditions.push(inclNoSeg ? `(${inSql} OR ${noSegSql})` : inSql)
         } else if (inclNoSeg) {
           conditions.push(noSegSql)
@@ -108,7 +108,7 @@ export async function GET(request: Request) {
         GROUP BY mmid
       ),
       conversions AS (
-        -- We map customer outcomes flags from mart_telesales_orders
+        -- We map customer outcomes flags from mmid_cmg_map
         SELECT
           mmid,
           BOOL_OR(customer_type = 'new_customer')             AS is_new,
