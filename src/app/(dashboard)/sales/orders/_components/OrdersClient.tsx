@@ -1,6 +1,6 @@
 'use client'
 
-import { useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { useLanguage } from '@/context/LanguageContext'
 import { t } from '@/lib/i18n'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
@@ -14,9 +14,11 @@ import { useMonthRange, lastDayOfMonth } from '@/hooks/useMonthRange'
 import { MonthChipGroup } from '@/components/dashboard/MonthChipGroup'
 import { columns } from '../../columns'
 import { Calendar } from 'lucide-react'
+import type { PaginationState } from '@tanstack/react-table'
 
 interface SalesData {
   recent_orders: any[]
+  total_orders_count: number
   options: { cmg: string[]; agents: string[] }
   months: string[]
 }
@@ -52,7 +54,7 @@ export default function OrdersClient() {
     handleChipClick: baseHandleChipClick, clearRange,
   } = useMonthRange()
 
-  const [interval,        setInterval]        = useState<Interval>('custom')
+  const [interval,        setInterval]        = useState<Interval>('monthly')
   const [customStart,     setCustomStart]     = useState('2026-05-01')
   const [customEnd,       setCustomEnd]       = useState('2026-05-31')
   const [channel,         setChannel]         = useState<string[]>([])
@@ -63,6 +65,16 @@ export default function OrdersClient() {
   const [orderSearch,     setOrderSearch]     = useState('')
   const [debouncedSearch, setDebouncedSearch] = useState('')
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  const [pagination, setPagination] = useState<PaginationState>({
+    pageIndex: 0,
+    pageSize: 50,
+  })
+
+  // Reset to first page on filter change
+  useEffect(() => {
+    setPagination(p => ({ ...p, pageIndex: 0 }))
+  }, [channel, cmg, agent, callStatus, filterConv, debouncedSearch, rangeFrom, rangeTo, customStart, customEnd])
 
   const handleOrderSearch = (v: string) => {
     setOrderSearch(v)
@@ -95,8 +107,12 @@ export default function OrdersClient() {
     if (effectiveStart)        p.set('startDate',  effectiveStart)
     if (effectiveEnd)          p.set('endDate',    effectiveEnd)
     if (debouncedSearch)       p.set('search',     debouncedSearch)
+    
+    p.set('page',     String(pagination.pageIndex + 1))
+    p.set('pageSize', String(pagination.pageSize))
+
     return `/api/data/sales?${p.toString()}`
-  }, [channel, cmg, agent, callStatus, filterConv, effectiveStart, effectiveEnd, debouncedSearch])
+  }, [channel, cmg, agent, callStatus, filterConv, effectiveStart, effectiveEnd, debouncedSearch, pagination])
 
   const { data, isLoading } = useDashboardSWR<SalesData>(apiUrl)
 
@@ -105,7 +121,7 @@ export default function OrdersClient() {
     return <PageEmpty message="No orders available" hint="Please build mart first." />
   }
 
-  const { recent_orders, options, months } = data
+  const { recent_orders, total_orders_count, options, months } = data
   const hasFilter = channel.length > 0 || cmg.length > 0 || agent.length > 0 || callStatus.length > 0 || filterConv !== 'all'
   const hasRange  = !!(rangeFrom || interval === 'custom')
 
@@ -210,7 +226,7 @@ export default function OrdersClient() {
           <CardTitle className="text-sm font-medium">
             Telesales Orders
             <span className="ml-2 text-xs font-normal text-muted-foreground">
-              {(recent_orders?.length ?? 0).toLocaleString()} records
+              {total_orders_count.toLocaleString()} records
             </span>
           </CardTitle>
         </CardHeader>
@@ -221,6 +237,9 @@ export default function OrdersClient() {
             searchValue={orderSearch}
             onSearchChange={handleOrderSearch}
             searchPlaceholder="Search MMID or Order No..."
+            rowCount={total_orders_count}
+            pagination={pagination}
+            onPaginationChange={setPagination}
           />
         </CardContent>
       </Card>

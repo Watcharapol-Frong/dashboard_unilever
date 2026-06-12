@@ -171,7 +171,7 @@ export default function SalesClient() {
     rangeFrom, rangeTo, hoverMonth, setHoverMonth,
     handleChipClick: baseHandleChipClick, clearRange, activeRangeLabel,
   } = useMonthRange()
-  const [interval,        setInterval]        = useState<Interval>('custom')
+  const [interval,        setInterval]        = useState<Interval>('monthly')
   const [customStart,     setCustomStart]     = useState('2026-05-01')
   const [customEnd,       setCustomEnd]       = useState('2026-05-31')
   const [channel,         setChannel]         = useState<string[]>([])

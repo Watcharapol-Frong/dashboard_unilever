@@ -15,7 +15,16 @@ export function formatRangeLabel(from: string | null, to: string | null): string
 }
 
 export function useMonthRange() {
-  const [rangeFrom, setRangeFrom] = useState<string | null>(null)
+  const lastMonth = useMemo(() => {
+    const d = new Date()
+    // If today is e.g. June 12, 2026, we want "2026-05"
+    d.setMonth(d.getMonth() - 1)
+    const y = d.getFullYear()
+    const m = String(d.getMonth() + 1).padStart(2, '0')
+    return `${y}-${m}`
+  }, [])
+
+  const [rangeFrom, setRangeFrom] = useState<string | null>(lastMonth)
   const [rangeTo,   setRangeTo]   = useState<string | null>(null)
   const [hoverMonth, setHoverMonth] = useState<string | null>(null)
 

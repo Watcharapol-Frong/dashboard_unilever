@@ -217,6 +217,7 @@ export default function LeadsClient() {
           onSearchChange={(v) => { setSearch(v); setPage(1) }}
           searchPlaceholder={t('leads.search', lang)}
           defaultPageSize={20}
+          hidePagination
         />
       </div>
 

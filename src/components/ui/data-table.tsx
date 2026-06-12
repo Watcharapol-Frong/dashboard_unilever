@@ -4,6 +4,7 @@ import * as React from "react"
 import {
   ColumnDef,
   ColumnFiltersState,
+  PaginationState,
   SortingState,
   VisibilityState,
   flexRender,
@@ -37,10 +38,18 @@ interface DataTableProps<TData, TValue> {
   onSearchChange?: (v: string) => void
   searchPlaceholder?: string
   toolbarLeft?: React.ReactNode
-  /** When true, disables internal client-side pagination (use when parent handles server-side pagination) */
-  manualPagination?: boolean
+  /** Total number of rows for server-side pagination */
+  rowCount?: number
+  /** Pagination state for server-side pagination */
+  pagination?: PaginationState
+  /** Callback for pagination changes in server-side pagination */
+  onPaginationChange?: (pagination: PaginationState) => void
   /** Default page size for client-side pagination (default: 10) */
   defaultPageSize?: number
+  /** When true, disables internal client-side pagination. Automatically true if rowCount/pagination/onPaginationChange are provided. */
+  manualPagination?: boolean
+  /** When true, hides the pagination footer */
+  hidePagination?: boolean
 }
 
 export function DataTable<TData, TValue>({
@@ -51,8 +60,12 @@ export function DataTable<TData, TValue>({
   onSearchChange,
   searchPlaceholder,
   toolbarLeft,
-  manualPagination,
+  rowCount,
+  pagination,
+  onPaginationChange,
   defaultPageSize,
+  manualPagination: manualPaginationProp,
+  hidePagination,
 }: DataTableProps<TData, TValue>) {
   const [rowSelection, setRowSelection] = React.useState({})
   const [columnVisibility, setColumnVisibility] =
@@ -62,6 +75,9 @@ export function DataTable<TData, TValue>({
   )
   const [sorting, setSorting] = React.useState<SortingState>([])
 
+  const isServerSide = rowCount !== undefined && pagination !== undefined && onPaginationChange !== undefined
+  const manualPagination = isServerSide || !!manualPaginationProp
+
   const table = useReactTable({
     data,
     columns,
@@ -70,18 +86,28 @@ export function DataTable<TData, TValue>({
       columnVisibility,
       rowSelection,
       columnFilters,
+      pagination: isServerSide ? pagination : undefined,
     },
     initialState: {
-      pagination: { pageSize: manualPagination ? 10_000 : (defaultPageSize ?? 10) },
+      pagination: isServerSide ? undefined : { pageSize: manualPagination ? 10_000 : (defaultPageSize ?? 10) },
     },
+    manualPagination: manualPagination,
+    rowCount: rowCount,
+    onPaginationChange: isServerSide ? (updater) => {
+      if (typeof updater === 'function') {
+        onPaginationChange(updater(pagination!))
+      } else {
+        onPaginationChange(updater)
+      }
+    } : undefined,
     enableRowSelection: true,
     onRowSelectionChange: setRowSelection,
     onSortingChange: setSorting,
     onColumnFiltersChange: setColumnFilters,
     onColumnVisibilityChange: setColumnVisibility,
     getCoreRowModel: getCoreRowModel(),
-    getFilteredRowModel: getFilteredRowModel(),
-    getPaginationRowModel: getPaginationRowModel(),
+    getFilteredRowModel: isServerSide ? undefined : getFilteredRowModel(),
+    getPaginationRowModel: manualPagination ? undefined : getPaginationRowModel(),
     getSortedRowModel: getSortedRowModel(),
     getFacetedRowModel: getFacetedRowModel(),
     getFacetedUniqueValues: getFacetedUniqueValues(),
@@ -163,7 +189,7 @@ export function DataTable<TData, TValue>({
           </TableBody>
         </Table>
       </div>
-      {!manualPagination && <DataTablePagination table={table} />}
+      {!hidePagination && <DataTablePagination table={table} />}
     </div>
   )
 }

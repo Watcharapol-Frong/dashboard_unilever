@@ -88,30 +88,44 @@ async function fetchKpis(where: string, params: any[]) {
   `, params)
 }
 
-async function fetchRecentOrders(where: string, params: any[], hasFilter = false) {
-  const limit = hasFilter ? '' : 'LIMIT 1000'
-  return query<{
-    order_number: string; order_date: string; mmid: string | null
-    prod_num: string | null; sales_qty: number; sales_in_vat: number
-    dynamic_cmg: string | null; channel: string; agent: string | null
-    call_status: string | null
-  }>(`
-    SELECT
-      order_number,
-      order_date::text,
-      mmid,
-      prod_num,
-      sales_qty,
-      sales_in_vat,
-      dynamic_cmg,
-      channel,
-      agent,
-      call_status
-    FROM sales_hoc_orders
-    ${where}
-    ORDER BY order_date DESC, order_number DESC
-    ${limit}
-  `, params)
+async function fetchRecentOrders(where: string, params: any[], page: number, pageSize: number) {
+  const limit  = pageSize
+  const offset = (page - 1) * pageSize
+
+  const [rows, countRow] = await Promise.all([
+    query<{
+      order_number: string; order_date: string; mmid: string | null
+      prod_num: string | null; sales_qty: number; sales_in_vat: number
+      dynamic_cmg: string | null; channel: string; agent: string | null
+      call_status: string | null
+    }>(`
+      SELECT
+        order_number,
+        order_date::text,
+        mmid,
+        prod_num,
+        sales_qty,
+        sales_in_vat,
+        dynamic_cmg,
+        channel,
+        agent,
+        call_status
+      FROM sales_hoc_orders
+      ${where}
+      ORDER BY order_date DESC, order_number DESC
+      LIMIT ${limit} OFFSET ${offset}
+    `, params),
+    queryOne<{ count: string }>(`
+      SELECT COUNT(*)::text AS count
+      FROM sales_hoc_orders
+      ${where}
+    `, params)
+  ])
+
+  return {
+    rows,
+    total_count: Number(countRow?.count ?? 0)
+  }
 }
 
 // Returns last 2 complete periods (most-recent first) — period + period_label + converted_sales for scope
@@ -163,6 +177,8 @@ export async function GET(request: Request) {
     const callStatus = (searchParams.get('callStatus') || '').split(',').filter(Boolean)
     const filterConv = searchParams.get('filterConv') || searchParams.get('conversion')
     const search     = searchParams.get('search')
+    const page       = Number(searchParams.get('page') || '1')
+    const pageSize   = Number(searchParams.get('pageSize') || '50')
 
     const hasDateRange = !!(startDate && endDate)
     const hasFilter = channel.length > 0 || cmg.length > 0 || agent.length > 0 || callStatus.length > 0 || !!filterConv || !!search
@@ -206,7 +222,7 @@ export async function GET(request: Request) {
     }
 
     // ── Phase 2: Fetch all remaining data in parallel ─────────────────────────
-    const [currKpiOrNull, prevKpi, periodsRaw, cmgOptsRaw, agentOptsRaw, monthsRaw, recentOrdersRaw] = await Promise.all([
+    const [currKpiOrNull, prevKpi, periodsRaw, cmgOptsRaw, agentOptsRaw, monthsRaw, ordersData] = await Promise.all([
       // Current KPI: date-scoped when range provided; null when no range (use preloaded scope)
       hasDateRange
         ? fetchKpis(curr.where, curr.params)
@@ -260,8 +276,8 @@ export async function GET(request: Request) {
 
       // Recent orders (only when daily or searched or filtered)
       (interval === 'daily' || search || hasFilter)
-        ? fetchRecentOrders(trendFilter.where, trendFilter.params, hasFilter || hasDateRange)
-        : Promise.resolve([]),
+        ? fetchRecentOrders(trendFilter.where, trendFilter.params, page, pageSize)
+        : Promise.resolve({ rows: [], total_count: 0 }),
     ])
 
     // ── Parse current KPI ─────────────────────────────────────────────────────
@@ -343,11 +359,12 @@ export async function GET(request: Request) {
           agents: agentOptsRaw.map(o => o.agent).filter(Boolean).sort(),
         },
         months: monthsRaw.map(r => r.month),
-        recent_orders: recentOrdersRaw.map(r => ({
+        recent_orders: ordersData.rows.map(r => ({
           ...r,
           sales_qty: Number(r.sales_qty),
           sales_in_vat: Number(r.sales_in_vat),
         })),
+        total_orders_count: ordersData.total_count,
       },
     })
     setCacheHeader(res, 'MEDIUM')
