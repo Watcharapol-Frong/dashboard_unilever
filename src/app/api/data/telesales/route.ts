@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import { withAuth } from '@/lib/auth'
 import { query, queryOne } from '@/lib/db'
 import { setCacheHeader } from '@/lib/query'
+import { CONV, REACHED, reachedCond } from '@/lib/metrics'
 
 export const dynamic = 'force-dynamic'
 
@@ -19,7 +20,7 @@ function buildFilters(
   const prefixed: string[] = ['tc.first_connected_date IS NOT NULL']
   // order_date is intentionally NOT date-filtered — customer_type already encodes
   // the attribution window, so a retention order outside the call period still counts
-  const orderConds: string[] = [`customer_type IN ('new_customer', 'retention')`]
+  const orderConds: string[] = [CONV]
 
   const push = (v: any) => { params.push(v); return params.length }
 
@@ -137,11 +138,7 @@ export async function GET(request: Request) {
       queryOne<{ total_calls: string; reached: string }>(`
         SELECT
           COUNT(DISTINCT mmid)::text AS total_calls,
-          COUNT(DISTINCT mmid) FILTER (
-            -- Thai DB values: no-answer variants / phone off or unreachable
-            WHERE call_status NOT LIKE 'ไม่รับสาย%'
-              AND call_status IS DISTINCT FROM 'ปิดเครื่อง/ติดต่อไม่ได้'
-          )::text AS reached
+          COUNT(DISTINCT mmid) FILTER (WHERE ${REACHED})::text AS reached
         FROM telesales_calls
         ${where}
       `, params),
@@ -172,11 +169,7 @@ export async function GET(request: Request) {
         SELECT
           COALESCE(tc.agent, 'Unknown') AS agent,
           COUNT(*)::text AS total_calls,
-          COUNT(*) FILTER (
-            -- Thai DB values: no-answer variants / phone off or unreachable
-            WHERE tc.call_status NOT LIKE 'ไม่รับสาย%'
-              AND tc.call_status IS DISTINCT FROM 'ปิดเครื่อง/ติดต่อไม่ได้'
-          )::text AS reached,
+          COUNT(*) FILTER (WHERE ${reachedCond('tc')})::text AS reached,
           COUNT(DISTINCT tc.mmid) FILTER (WHERE ac.mmid IS NOT NULL)::text AS converted,
           COUNT(DISTINCT tc.first_connected_date)::text AS unique_days
         FROM telesales_calls tc

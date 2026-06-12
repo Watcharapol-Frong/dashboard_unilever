@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import { withAuth } from '@/lib/auth'
 import { query } from '@/lib/db'
 import { setCacheHeader } from '@/lib/query'
+import { REACHED } from '@/lib/metrics'
 
 export const dynamic = 'force-dynamic'
 
@@ -27,8 +28,7 @@ export async function GET(request: Request) {
       SELECT
         COUNT(DISTINCT mmid)::text AS total_calls,
         COUNT(DISTINCT mmid) FILTER (
-          WHERE call_status NOT LIKE 'ไม่รับสาย%'
-            AND call_status IS DISTINCT FROM 'ปิดเครื่อง/ติดต่อไม่ได้'
+          WHERE ${REACHED}
         )::text AS connected
       FROM sales_hoc_orders
       ${where}

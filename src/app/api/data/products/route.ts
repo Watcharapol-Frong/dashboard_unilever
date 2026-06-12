@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import { withAuth } from '@/lib/auth'
 import { query, queryOne } from '@/lib/db'
 import { push as qpush, addDateRange, addFilter, setCacheHeader } from '@/lib/query'
+import { CONV, NOT_CONV } from '@/lib/metrics'
 
 export const dynamic = 'force-dynamic'
 
@@ -30,9 +31,9 @@ function buildProductWhere(
   }
   addFilter(params, conditions, subclass, 'm.subclass')
   if (converted === 'converted') {
-    conditions.push(`m.customer_type IN ('new_customer', 'retention')`)
+    conditions.push(`m.${CONV}`)
   } else if (converted === 'not_converted') {
-    conditions.push(`m.customer_type IN ('first_order_not_converted', 'retention_not_converted')`)
+    conditions.push(`m.${NOT_CONV}`)
   }
   addFilter(params, conditions, leadCustomers, 'm.dynamic_cmg')
 

@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import { withAuth } from '@/lib/auth'
 import { query } from '@/lib/db'
 import { setCacheHeader } from '@/lib/query'
+import { CONV } from '@/lib/metrics'
 
 export const dynamic = 'force-dynamic'
 
@@ -38,13 +39,13 @@ export async function GET(request: Request) {
       WITH sales_agg AS (
         SELECT
           COALESCE(agent, '—') AS agent,
-          COALESCE(SUM(sales_in_vat) FILTER (WHERE customer_type IN ('new_customer', 'retention')), 0) AS sales_total,
-          COUNT(DISTINCT order_number) FILTER (WHERE customer_type IN ('new_customer', 'retention'))    AS order_total,
-          COUNT(DISTINCT mmid) FILTER (WHERE customer_type IN ('new_customer', 'retention'))            AS converted_customers
+          COALESCE(SUM(sales_in_vat) FILTER (WHERE ${CONV}), 0) AS sales_total,
+          COUNT(DISTINCT order_number) FILTER (WHERE ${CONV})    AS order_total,
+          COUNT(DISTINCT mmid) FILTER (WHERE ${CONV})            AS converted_customers
         FROM sales_hoc_orders
         ${salesWhere}
         GROUP BY agent
-        HAVING COALESCE(SUM(sales_in_vat) FILTER (WHERE customer_type IN ('new_customer', 'retention')), 0) > 0
+        HAVING COALESCE(SUM(sales_in_vat) FILTER (WHERE ${CONV}), 0) > 0
       ),
       calls_agg AS (
         SELECT

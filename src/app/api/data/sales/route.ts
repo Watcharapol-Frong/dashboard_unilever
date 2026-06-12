@@ -2,13 +2,11 @@ import { NextResponse } from 'next/server'
 import { withAuth } from '@/lib/auth'
 import { query, queryOne } from '@/lib/db'
 import { addDateRange, addFilter, toWhere, setCacheHeader } from '@/lib/query'
+import { CONV, NOT_CONV } from '@/lib/metrics'
 
 export const dynamic = 'force-dynamic'
 
 type Interval = 'daily' | 'weekly' | 'monthly'
-
-const CONV     = "customer_type IN ('new_customer','retention')"
-const NOT_CONV = "customer_type IN ('first_order_not_converted','retention_not_converted')"
 
 function periodExpr(interval: Interval) {
   if (interval === 'daily')  return 'order_date'

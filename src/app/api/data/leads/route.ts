@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { withAdmin } from '@/lib/auth'
 import { query } from '@/lib/db'
 import { setCacheHeader } from '@/lib/query'
+import { CONV, REACHED } from '@/lib/metrics'
 
 export const dynamic = 'force-dynamic'
 
@@ -51,11 +52,7 @@ export async function GET(req: NextRequest) {
       WITH cs AS (
         SELECT mmid,
           CASE
-            WHEN COUNT(*) FILTER (
-              -- Thai DB values: no-answer variants / phone off or unreachable
-              WHERE call_status NOT LIKE 'ไม่รับสาย%'
-                AND call_status IS DISTINCT FROM 'ปิดเครื่อง/ติดต่อไม่ได้'
-            ) > 0 THEN 'reached'
+            WHEN COUNT(*) FILTER (WHERE ${REACHED}) > 0 THEN 'reached'
             ELSE 'called_not_reached'
           END AS contact_status,
           MAX(agent) AS agent
@@ -65,9 +62,9 @@ export async function GET(req: NextRequest) {
       ),
       os AS (
         SELECT mmid,
-          COUNT(DISTINCT order_number) FILTER (WHERE customer_type IN ('new_customer','retention')) AS hoc_orders,
-          COALESCE(SUM(sales_in_vat)   FILTER (WHERE customer_type IN ('new_customer','retention')), 0) AS hoc_sales,
-          BOOL_OR(customer_type IN ('new_customer','retention')) AS is_converted,
+          COUNT(DISTINCT order_number) FILTER (WHERE ${CONV}) AS hoc_orders,
+          COALESCE(SUM(sales_in_vat)   FILTER (WHERE ${CONV}), 0) AS hoc_sales,
+          BOOL_OR(${CONV}) AS is_converted,
           MAX(dynamic_cmg) AS dynamic_cmg
         FROM sales_hoc_orders
         GROUP BY mmid

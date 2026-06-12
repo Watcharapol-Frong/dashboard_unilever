@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import { withAuth } from '@/lib/auth'
 import { queryOne } from '@/lib/db'
 import { setCacheHeader } from '@/lib/query'
+import { REACHED } from '@/lib/metrics'
 
 export const dynamic = 'force-dynamic'
 
@@ -99,13 +100,7 @@ export async function GET(request: Request) {
         SELECT
           mmid,
           CASE
-            WHEN COUNT(*) FILTER (
-              -- Thai DB values: no-answer / unreachable / not interested statuses
-              WHERE call_status NOT LIKE 'ไม่รับสาย%'                        -- no answer variants
-                AND call_status IS DISTINCT FROM 'ปิดเครื่อง/ติดต่อไม่ได้'  -- phone off / unreachable
-                AND call_status IS DISTINCT FROM 'ไม่สะดวกคุย'              -- not convenient to talk
-                AND call_status IS DISTINCT FROM 'ยังไม่ต้องการสินค้า'       -- not interested
-            ) > 0 THEN 'engaged'
+            WHEN COUNT(*) FILTER (WHERE ${REACHED}) > 0 THEN 'engaged'
             ELSE 'not_engaged'
           END AS engagement_status
         FROM telesales_calls

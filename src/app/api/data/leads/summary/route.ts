@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import { withAdmin } from '@/lib/auth'
 import { query, queryOne } from '@/lib/db'
 import { setCacheHeader } from '@/lib/query'
+import { CONV, REACHED } from '@/lib/metrics'
 
 export const dynamic = 'force-dynamic'
 
@@ -17,11 +18,7 @@ export async function GET() {
         WITH cs AS (
           SELECT mmid,
             CASE
-              WHEN COUNT(*) FILTER (
-                -- Thai DB values: no-answer variants / phone off or unreachable
-                WHERE call_status NOT LIKE 'ไม่รับสาย%'
-                  AND call_status IS DISTINCT FROM 'ปิดเครื่อง/ติดต่อไม่ได้'
-              ) > 0 THEN 'reached'
+              WHEN COUNT(*) FILTER (WHERE ${REACHED}) > 0 THEN 'reached'
               ELSE 'called_not_reached'
             END AS contact_status
           FROM telesales_calls
@@ -30,8 +27,8 @@ export async function GET() {
         ),
         os AS (
           SELECT mmid,
-            COUNT(DISTINCT order_number) FILTER (WHERE customer_type IN ('new_customer','retention')) AS hoc_orders,
-            BOOL_OR(customer_type IN ('new_customer','retention')) AS is_converted
+            COUNT(DISTINCT order_number) FILTER (WHERE ${CONV}) AS hoc_orders,
+            BOOL_OR(${CONV}) AS is_converted
           FROM sales_hoc_orders
           GROUP BY mmid
         )

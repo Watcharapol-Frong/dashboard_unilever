@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { withAdmin } from '@/lib/auth'
 import { query } from '@/lib/db'
+import { setCacheHeader } from '@/lib/query'
 
 export const dynamic = 'force-dynamic'
 
@@ -147,7 +148,7 @@ export async function GET() {
       `),
     ])
 
-    return NextResponse.json({
+    const res = NextResponse.json({
       ok: true,
       data: {
         months:        months.map(r => r.month.slice(0, 7)),  // YYYY-MM
@@ -156,6 +157,8 @@ export async function GET() {
         customerTypes: ['new_customer', 'retention', 'first_order_not_converted', 'retention_not_converted'],
       },
     })
+    setCacheHeader(res, 'LONG')
+    return res
   })
 }
 

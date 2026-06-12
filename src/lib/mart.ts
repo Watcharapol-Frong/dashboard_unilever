@@ -1,4 +1,5 @@
 import { query, queryOne, queryRowCount } from '@/lib/db'
+import { reachedCond } from '@/lib/metrics'
 
 export async function buildMartMain(attributionDays = 14): Promise<number> {
   // ── 1. Rebuild mart_telesales_orders (ALL orders for called mmids, any product) ──
@@ -248,13 +249,7 @@ export async function buildMartPerformance(attributionDays = 14): Promise<number
         DATE_TRUNC('month', tc.first_connected_date)::date AS month,
         mc.primary_cmg AS dynamic_cmg,
         COUNT(DISTINCT tc.mmid) AS total_calls,
-        COUNT(DISTINCT tc.mmid) FILTER (
-          -- exclude no-answer and unreachable statuses (Thai DB values)
-          WHERE tc.call_status NOT LIKE 'ไม่รับสาย%'            -- no answer variants
-            AND tc.call_status IS DISTINCT FROM 'ปิดเครื่อง/ติดต่อไม่ได้' -- phone off / unreachable
-            AND tc.call_status IS DISTINCT FROM 'ไม่สะดวกคุย'           -- not convenient to talk
-            AND tc.call_status IS DISTINCT FROM 'ยังไม่ต้องการสินค้า'    -- not interested
-        ) AS reached
+        COUNT(DISTINCT tc.mmid) FILTER (WHERE ${reachedCond('tc')}) AS reached
       FROM telesales_calls tc
       JOIN mmid_cmg mc ON mc.mmid = tc.mmid
       WHERE tc.first_connected_date IS NOT NULL
@@ -285,13 +280,9 @@ export async function buildMartPerformance(attributionDays = 14): Promise<number
       SELECT
         DATE_TRUNC('month', first_connected_date)::date AS month,
         COUNT(DISTINCT mmid) AS total_calls,
-        COUNT(DISTINCT mmid) FILTER (
-          -- exclude no-answer and unreachable statuses (Thai DB values)
-          WHERE call_status NOT LIKE 'ไม่รับสาย%'                        -- no answer variants
-            AND call_status IS DISTINCT FROM 'ปิดเครื่อง/ติดต่อไม่ได้'  -- phone off / unreachable
-        ) AS reached
-      FROM telesales_calls
-      WHERE first_connected_date IS NOT NULL
+        COUNT(DISTINCT mmid) FILTER (WHERE ${reachedCond('tc2')}) AS reached
+      FROM telesales_calls tc2
+      WHERE tc2.first_connected_date IS NOT NULL
       GROUP BY 1
     ),
     month_sales AS (
