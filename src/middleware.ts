@@ -7,6 +7,10 @@ export const ADMIN_PATHS = ['/leads', '/data-hub', '/exports']
 // This flag has zero effect in production — NODE_ENV=production disables it entirely.
 const DEV_MODE = process.env.DEV_MODE === 'true' && process.env.NODE_ENV === 'development'
 
+// Maintenance mode: redirect all visitors to /maintenance when MAINTENANCE_MODE=true
+// Set MAINTENANCE_MODE=true in Vercel environment variables to activate.
+const MAINTENANCE_MODE = process.env.MAINTENANCE_MODE === 'true'
+
 const isProtectedRoute = createRouteMatcher([
   '/overview(.*)', '/sales(.*)', '/telesales(.*)',
   '/products(.*)', '/leads(.*)', '/incentives(.*)', '/data-hub(.*)', '/exports(.*)',
@@ -21,6 +25,11 @@ const isAdminOnlyRoute = createRouteMatcher([
 ])
 
 export default clerkMiddleware(async (auth, request) => {
+  // ── Maintenance Mode: redirect everyone to /maintenance ───────────────────────
+  if (MAINTENANCE_MODE && !request.nextUrl.pathname.startsWith('/maintenance')) {
+    return NextResponse.redirect(new URL('/maintenance', request.url))
+  }
+
   // ── Dev Mode: skip all auth checks, treat as admin ───────────────────────────
   if (DEV_MODE) return NextResponse.next()
 
@@ -54,6 +63,6 @@ export default clerkMiddleware(async (auth, request) => {
 
 export const config = {
   matcher: [
-    '/((?!_next/static|_next/image|favicon.ico|api/webhooks/.*|api/data/ingest/.*|api/auth/.*).*)',
+    '/((?!_next/static|_next/image|favicon.ico|maintenance|api/webhooks/.*|api/data/ingest/.*|api/auth/.*).*)',
   ],
 }
