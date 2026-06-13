@@ -25,6 +25,9 @@ const isAdminOnlyRoute = createRouteMatcher([
 // Note: /api/data/hub/freshness is intentionally excluded — viewer+ can access it
 
 export default clerkMiddleware(async (auth, request) => {
+  // ── Auth disabled for preview — remove this line to re-enable ─────────────────
+  return NextResponse.next()
+
   // ── Maintenance Mode ──────────────────────────────────────────────────────────
   if (MAINTENANCE_MODE && !request.nextUrl.pathname.startsWith('/maintenance')) {
     return NextResponse.redirect(new URL('/maintenance', request.url))
