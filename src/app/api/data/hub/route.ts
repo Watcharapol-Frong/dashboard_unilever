@@ -7,6 +7,10 @@ export const dynamic = 'force-dynamic'
 export async function GET() {
   return withAdmin(async () => {
   try {
+  const safe = async <T>(sql: string): Promise<T | null> => {
+    try { return await queryOne<T>(sql) } catch { return null }
+  }
+
   const [
     summaries,
     lastUploads,
@@ -19,6 +23,9 @@ export async function GET() {
     costs,
     incentiveRows,
     batches,
+    martMain,
+    martPerf,
+    recentBuilds,
   ] = await Promise.all([
     query<{ table_name: string; total_rows: string; total_sales: string }>(
       `SELECT table_name, total_rows, total_sales FROM table_summaries`
@@ -64,6 +71,35 @@ export async function GET() {
       `SELECT id, table_name, filename, row_count, error_count, status, uploaded_at, uploaded_by
        FROM upload_batches ORDER BY uploaded_at DESC LIMIT 50`
     ),
+    // Mart stats
+    safe<{ cnt: string; min_date: string | null; max_date: string | null; last_refreshed: string | null; avg_days: string | null }>(`
+      SELECT COUNT(*) AS cnt,
+             MIN(order_date)::text  AS min_date,
+             MAX(order_date)::text  AS max_date,
+             MAX(refreshed_at)::text AS last_refreshed,
+             ROUND(AVG(days_to_order), 1)::text AS avg_days
+      FROM sales_hoc_orders
+    `),
+    safe<{ cnt: string; min_month: string | null; max_month: string | null; last_refreshed: string | null }>(`
+      SELECT COUNT(*) AS cnt,
+             MIN(month)::text      AS min_month,
+             MAX(month)::text      AS max_month,
+             MAX(refreshed_at)::text AS last_refreshed
+      FROM mart_performance_cmg
+    `),
+    (async () => {
+      try {
+        return await query<{
+          id: string; started_at: string; finished_at: string | null
+          attribution_days: number | null; duration_ms: number | null
+          status: string; row_counts: Record<string, number> | null; error_message: string | null
+        }>(`
+          SELECT id::text, started_at::text, finished_at::text,
+                 attribution_days, duration_ms, status, row_counts, error_message
+          FROM mart_builds ORDER BY id DESC LIMIT 5
+        `)
+      } catch { return [] }
+    })(),
   ])
 
   const summaryMap: Record<string, { total_rows: number; total_sales: number }> = {}
@@ -128,11 +164,28 @@ export async function GET() {
     },
   }
 
-  const res = NextResponse.json({ status, history: batches })
+  const mart = {
+    main: {
+      row_count:         Number(martMain?.cnt ?? 0),
+      min_date:          martMain?.min_date ?? null,
+      max_date:          martMain?.max_date ?? null,
+      last_refreshed:    martMain?.last_refreshed ?? null,
+      avg_days_to_order: martMain?.avg_days ? Number(martMain.avg_days) : null,
+    },
+    performance: {
+      row_count:      Number(martPerf?.cnt ?? 0),
+      min_month:      martPerf?.min_month ?? null,
+      max_month:      martPerf?.max_month ?? null,
+      last_refreshed: martPerf?.last_refreshed ?? null,
+    },
+    recent_builds: recentBuilds,
+  }
+
+  const res = NextResponse.json({ status, history: batches, mart })
   res.headers.set('Cache-Control', 'public, s-maxage=120, stale-while-revalidate=300')
   return res
   } catch (err) {
-    console.error('[dashboard]', err)
+    console.error('[hub]', err)
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
   }
   })

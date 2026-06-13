@@ -3,6 +3,14 @@ import { withAdmin } from '@/lib/auth'
 import { refreshAllMarts } from '@/lib/mart'
 import { buildLock } from '@/lib/build-lock'
 
+export const dynamic = 'force-dynamic'
+
+export async function GET() {
+  return withAdmin(async () => {
+    return NextResponse.json(buildLock.get())
+  })
+}
+
 export async function POST(request: Request) {
   return withAdmin(async () => {
     const body = await request.json().catch(() => ({}))

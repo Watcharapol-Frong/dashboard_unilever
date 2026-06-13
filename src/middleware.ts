@@ -18,9 +18,12 @@ const isProtectedRoute = createRouteMatcher([
 
 const isAdminOnlyRoute = createRouteMatcher([
   '/data-hub(.*)',
-  '/api/data/hub/(.*)',
+  '/api/data/hub',           // hub root — source stats + mart stats (admin)
+  '/api/data/hub/build(.*)', // build trigger + build lock state (admin)
+  '/api/data/hub/upload(.*)',// all upload sub-routes (admin)
   '/api/data/raw/export(.*)',
 ])
+// Note: /api/data/hub/freshness is intentionally excluded — viewer+ can access it
 
 export default clerkMiddleware(async (auth, request) => {
   // ── Maintenance Mode: redirect everyone to /maintenance ───────────────────────
