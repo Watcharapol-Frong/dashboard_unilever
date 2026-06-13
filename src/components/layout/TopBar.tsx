@@ -62,7 +62,7 @@ export function TopBar({ title }: { title?: string }) {
   const pageLabel = title ?? t(labelKey, lang)
 
   const { data } = useSWR<Freshness>(
-    ['/api/data/mart-freshness', buildVersion],
+    ['/api/data/hub/freshness', buildVersion],
     ([url]: [string]) => fetcher(url),
     { revalidateOnFocus: false, dedupingInterval: 60_000 },
   )

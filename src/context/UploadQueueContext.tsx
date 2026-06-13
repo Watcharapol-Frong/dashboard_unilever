@@ -52,7 +52,7 @@ export function UploadQueueProvider({ children }: { children: React.ReactNode })
     try {
       // Phase 1: Initiate multipart upload + get presigned URLs for all parts
       setJobs(prev => prev.map(j => j.id === job.id ? { ...j, progress: 2 } : j))
-      const initRes = await fetch('/api/data/upload/multipart/init', {
+      const initRes = await fetch('/api/data/hub/upload/multipart/init', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ type: job.fileType, fileSize: job.file.size }),
@@ -92,7 +92,7 @@ export function UploadQueueProvider({ children }: { children: React.ReactNode })
 
       // Phase 3: Complete multipart + process from R2
       setJobs(prev => prev.map(j => j.id === job.id ? { ...j, progress: 90 } : j))
-      const completeRes = await fetch('/api/data/upload/multipart/complete', {
+      const completeRes = await fetch('/api/data/hub/upload/multipart/complete', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ uploadId, key, parts: completedParts, type: job.fileType, filename: job.file.name }),
@@ -106,11 +106,11 @@ export function UploadQueueProvider({ children }: { children: React.ReactNode })
       setJobs(prev => prev.map(j =>
         j.id === job.id ? { ...j, status: result.ok ? 'done' : 'failed', progress: 100, result } : j
       ))
-      swrMutate('/api/data/dashboard')
+      swrMutate('/api/data/hub')
 
     } catch (err) {
       if (uploadId && key) {
-        fetch('/api/data/upload/multipart/abort', {
+        fetch('/api/data/hub/upload/multipart/abort', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ uploadId, key }),

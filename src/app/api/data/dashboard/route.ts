@@ -1,139 +1,135 @@
 import { NextResponse } from 'next/server'
-import { withAdmin } from '@/lib/auth'
+import { withAuth } from '@/lib/auth'
 import { query, queryOne } from '@/lib/db'
+import { setCacheHeader } from '@/lib/query'
 
 export const dynamic = 'force-dynamic'
 
 export async function GET() {
-  return withAdmin(async () => {
-  try {
-  const [
-    summaries,
-    lastUploads,
-    onlineDates,
-    offlineDates,
-    productsBrands,
-    telesales,
-    teleAgents,
-    targets,
-    costs,
-    incentiveRows,
-    batches,
-  ] = await Promise.all([
-    query<{ table_name: string; total_rows: string; total_sales: string }>(
-      `SELECT table_name, total_rows, total_sales FROM table_summaries`
-    ),
-    query<{ table_name: string; uploaded_at: string }>(
-      `SELECT DISTINCT ON (table_name) table_name, uploaded_at
-       FROM upload_batches WHERE status IN ('success','partial')
-       ORDER BY table_name, uploaded_at DESC`
-    ),
-    queryOne<{ min_d: string | null; max_d: string | null }>(
-      `SELECT MIN(order_date)::text AS min_d, MAX(order_date)::text AS max_d FROM online_sales`
-    ),
-    queryOne<{ min_d: string | null; max_d: string | null }>(
-      `SELECT MIN(order_date)::text AS min_d, MAX(order_date)::text AS max_d FROM offline_sales`
-    ),
-    query<{ brands: string }>(`SELECT DISTINCT brands FROM products WHERE brands IS NOT NULL`),
-    queryOne<{ cnt: string; min_d: string | null; max_d: string | null }>(
-      `SELECT COUNT(*) AS cnt,
-              MIN(first_connected_date)::text AS min_d,
-              MAX(first_connected_date)::text AS max_d
-       FROM telesales_calls`
-    ),
-    query<{ agent: string }>(`SELECT DISTINCT agent FROM telesales_calls WHERE agent IS NOT NULL`),
-    queryOne<{ cnt: string; min_d: string | null; max_d: string | null; total: string }>(
-      `SELECT COUNT(*) AS cnt,
-              MIN(month)::text AS min_d,
-              MAX(month)::text AS max_d,
-              COALESCE(SUM(sales_target), 0)::text AS total
-       FROM targets`
-    ),
-    queryOne<{ cnt: string; min_d: string | null; max_d: string | null }>(
-      `SELECT COUNT(*) AS cnt,
-              MIN(month)::text AS min_d,
-              MAX(month)::text AS max_d
-       FROM costs`
-    ),
-    query<{ tier: number }>(`SELECT tier FROM incentives ORDER BY tier`),
+  return withAuth(async () => {
+    const [rows, callsRow] = await Promise.all([
     query<{
-      id: string; table_name: string; filename: string | null
-      row_count: number | null; error_count: number
-      status: string; uploaded_at: string; uploaded_by: string | null
-    }>(
-      `SELECT id, table_name, filename, row_count, error_count, status, uploaded_at, uploaded_by
-       FROM upload_batches ORDER BY uploaded_at DESC LIMIT 50`
+      month: string
+      month_label: string
+      dynamic_cmg: string
+      total_calls: number
+      reached: number
+      ordered: number
+      new_customers: number
+      retention: number
+      hoc_orders: number
+      hoc_sales: string
+      sales_target: string
+      achievement_ratio: string
+      incentive_per_head: string
+      total_incentive: string
+      total_agent_cost: string
+      total_expense: string
+      roi: string
+      online_sales: string
+      offline_sales: string
+      online_orders: string
+      offline_orders: string
+      online_new_customers: string
+      offline_new_customers: string
+      online_retention: string
+      offline_retention: string
+    }>(`
+      WITH channel_metrics AS (
+        SELECT
+          month, dynamic_cmg,
+          COALESCE(SUM(sales_in_vat) FILTER (WHERE channel = 'online'  AND customer_type IN ('new_customer', 'retention')), 0) AS online_sales,
+          COALESCE(SUM(sales_in_vat) FILTER (WHERE channel = 'offline' AND customer_type IN ('new_customer', 'retention')), 0) AS offline_sales,
+          COUNT(DISTINCT order_number) FILTER (WHERE channel = 'online'  AND customer_type IN ('new_customer', 'retention')) AS online_orders,
+          COUNT(DISTINCT order_number) FILTER (WHERE channel = 'offline' AND customer_type IN ('new_customer', 'retention')) AS offline_orders,
+          COUNT(DISTINCT mmid) FILTER (WHERE channel = 'online'  AND customer_type = 'new_customer')        AS online_new_customers,
+          COUNT(DISTINCT mmid) FILTER (WHERE channel = 'offline' AND customer_type = 'new_customer')        AS offline_new_customers,
+          COUNT(DISTINCT mmid) FILTER (WHERE channel = 'online'  AND customer_type = 'retention')           AS online_retention,
+          COUNT(DISTINCT mmid) FILTER (WHERE channel = 'offline' AND customer_type = 'retention')           AS offline_retention
+        FROM sales_hoc_orders
+        GROUP BY month, dynamic_cmg
+      )
+      SELECT
+        c.month::text,
+        TO_CHAR(c.month, 'FMMonth') AS month_label,
+        c.dynamic_cmg,
+        COALESCE(c.total_calls, 0)      AS total_calls,
+        COALESCE(c.reached, 0)          AS reached,
+        c.ordered,
+        c.new_customers,
+        c.retention,
+        c.hoc_orders,
+        c.hoc_sales,
+        -- incentive-eligible sales: before May 2026 all CMGs count; from May DISTRIBUTOR excluded
+        CASE WHEN c.month < '2026-05-01' OR c.dynamic_cmg IN ('FOOD RETAILER', 'HORECA', 'END USER')
+             THEN c.hoc_sales ELSE 0
+        END AS incentive_hoc_sales,
+        c.sales_target,
+        c.achievement_ratio,
+        COALESCE(m.incentive_per_head, 0) AS incentive_per_head,
+        COALESCE(m.total_incentive, 0)    AS total_incentive,
+        COALESCE(m.total_agent_cost, 0)   AS total_agent_cost,
+        COALESCE(m.total_expense, 0)      AS total_expense,
+        COALESCE(m.roi, 0)                AS roi,
+        COALESCE(ch.online_sales, 0)           AS online_sales,
+        COALESCE(ch.offline_sales, 0)          AS offline_sales,
+        COALESCE(ch.online_orders, 0)          AS online_orders,
+        COALESCE(ch.offline_orders, 0)         AS offline_orders,
+        COALESCE(ch.online_new_customers, 0)   AS online_new_customers,
+        COALESCE(ch.offline_new_customers, 0)  AS offline_new_customers,
+        COALESCE(ch.online_retention, 0)       AS online_retention,
+        COALESCE(ch.offline_retention, 0)      AS offline_retention
+      FROM mart_performance_cmg c
+      LEFT JOIN mart_performance_month m  ON m.month = c.month
+      LEFT JOIN channel_metrics ch        ON ch.month = c.month AND ch.dynamic_cmg = c.dynamic_cmg
+      ORDER BY c.month, c.dynamic_cmg
+    `).catch((err: unknown) => {
+      console.error('[overview] query error:', err)
+      throw err
+    }),
+    queryOne<{ total_calls: string }>(
+      `SELECT COUNT(DISTINCT mmid)::text AS total_calls
+       FROM telesales_calls WHERE first_connected_date IS NOT NULL`
     ),
-  ])
+    ])
 
-  const summaryMap: Record<string, { total_rows: number; total_sales: number }> = {}
-  for (const s of summaries) {
-    summaryMap[s.table_name] = {
-      total_rows:  Number(s.total_rows  || 0),
-      total_sales: Number(s.total_sales || 0),
-    }
-  }
+    const data = rows.map((r: any) => ({
+      month:             r.month,
+      month_label:       r.month_label,
+      dynamic_cmg:       r.dynamic_cmg,
+      total_calls:       Number(r.total_calls ?? 0),
+      reached:           Number(r.reached ?? 0),
+      ordered:           Number(r.ordered ?? 0),
+      new_customers:     Number(r.new_customers ?? 0),
+      retention:         Number(r.retention ?? 0),
+      hoc_orders:        Number(r.hoc_orders ?? 0),
+      hoc_sales:           Number(r.hoc_sales ?? 0),
+      incentive_hoc_sales: Number(r.incentive_hoc_sales ?? 0),
+      sales_target:        Number(r.sales_target ?? 0),
+      achievement_ratio: Number(r.achievement_ratio ?? 0),
+      incentive_per_head:Number(r.incentive_per_head ?? 0),
+      total_incentive:   Number(r.total_incentive ?? 0),
+      total_agent_cost:  Number(r.total_agent_cost ?? 0),
+      total_expense:     Number(r.total_expense ?? 0),
+      roi:               Number(r.roi ?? 0),
+      online_sales:      Number(r.online_sales ?? 0),
+      offline_sales:     Number(r.offline_sales ?? 0),
+      online_orders:     Number(r.online_orders ?? 0),
+      offline_orders:    Number(r.offline_orders ?? 0),
+      online_new_customers: Number(r.online_new_customers ?? 0),
+      offline_new_customers: Number(r.offline_new_customers ?? 0),
+      online_retention:  Number(r.online_retention ?? 0),
+      offline_retention: Number(r.offline_retention ?? 0),
+    }))
 
-  const lastUpload: Record<string, string> = {}
-  for (const b of lastUploads) lastUpload[b.table_name] = b.uploaded_at
-
-  const status = {
-    online_sales: {
-      total_rows:    summaryMap['online_sales']?.total_rows  ?? 0,
-      total_sales:   summaryMap['online_sales']?.total_sales ?? 0,
-      earliest_date: onlineDates?.min_d ?? null,
-      latest_date:   onlineDates?.max_d ?? null,
-      last_uploaded: lastUpload['online_sales'] ?? null,
-    },
-    offline_sales: {
-      total_rows:    summaryMap['offline_sales']?.total_rows  ?? 0,
-      total_sales:   summaryMap['offline_sales']?.total_sales ?? 0,
-      earliest_date: offlineDates?.min_d ?? null,
-      latest_date:   offlineDates?.max_d ?? null,
-      last_uploaded: lastUpload['offline_sales'] ?? null,
-    },
-    leads: {
-      total_rows:    summaryMap['leads']?.total_rows ?? 0,
-      last_uploaded: lastUpload['leads'] ?? null,
-    },
-    products: {
-      total_rows:    summaryMap['products']?.total_rows ?? 0,
-      total_brands:  new Set(productsBrands.map(r => r.brands)).size,
-      last_uploaded: lastUpload['products'] ?? null,
-    },
-    telesales: {
-      total_rows:    Number(telesales?.cnt ?? 0),
-      total_agents:  teleAgents.length,
-      earliest_date: telesales?.min_d ?? null,
-      latest_date:   telesales?.max_d ?? null,
-      last_uploaded: lastUpload['telesales_calls'] ?? null,
-    },
-    targets: {
-      total_rows:     Number(targets?.cnt ?? 0),
-      earliest_month: targets?.min_d ?? null,
-      latest_month:   targets?.max_d ?? null,
-      total_target:   Number(targets?.total ?? 0),
-      last_uploaded:  lastUpload['targets'] ?? null,
-    },
-    costs: {
-      total_rows:     Number(costs?.cnt ?? 0),
-      earliest_month: costs?.min_d ?? null,
-      latest_month:   costs?.max_d ?? null,
-      last_uploaded:  lastUpload['costs'] ?? null,
-    },
-    incentives: {
-      total_tiers:   incentiveRows.length,
-      tiers:         incentiveRows.map(r => Number(r.tier)).sort((a, b) => a - b),
-      last_uploaded: lastUpload['incentives'] ?? null,
-    },
-  }
-
-  const res = NextResponse.json({ status, history: batches })
-  res.headers.set('Cache-Control', 'public, s-maxage=120, stale-while-revalidate=300')
-  return res
-  } catch (err) {
-    console.error('[dashboard]', err)
-    return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
-  }
+    const res = NextResponse.json({
+      ok: true,
+      data: {
+        rows: data,
+        all_time_calls: Number(callsRow?.total_calls ?? 0),
+      },
+    })
+    setCacheHeader(res, 'MEDIUM')
+    return res
   })
 }

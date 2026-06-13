@@ -45,7 +45,7 @@ export function BuildProvider({ children }: { children: React.ReactNode }) {
     timerRef.current = setInterval(() => setElapsedSeconds(s => s + 1), 1000)
 
     try {
-      const res: Response = await fetch('/api/data/refresh-mart', {
+      const res: Response = await fetch('/api/data/hub/build', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ attribution_days: effectiveDays }),

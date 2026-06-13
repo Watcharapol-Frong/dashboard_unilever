@@ -11,7 +11,7 @@ interface FreshnessData {
 const fetcher = (url: string) => fetch(url).then(r => r.json())
 
 export function FreshnessBar() {
-  const { data } = useSWR<FreshnessData>('/api/data/mart-freshness', fetcher, {
+  const { data } = useSWR<FreshnessData>('/api/data/hub/freshness', fetcher, {
     refreshInterval: 5 * 60 * 1000,
     revalidateOnFocus: false,
     dedupingInterval: 5 * 60 * 1000,

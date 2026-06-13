@@ -4,10 +4,10 @@ import { useEffect } from 'react'
 import { useBuild } from '@/context/BuildContext'
 
 const PREFETCH_ROUTES = [
-  '/api/data/overview',
-  '/api/data/sales',
-  '/api/data/telesales',
-  '/api/data/mart-freshness',
+  '/api/data/dashboard',
+  '/api/data/dashboard/sales',
+  '/api/data/dashboard/telesales',
+  '/api/data/hub/freshness',
 ]
 
 export function Prefetcher() {
