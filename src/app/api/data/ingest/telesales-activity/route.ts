@@ -75,26 +75,11 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ ok: true, inserted: 0, skipped })
   }
 
-  // ── 2. Encrypt + upload raw payload to R2 (disaster recovery) ──
-  const encryptionKey = process.env.STORAGE_ENCRYPTION_KEY
-  if (!encryptionKey) {
-    return NextResponse.json({ error: 'Server configuration error (encryption)' }, { status: 500 })
-  }
+  const datePart = new Date().toISOString().slice(0, 10)
+  const token    = randomBytes(8).toString('hex')
+  const r2Key    = `leads-activity/${datePart}_${token}.json`
 
-  const datePart  = new Date().toISOString().slice(0, 10)
-  const token     = randomBytes(8).toString('hex')
-  const r2Key     = `leads-activity/${datePart}_${token}.json`
-  const payload   = JSON.stringify({ ingested_at: new Date().toISOString(), records })
-  const encrypted = encrypt(payload, encryptionKey)
-
-  try {
-    await uploadToR2(r2Key, encrypted)
-  } catch (err) {
-    console.error('[ingest/telesales-activity] R2 upload failed:', err)
-    return NextResponse.json({ error: 'Storage backup failed' }, { status: 500 })
-  }
-
-  // ── 3. Chunked upsert → telesales_calls ──────────────────
+  // ── 2. Chunked upsert → telesales_calls (primary path) ───
   const CHUNK = 500
   let dbError: string | null = null
 
@@ -137,21 +122,31 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'DB upsert failed', detail: dbError }, { status: 500 })
   }
 
-  // ── 4. Record batch (after upsert succeeds) ───────────────
-  await query(
-    `INSERT INTO upload_batches (table_name, filename, storage_path, row_count, status)
-     VALUES ('telesales_calls', $1, $2, $3, 'success')`,
-    [`gas_${datePart}_${token}.json`, r2Key, rows.length],
-  )
+  // ── 3. R2 backup (non-fatal — disaster recovery only) ────
+  const encryptionKey = process.env.STORAGE_ENCRYPTION_KEY
+  if (encryptionKey) {
+    const payload   = JSON.stringify({ ingested_at: new Date().toISOString(), records })
+    const encrypted = encrypt(payload, encryptionKey)
+    uploadToR2(r2Key, encrypted).catch(err => {
+      console.error('[ingest/telesales-activity] R2 backup failed (non-fatal):', err)
+    })
+  }
 
-  // ── 5. Sync table_summaries ───────────────────────────────
-  await query(
-    `INSERT INTO table_summaries (table_name, total_rows)
-     SELECT 'telesales_calls', COUNT(*) FROM telesales_calls
-     ON CONFLICT (table_name) DO UPDATE SET
-       total_rows   = EXCLUDED.total_rows,
-       last_updated = NOW()`
-  )
+  // ── 4. Record batch + sync summaries ─────────────────────
+  await Promise.all([
+    query(
+      `INSERT INTO upload_batches (table_name, filename, storage_path, row_count, status)
+       VALUES ('telesales_calls', $1, $2, $3, 'success')`,
+      [`gas_${datePart}_${token}.json`, r2Key, rows.length],
+    ),
+    query(
+      `INSERT INTO table_summaries (table_name, total_rows)
+       SELECT 'telesales_calls', COUNT(*) FROM telesales_calls
+       ON CONFLICT (table_name) DO UPDATE SET
+         total_rows   = EXCLUDED.total_rows,
+         last_updated = NOW()`
+    ),
+  ])
 
   return NextResponse.json({ ok: true, inserted: rows.length, skipped, storage_path: r2Key })
 }

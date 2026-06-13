@@ -7,7 +7,8 @@ export const dynamic = 'force-dynamic'
 
 export async function GET() {
   return withAuth(async () => {
-    const rows = await query<{
+    const [rows, callsRow] = await Promise.all([
+    query<{
       month: string
       month_label: string
       dynamic_cmg: string
@@ -85,12 +86,12 @@ export async function GET() {
     `).catch((err: unknown) => {
       console.error('[overview] query error:', err)
       throw err
-    })
-
-    const callsRow = await queryOne<{ total_calls: string }>(
+    }),
+    queryOne<{ total_calls: string }>(
       `SELECT COUNT(DISTINCT mmid)::text AS total_calls
        FROM telesales_calls WHERE first_connected_date IS NOT NULL`
-    )
+    ),
+    ])
 
     const data = rows.map((r: any) => ({
       month:             r.month,

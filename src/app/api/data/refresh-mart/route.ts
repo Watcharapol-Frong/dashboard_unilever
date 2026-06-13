@@ -6,7 +6,7 @@ import { buildLock } from '@/lib/build-lock'
 export async function POST(request: Request) {
   return withAdmin(async () => {
     const body = await request.json().catch(() => ({}))
-    const attributionDays = Math.max(1, Math.min(365, Number(body.attribution_days ?? 14)))
+    const attributionDays = Math.max(1, Math.min(365, Number(body.attribution_days ?? 30)))
 
     if (!buildLock.acquire(attributionDays)) {
       return NextResponse.json(

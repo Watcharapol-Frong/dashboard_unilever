@@ -8,7 +8,7 @@
  */
 import { refreshAllMarts } from '../src/lib/mart'
 
-const attributionDays = Math.max(1, Math.min(365, Number(process.env.ATTRIBUTION_DAYS ?? 14)))
+const attributionDays = Math.max(1, Math.min(365, Number(process.env.ATTRIBUTION_DAYS ?? 30)))
 
 console.log(`[build-mart] Starting — attribution window: ${attributionDays} days`)
 const t0 = Date.now()

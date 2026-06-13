@@ -1,9 +1,11 @@
 import { NextResponse } from 'next/server'
+import { withAdmin } from '@/lib/auth'
 import { query, queryOne } from '@/lib/db'
 
 export const dynamic = 'force-dynamic'
 
 export async function GET() {
+  return withAdmin(async () => {
   try {
   const [
     summaries,
@@ -133,4 +135,5 @@ export async function GET() {
     console.error('[dashboard]', err)
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
   }
+  })
 }

@@ -33,7 +33,7 @@ export async function ensureSchemaExtensions(): Promise<void> {
   ])
 }
 
-export async function buildMartMain(attributionDays = 14): Promise<number> {
+export async function buildMartMain(attributionDays = 30): Promise<number> {
   // ── 1. mmid_cmg_map — tiny lookup: mmid → primary_cmg + first_connected_date ──
   await query(`DROP TABLE IF EXISTS mmid_cmg_map`)
   await query(`
@@ -170,7 +170,7 @@ export async function buildMartMain(attributionDays = 14): Promise<number> {
   return rowCount
 }
 
-export async function buildMartPerformance(attributionDays = 14): Promise<number> {
+export async function buildMartPerformance(attributionDays = 30): Promise<number> {
   await query(`DROP TABLE IF EXISTS mart_performance`)
   await query(`DROP TABLE IF EXISTS mart_performance_cmg`)
   await query(`DROP TABLE IF EXISTS mart_performance_month`)
@@ -368,7 +368,7 @@ export async function buildMartPerformance(attributionDays = 14): Promise<number
   return Number(row?.cnt ?? 0)
 }
 
-export async function refreshAllMarts(attributionDays = 14): Promise<{ mart_main: number; performance: number }> {
+export async function refreshAllMarts(attributionDays = 30): Promise<{ mart_main: number; performance: number }> {
   await ensureSchemaExtensions()
 
   const startedAt = Date.now()
