@@ -1,13 +1,8 @@
 import { NextRequest } from 'next/server'
-import { auth } from '@clerk/nextjs/server'
 
 export async function POST(req: NextRequest) {
   try {
     const { query, conversationId } = await req.json()
-
-    // Retrieve the authenticated user's ID from Clerk
-    const { userId } = await auth()
-    const userIdentifier = userId || 'anonymous-user'
 
     const apiKey = process.env.DIFY_API_KEY
     const apiUrl = process.env.NEXT_PUBLIC_DIFY_API_URL || 'https://api.dify.ai/v1'
@@ -20,7 +15,6 @@ export async function POST(req: NextRequest) {
       )
     }
 
-    // Call Dify chat-messages API
     const response = await fetch(`${apiUrl}/chat-messages`, {
       method: 'POST',
       headers: {
@@ -31,7 +25,7 @@ export async function POST(req: NextRequest) {
         inputs: {},
         query: query,
         response_mode: 'streaming',
-        user: userIdentifier,
+        user: 'preview-user',
         conversation_id: conversationId || '',
       }),
     })
@@ -45,7 +39,6 @@ export async function POST(req: NextRequest) {
       )
     }
 
-    // Return the response stream directly (SSE)
     return new Response(response.body, {
       headers: {
         'Content-Type': 'text/event-stream',
