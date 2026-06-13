@@ -3,9 +3,11 @@ import { NextResponse } from 'next/server'
 
 export const ADMIN_PATHS = ['/data-hub']
 
-// Dev mode: bypass all auth when DEV_MODE=true in .env.local (development only)
-// This flag has zero effect in production — NODE_ENV=production disables it entirely.
-const DEV_MODE = process.env.DEV_MODE === 'true' && process.env.NODE_ENV === 'development'
+// Dev mode: bypass all auth — active in local dev OR Vercel preview (never production).
+// Set DEV_MODE=true in .env.local (local) or Vercel environment variables scoped to Preview only.
+const DEV_MODE =
+  process.env.DEV_MODE === 'true' &&
+  (process.env.NODE_ENV === 'development' || process.env.VERCEL_ENV === 'preview')
 
 // Maintenance mode: redirect all visitors to /maintenance when MAINTENANCE_MODE=true
 // Set MAINTENANCE_MODE=true in Vercel environment variables to activate.
