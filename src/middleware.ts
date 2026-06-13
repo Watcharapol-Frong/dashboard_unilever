@@ -13,7 +13,8 @@ const MAINTENANCE_MODE = process.env.MAINTENANCE_MODE === 'true'
 
 const isProtectedRoute = createRouteMatcher([
   '/dashboard(.*)', '/data-hub(.*)', '/raw-data(.*)',
-  '/api/data/(.*)',
+  '/ai-assistant(.*)',
+  '/api/data/(.*)', '/api/ai/(.*)',
 ])
 
 const isAdminOnlyRoute = createRouteMatcher([
