@@ -21,18 +21,17 @@ export const NOT_CONV =
 // ── Call Reachability ─────────────────────────────────────────────────────────
 
 /**
- * "Reached" = a productive call connection occurred.
- * Excludes: no-answer variants, phone-off/unreachable, not-convenient-to-talk,
- * and not-interested statuses (Thai DB values).
+ * "Reached" = the customer picked up and a conversation occurred.
+ * Excludes only truly unreachable outcomes: no-answer variants and phone-off.
+ * "ไม่สะดวกคุย" and "ยังไม่ต้องการสินค้า" count as reached — the customer
+ * did talk, they just weren't ready to buy.
  *
  * Use as: `FILTER (WHERE ${REACHED})` or `WHERE ${REACHED}`
  * For table-prefixed columns use reachedCond('tc') etc.
  */
 export const REACHED =
   `call_status NOT LIKE 'ไม่รับสาย%'` +
-  ` AND call_status IS DISTINCT FROM 'ปิดเครื่อง/ติดต่อไม่ได้'` +
-  ` AND call_status IS DISTINCT FROM 'ไม่สะดวกคุย'` +
-  ` AND call_status IS DISTINCT FROM 'ยังไม่ต้องการสินค้า'`
+  ` AND call_status IS DISTINCT FROM 'ปิดเครื่อง/ติดต่อไม่ได้'`
 
 /**
  * Returns the REACHED condition with every column reference prefixed.
@@ -56,8 +55,8 @@ export const METRIC_DEFS = {
     sql: NOT_CONV,
   },
   reached: {
-    en: 'Calls where the customer picked up and a productive interaction occurred. Excludes no-answer, phone-off, not-convenient, and not-interested statuses.',
-    th: 'สายที่ลูกค้ารับและมีการสนทนาที่เป็นประโยชน์ ไม่รวม: ไม่รับสาย, ปิดเครื่อง/ติดต่อไม่ได้, ไม่สะดวกคุย, ยังไม่ต้องการสินค้า',
+    en: 'Calls where the customer picked up and a conversation occurred. Excludes only truly unreachable outcomes: no-answer and phone-off. "Not convenient" and "not interested yet" count as reached.',
+    th: 'สายที่ลูกค้ารับสายและมีการสนทนาเกิดขึ้น ไม่รวมเฉพาะสายที่ติดต่อไม่ได้จริงๆ: ไม่รับสาย, ปิดเครื่อง/ติดต่อไม่ได้ — ส่วน "ไม่สะดวกคุย" และ "ยังไม่ต้องการสินค้า" นับเป็น reached เพราะลูกค้ารับสายและคุยแล้ว',
     sql: REACHED,
   },
   new_customer: {
