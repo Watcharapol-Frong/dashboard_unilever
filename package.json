@@ -11,6 +11,7 @@
     "build-mart": "npx tsx scripts/build-mart.ts"
   },
   "dependencies": {
+    "@anthropic-ai/sdk": "^0.104.1",
     "@aws-sdk/client-s3": "^3.1048.0",
     "@aws-sdk/lib-storage": "^3.1048.0",
     "@aws-sdk/s3-request-presigner": "^3.1050.0",
