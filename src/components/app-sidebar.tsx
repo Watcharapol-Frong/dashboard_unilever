@@ -6,7 +6,7 @@ import { usePathname } from "next/navigation"
 import { useUser } from "@clerk/nextjs"
 import {
   LayoutDashboard, ShoppingCart, Phone,
-  Database, Table2, Sparkles,
+  Database, Table2,
 } from "lucide-react"
 
 import { NavUser } from "@/components/nav-user"
@@ -17,10 +17,9 @@ import {
 } from "@/components/ui/sidebar"
 
 const dashboardNav = [
-  { title: "Main",         url: "/dashboard",           icon: LayoutDashboard, exact: true  },
-  { title: "Order Sales",  url: "/dashboard/sales",     icon: ShoppingCart,    exact: false },
-  { title: "Telesales",    url: "/dashboard/telesales", icon: Phone,           exact: false },
-  { title: "AI Assistant", url: "/ai-assistant",        icon: Sparkles,        exact: false },
+  { title: "Main",        url: "/dashboard",           icon: LayoutDashboard, exact: true  },
+  { title: "Order Sales", url: "/dashboard/sales",     icon: ShoppingCart,    exact: false },
+  { title: "Telesales",   url: "/dashboard/telesales", icon: Phone,           exact: false },
 ]
 
 export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
