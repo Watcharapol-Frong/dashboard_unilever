@@ -1,7 +1,7 @@
 import { clerkMiddleware, createRouteMatcher } from '@clerk/nextjs/server'
 import { NextResponse } from 'next/server'
 
-export const ADMIN_PATHS = ['/leads', '/data-hub', '/exports']
+export const ADMIN_PATHS = ['/data-hub']
 
 // Dev mode: bypass all auth when DEV_MODE=true in .env.local (development only)
 // This flag has zero effect in production — NODE_ENV=production disables it entirely.
@@ -12,16 +12,15 @@ const DEV_MODE = process.env.DEV_MODE === 'true' && process.env.NODE_ENV === 'de
 const MAINTENANCE_MODE = process.env.MAINTENANCE_MODE === 'true'
 
 const isProtectedRoute = createRouteMatcher([
-  '/overview(.*)', '/sales(.*)', '/telesales(.*)',
-  '/products(.*)', '/leads(.*)', '/incentives(.*)', '/data-hub(.*)', '/exports(.*)',
+  '/dashboard(.*)', '/data-hub(.*)', '/raw-data(.*)',
   '/api/data/(.*)',
 ])
 
 const isAdminOnlyRoute = createRouteMatcher([
-  '/leads(.*)', '/data-hub(.*)', '/exports(.*)',
+  '/data-hub(.*)',
   '/api/data/upload/(.*)', '/api/data/dashboard(.*)',
   '/api/data/refresh-mart/(.*)', '/api/data/export/(.*)',
-  '/api/data/template/(.*)',
+  '/api/data/template/(.*)', '/api/data/raw/export(.*)',
 ])
 
 export default clerkMiddleware(async (auth, request) => {
@@ -38,7 +37,6 @@ export default clerkMiddleware(async (auth, request) => {
 
   // ── Step 2: Authenticated gate — fail-safe: return early, no fall-through ───
   if (isProtectedRoute(request) && !userId) {
-    // API callers get a machine-readable 401; browsers get redirected to sign-in
     if (request.nextUrl.pathname.startsWith('/api/')) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
@@ -47,7 +45,6 @@ export default clerkMiddleware(async (auth, request) => {
 
   // ── Step 3: Admin gate — explicit early return on every failure path ─────────
   if (isAdminOnlyRoute(request)) {
-    // Type-assert publicMetadata so role access is safe in strict TypeScript
     const meta = sessionClaims?.publicMetadata as { role?: string } | undefined
     const role  = meta?.role
 
@@ -55,10 +52,9 @@ export default clerkMiddleware(async (auth, request) => {
       if (request.nextUrl.pathname.startsWith('/api/')) {
         return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
       }
-      return NextResponse.redirect(new URL('/overview', request.url))
+      return NextResponse.redirect(new URL('/dashboard', request.url))
     }
   }
-  // Execution reaching here means: authenticated (if required) + authorized.
 })
 
 export const config = {
