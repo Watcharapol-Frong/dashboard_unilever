@@ -7,9 +7,9 @@ on:
   workflow_dispatch:
     inputs:
       attribution_days:
-        description: 'Attribution window in days (default: 14)'
+        description: 'Attribution window in days (default: 30)'
         required: false
-        default: '14'
+        default: '30'
 
 jobs:
   build-mart:
@@ -33,6 +33,6 @@ jobs:
       - name: Run mart build
         env:
           DATABASE_URL:      ${{ secrets.DATABASE_URL }}
-          ATTRIBUTION_DAYS:  ${{ inputs.attribution_days || '14' }}
+          ATTRIBUTION_DAYS:  ${{ inputs.attribution_days || '30' }}
           NODE_ENV:          production
         run: npx tsx scripts/build-mart.ts
