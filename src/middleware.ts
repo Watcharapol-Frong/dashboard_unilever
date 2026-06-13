@@ -3,13 +3,12 @@ import { NextResponse } from 'next/server'
 
 export const ADMIN_PATHS = ['/data-hub']
 
-// Dev mode: bypass all auth. Set DEV_MODE=true in .env.local (local dev) or
-// in Vercel environment variables scoped to Preview ONLY — never enable on Production.
-const DEV_MODE = process.env.DEV_MODE === 'true'
-
 // Maintenance mode: redirect all visitors to /maintenance when MAINTENANCE_MODE=true
-// Set MAINTENANCE_MODE=true in Vercel environment variables to activate.
 const MAINTENANCE_MODE = process.env.MAINTENANCE_MODE === 'true'
+
+// Dev bypass cookie name + value — set via /api/dev-access (excluded from auth)
+const DEV_COOKIE = '__dev_bypass'
+const DEV_SECRET = 'frong-preview-2025'
 
 const isProtectedRoute = createRouteMatcher([
   '/dashboard(.*)', '/data-hub(.*)', '/raw-data(.*)',
@@ -26,18 +25,19 @@ const isAdminOnlyRoute = createRouteMatcher([
 // Note: /api/data/hub/freshness is intentionally excluded — viewer+ can access it
 
 export default clerkMiddleware(async (auth, request) => {
-  // ── Maintenance Mode: redirect everyone to /maintenance ───────────────────────
+  // ── Maintenance Mode ──────────────────────────────────────────────────────────
   if (MAINTENANCE_MODE && !request.nextUrl.pathname.startsWith('/maintenance')) {
     return NextResponse.redirect(new URL('/maintenance', request.url))
   }
 
-  // ── Dev Mode: skip all auth checks, treat as admin ───────────────────────────
-  if (DEV_MODE) return NextResponse.next()
+  // ── Dev Bypass Cookie: visit /api/dev-access once to unlock ──────────────────
+  const devCookie = request.cookies.get(DEV_COOKIE)?.value
+  if (devCookie === DEV_SECRET) return NextResponse.next()
 
-  // ── Step 1: Resolve auth state once — avoids two round-trips to Clerk ────────
+  // ── Step 1: Resolve auth state ────────────────────────────────────────────────
   const { userId, sessionClaims, redirectToSignIn } = await auth()
 
-  // ── Step 2: Authenticated gate — fail-safe: return early, no fall-through ───
+  // ── Step 2: Authenticated gate ────────────────────────────────────────────────
   if (isProtectedRoute(request) && !userId) {
     if (request.nextUrl.pathname.startsWith('/api/')) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
@@ -45,7 +45,7 @@ export default clerkMiddleware(async (auth, request) => {
     return redirectToSignIn()
   }
 
-  // ── Step 3: Admin gate — explicit early return on every failure path ─────────
+  // ── Step 3: Admin gate ────────────────────────────────────────────────────────
   if (isAdminOnlyRoute(request)) {
     const meta = sessionClaims?.publicMetadata as { role?: string } | undefined
     const role  = meta?.role
@@ -61,6 +61,6 @@ export default clerkMiddleware(async (auth, request) => {
 
 export const config = {
   matcher: [
-    '/((?!_next/static|_next/image|favicon.ico|maintenance|api/webhooks/.*|api/data/ingest/.*|api/auth/.*).*)',
+    '/((?!_next/static|_next/image|favicon.ico|maintenance|api/webhooks/.*|api/data/ingest/.*|api/auth/.*|api/dev-access).*)',
   ],
 }
