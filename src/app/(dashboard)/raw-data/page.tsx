@@ -1,3 +1,5 @@
+import RawDataClient from './_components/RawDataClient'
+
 export default function RawDataPage() {
-  return <div className="text-muted-foreground text-sm">Raw Data (coming soon)</div>
+  return <RawDataClient />
 }

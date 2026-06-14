@@ -86,7 +86,7 @@ export function DataTable<TData, TValue>({
       columnVisibility,
       rowSelection,
       columnFilters,
-      pagination: isServerSide ? pagination : undefined,
+      ...(isServerSide ? { pagination } : {}),
     },
     initialState: {
       pagination: isServerSide ? undefined : { pageSize: manualPagination ? 10_000 : (defaultPageSize ?? 10) },

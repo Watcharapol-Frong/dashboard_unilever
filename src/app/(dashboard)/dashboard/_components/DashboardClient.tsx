@@ -15,7 +15,8 @@ import { useDashboardSWR }    from '@/hooks/useDashboardSWR'
 import { KpiCard }            from '@/components/dashboard/KpiCard'
 import { KpiGrid }            from '@/components/dashboard/KpiGrid'
 import { MonthChipGroup }     from '@/components/dashboard/MonthChipGroup'
-import { SalesTrendChart }    from '@/components/dashboard/SalesTrendChart'
+import { SalesTrendChart }           from '@/components/dashboard/SalesTrendChart'
+import { TelesalesTrendMiniChart }   from '@/components/dashboard/TelesalesTrendMiniChart'
 import { PageLoading, PageEmpty, PageError } from '@/components/dashboard/PageState'
 import {
   fmtBaht, fmt, formatPct,
@@ -398,40 +399,43 @@ export function DashboardClient() {
           <span className="text-xs text-muted-foreground">· by call date</span>
         </div>
         {aggTele ? (
-          <KpiGrid cols={4}>
-            <KpiCard
-              title="Total Calls"
-              value={fmt(aggTele.total_calls)}
-              icon={PhoneCall}
-              comparison={isSingleMonth ? mom(aggTele.total_calls, tPrev?.total_calls) : undefined}
-              comparisonLabel="vs previous month"
-              subtitle="customers contacted"
-            />
-            <KpiCard
-              title="Reached"
-              value={fmt(aggTele.reached)}
-              icon={PhoneForwarded}
-              valueClassName={colorRate(aggTele.reach_rate, [0.6, 0.4])}
-              subtitle={`${formatPct(aggTele.reach_rate)} reach rate`}
-            />
-            <KpiCard
-              title="Converted"
-              value={fmt(aggTele.converted)}
-              icon={UserCheck}
-              comparison={isSingleMonth ? mom(aggTele.converted, tPrev?.converted) : undefined}
-              comparisonLabel="vs previous month"
-              subtitle="became customers"
-            />
-            <KpiCard
-              title="Conversion Rate"
-              value={aggTele.reached > 0 ? formatPct(aggTele.conversion_rate) : '—'}
-              icon={Percent}
-              valueClassName={colorRate(aggTele.conversion_rate, [0.3, 0.15])}
-              comparison={isSingleMonth ? mom(aggTele.conversion_rate, tPrev?.conversion_rate) : undefined}
-              comparisonLabel="vs previous month"
-              subtitle="of reached customers"
-            />
-          </KpiGrid>
+          <>
+            <KpiGrid cols={4}>
+              <KpiCard
+                title="Total Calls"
+                value={fmt(aggTele.total_calls)}
+                icon={PhoneCall}
+                comparison={isSingleMonth ? mom(aggTele.total_calls, tPrev?.total_calls) : undefined}
+                comparisonLabel="vs previous month"
+                subtitle="customers contacted"
+              />
+              <KpiCard
+                title="Reached"
+                value={fmt(aggTele.reached)}
+                icon={PhoneForwarded}
+                valueClassName={colorRate(aggTele.reach_rate, [0.6, 0.4])}
+                subtitle={`${formatPct(aggTele.reach_rate)} reach rate`}
+              />
+              <KpiCard
+                title="Converted"
+                value={fmt(aggTele.converted)}
+                icon={UserCheck}
+                comparison={isSingleMonth ? mom(aggTele.converted, tPrev?.converted) : undefined}
+                comparisonLabel="vs previous month"
+                subtitle="became customers"
+              />
+              <KpiCard
+                title="Conversion Rate"
+                value={aggTele.reached > 0 ? formatPct(aggTele.conversion_rate) : '—'}
+                icon={Percent}
+                valueClassName={colorRate(aggTele.conversion_rate, [0.3, 0.15])}
+                comparison={isSingleMonth ? mom(aggTele.conversion_rate, tPrev?.conversion_rate) : undefined}
+                comparisonLabel="vs previous month"
+                subtitle="of reached customers"
+              />
+            </KpiGrid>
+            <TelesalesTrendMiniChart effectiveStart={effectiveStart} effectiveEnd={effectiveEnd} />
+          </>
         ) : (
           <PageEmpty message="No telesales data for selected period" />
         )}

@@ -4,7 +4,7 @@ import * as React from "react"
 import Link from "next/link"
 import { usePathname } from "next/navigation"
 import {
-  LayoutDashboard, ShoppingCart, Phone,
+  LayoutDashboard, ShoppingCart, Phone, Users,
   Database, Table2,
 } from "lucide-react"
 
@@ -18,6 +18,7 @@ const dashboardNav = [
   { title: "Main",        url: "/dashboard",           icon: LayoutDashboard, exact: true  },
   { title: "Order Sales", url: "/dashboard/sales",     icon: ShoppingCart,    exact: false },
   { title: "Telesales",   url: "/dashboard/telesales", icon: Phone,           exact: false },
+  { title: "Leads",       url: "/leads",               icon: Users,           exact: false },
 ]
 
 export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
