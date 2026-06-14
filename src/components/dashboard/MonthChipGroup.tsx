@@ -36,7 +36,7 @@ export function MonthChipGroup({
                 : 'bg-background text-muted-foreground border-gray-200 hover:bg-gray-50 hover:text-foreground',
             ].join(' ')}
           >
-            {new Date(m).toLocaleDateString('en-GB', { month: 'short', year: '2-digit' })}
+            {(() => { const [y, mo] = m.split('-').map(Number); return new Date(y, mo - 1, 1).toLocaleDateString('en-GB', { month: 'short', year: '2-digit' }) })()}
           </button>
         )
       })}

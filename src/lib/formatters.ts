@@ -1,9 +1,7 @@
-// ── Compact formatters (KPI cards) ───────────────────────────────────────────
-export const fmt = (n: number) =>
-  n >= 1_000_000 ? `${(n / 1_000_000).toFixed(2)}M`
-  : n >= 1_000   ? `${(n / 1_000).toFixed(1)}K`
-  : n.toFixed(0)
+// ── Full-digit formatters (KPI cards) ────────────────────────────────────────
+const _int = new Intl.NumberFormat('en-US', { maximumFractionDigits: 0 })
 
+export const fmt     = (n: number) => _int.format(Math.round(n))
 export const fmtBaht = (n: number) => `฿${fmt(n)}`
 
 // fmtPct: from two counts → "15.0%"
