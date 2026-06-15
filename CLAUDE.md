@@ -14,7 +14,7 @@ npm run build-mart   # run mart build locally (no Vercel, no timeout)
                      # requires DATABASE_URL in env
 ```
 
-**Active branch:** `claude/review-upload-mvp-U5yDI`  
+**Active branch:** `gemini-antigaravity-uxui`  
 Always develop on this branch. Never push directly to `main` without explicit permission.
 
 ---
@@ -24,8 +24,9 @@ Always develop on this branch. Never push directly to `main` without explicit pe
 Add to `.env.local`:
 ```
 DEV_MODE=true
+NEXT_PUBLIC_DEV_MODE=true
 ```
-Bypasses all Clerk auth, treats every request as admin.  
+Bypasses all Clerk auth, treats every request as admin. `ClerkProvider` is skipped when no publishable key is set.  
 **Double-locked:** only activates when `DEV_MODE=true` AND `NODE_ENV=development` — zero effect on Vercel.
 
 ---
@@ -35,7 +36,7 @@ Bypasses all Clerk auth, treats every request as admin.
 | Layer | Technology |
 |---|---|
 | Framework | Next.js 15 (App Router) |
-| Auth | Clerk (`@clerk/nextjs`) |
+| Auth | Clerk (`@clerk/nextjs` v6) |
 | Database | CockroachDB Serverless (raw SQL via `pg`) |
 | Storage | Cloudflare R2 (S3-compatible, AES-256-GCM encrypted) |
 | State / Fetching | SWR (5-min dedup, no revalidate-on-focus) |
@@ -54,41 +55,46 @@ src/
   app/
     (auth)/           — login / register pages
     (dashboard)/      — all dashboard pages
-      overview/
-      sales/
-        orders/
-      telesales/
-        call-log/
-      leads/
-      products/
-      incentives/
-      data-hub/       — admin: upload + build mart + recovery
-      exports/        — admin: pivot export
-    api/data/         — all API routes (see API Routes section)
+      dashboard/          — Main KPI overview
+        sales/            — Order Sales
+        telesales/        — Telesales performance
+          call-log/       — (exists, not in nav — do NOT delete)
+      leads/              — Lead list (admin only)
+      raw-data/           — Raw table viewer (admin only)
+      data-hub/           — Admin: upload + build mart + recovery
+    api/
+      auth/register/    — invite-code-gated registration (public)
+      chat/             — Dify AI streaming proxy
+      data/             — all data API routes (see API Routes section)
+      webhooks/clerk/   — Clerk webhook handler (svix verified)
     maintenance/      — shown when MAINTENANCE_MODE=true
   components/
     dashboard/        — KpiCard, KpiGrid, FilterBar, FilterSelect, PageState,
-                        MonthChipGroup, FreshnessBar, ChatBot, HelpSheet
-    layout/           — TopBar, Sidebar
+                        MonthChipGroup, FreshnessBar, ChatBot, RadialGauge,
+                        SalesTrendChart, TelesalesTrendMiniChart, TargetGaugeBar
+    layout/           — TopBar, Prefetcher
+    nav-user.tsx      — Sidebar user section (Clerk or dev-mode placeholder)
+    app-sidebar.tsx   — Sidebar with Dashboard / Data / Help / NavUser sections
     ui/               — shadcn/ui primitives
   context/
     BuildContext.tsx      — mart build state (persist across navigation)
-    LanguageContext.tsx
-    DateRangeContext.tsx
+    LanguageContext.tsx   — EN/TH language toggle
+    UploadQueueContext.tsx — upload queue state
   hooks/
     useDashboardSWR.ts   — typed SWR wrapper (5-min dedup, no revalidate on focus)
     useMonthRange.ts     — month chip range selector (default: last month)
   lib/
     auth.ts              — withAuth(), withAdmin(), requireAuth(), requireAdmin()
+                           DEV_MODE bypass when DEV_MODE=true + NODE_ENV=development
     db.ts                — query(), queryOne(), queryRowCount()
-    metrics.ts           — ★ METRIC LAYER: CONV, NOT_CONV, REACHED, reachedCond()
+    metrics.ts           — METRIC LAYER: CONV, NOT_CONV, REACHED, reachedCond()
     query.ts             — setCacheHeader(), CACHE presets, SQL filter helpers
     mart.ts              — buildMartMain(), buildMartPerformance(), refreshAllMarts(),
                            ensureSchemaExtensions()
     upload-service.ts    — ETL + SHA-256 hash dedup + R2 + DB upsert
     upload-config.ts     — FILE_TYPE_CONFIGS, validateHeaders()
     build-lock.ts        — in-memory build guard (prevents concurrent builds)
-    formatters.ts        — fmt(), fmtBaht(), fmtPct()
+    formatters.ts        — fmt(), fmtBaht(), fmtPct(), formatPct()
     r2.ts                — uploadToR2(), downloadFromR2()
     crypto.ts            — encrypt() / decrypt() (AES-256-GCM)
     i18n.ts              — t(key, lang) translation helper
@@ -97,7 +103,7 @@ scripts/
   create-indexes.ts      — source-table indexes (run once: npm run indexes)
   google-apps-script.js  — GAS script for incremental telesales sync
 docs/
-  business-logic.md      — ★ business rules, metric definitions, data flow
+  business-logic.md      — business rules, metric definitions, data flow
   page-brief.md          — page content and audience briefs
   ux-personas.md         — user personas, display priorities, UX rules
   overview-design.md     — overview page design notes
@@ -111,52 +117,63 @@ docs/
 ## Auth Rules
 
 ```
-Middleware (src/middleware.ts)
-  ├─ Protected (login required): /overview, /sales, /telesales, /products,
-  │                               /leads, /incentives, /data-hub, /exports,
-  │                               /api/data/*
-  ├─ Admin only:  /leads, /data-hub, /exports,
-  │               /api/data/upload/*, /api/data/dashboard*,
-  │               /api/data/refresh-mart/*, /api/data/export/*, /api/data/template/*
-  └─ No auth (GAS Bearer token): /api/data/ingest/*
+Middleware (src/middleware.ts)  — clerkMiddleware
+  Protected (login required): /dashboard(.*), /leads(.*),
+                               /raw-data(.*), /data-hub(.*),
+                               /api/data(.*)
+  Public: /login, /register, /api/auth/register,
+          /api/data/ingest/*, /api/webhooks/*, /api/dev-access
+
+Route handler level:
+  withAuth(handler)   — any authenticated user
+  withAdmin(handler)  — role === 'admin' only (checks publicMetadata.role)
+
+Admin-only: /leads, /data-hub, /raw-data,
+  /api/data/hub/*, /api/data/pivot (POST), /api/data/raw/*,
+  /api/data/leads/*, /api/data/template/*
 ```
 
 Use `withAuth(handler)` for viewer+ routes, `withAdmin(handler)` for admin-only routes.  
-GAS routes use `INGEST_API_SECRET` Bearer token checked via `timingSafeEqual`.
+GAS routes use `INGEST_API_SECRET` Bearer token checked separately (excluded from Clerk middleware matcher).
+
+Registration: 2-step custom form — invite code validates role → `clerkClient.users.createUser` with `publicMetadata.role`.
 
 ---
 
 ## API Routes
 
 ```
+/api/
+  auth/register/             POST — invite-code-gated registration (public)
+  chat/                      POST — Dify AI streaming proxy (auth required)
+  webhooks/clerk/            POST — Clerk webhook (svix verified, public)
+
 /api/data/
-  overview/              GET  — mart_performance_cmg (month × CMG)
-  overview/calls/        GET  — total_calls + connected (?startDate, endDate, cmg)
-  overview/agents/       GET  — agent leaderboard (?startDate, endDate, cmg)
-  cohorts/               GET  — cohort trend (?interval, cmg, channel, startDate, endDate)
-  sales/                 GET  — HOC sales KPI + trend + recent orders
-  telesales/             GET  — funnel + tier breakdown + agent perf
-  telesales/funnel/      GET  — engaged vs not_engaged Sankey data
-  leads/                 GET  — paginated lead list (?page, search, tier, contact, conv, cmg, agent)
-  leads/summary/         GET  — KPI + filter options (admin only)
-  products/              GET  — by_product, by_brand, by_buyer, brand_trend
-  products/options/      GET  — filter options [LONG cache]
-  incentives/            GET  — ROI + cost + incentive breakdown
-  pivot/                 GET  — filter options (months, CMGs) [LONG cache]
-  pivot/                 POST — raw data export (admin only)
-  dashboard/             GET  — upload history + table stats (admin only)
-  mart-status/           GET  — mart row counts + last 5 builds (admin only)
-  mart-freshness/        GET  — last refreshed_at + last build status
-  build-status/          GET  — build lock state
-  refresh-mart/          POST — full mart rebuild (admin only, manual trigger)
-  refresh-mart/chunk/    POST — legacy chunked rebuild
-  refresh-mart/finalize/ POST — legacy finalize
-  upload/multipart/init/     POST — start R2 multipart upload
-  upload/multipart/complete/ POST — finish upload → ETL + hash dedup
-  upload/multipart/abort/    POST — abort upload
-  upload/replay/         POST — re-process R2 backups into DB
-  ingest/telesales-activity/ POST — GAS: upsert telesales_calls (Bearer token)
-  ingest/threshold/      GET  — GAS: get MAX(first_connected_date)
+  dashboard/                 GET  — source table stats + upload history (admin)
+  dashboard/agents           GET  — agent leaderboard (?startDate, endDate, cmg)
+  dashboard/sales            GET  — sales KPI + trend + product analysis (?startDate, endDate, cmg)
+  dashboard/sales-trend      GET  — monthly/weekly sales trend (?view, cmg, start, end)
+  dashboard/summary          GET  — top-level KPI summary
+  dashboard/telesales        GET  — funnel + tier breakdown + agent perf (?startDate, endDate, cmg, agent)
+  dashboard/telesales-trend  GET  — monthly/weekly telesales trend (?view, start, end)
+  hub/                       GET  — upload history + table stats (admin)
+  hub/build                  POST — trigger mart rebuild (admin)
+  hub/freshness              GET  — last refreshed_at + last build status
+  hub/upload/multipart/
+    init/                    POST — start R2 multipart upload (admin)
+    complete/                POST — finish upload → ETL + hash dedup (admin)
+    abort/                   POST — abort upload (admin)
+    replay/                  POST — re-process R2 backups into DB (admin)
+  ingest/
+    telesales-activity/      POST — GAS: upsert telesales_calls (Bearer token)
+    threshold/               GET  — GAS: get MAX(first_connected_date)
+  leads/                     GET  — paginated lead list (?page, search, tier, contact, conv, cmg, agent)
+  leads/summary/             GET  — KPI + filter options (admin)
+  pivot/                     GET  — filter options (admin)
+  pivot/                     POST — raw data export (admin)
+  raw/                       GET  — raw table viewer (?table, page)
+  raw/export/                GET  — export raw table as CSV
+  template/[file]/           GET  — download upload templates (admin)
 ```
 
 **Cache presets** (`src/lib/query.ts`):
@@ -166,7 +183,7 @@ GAS routes use `INGEST_API_SECRET` Bearer token checked via `timingSafeEqual`.
 | SHORT | 1 min | 2 min | mart-status, leads list |
 | MEDIUM | 5 min | 10 min | most data routes (default) |
 | FUNNEL | 10 min | 20 min | expensive aggregations |
-| LONG | 1 hr | 2 hr | static options (products, pivot) |
+| LONG | 1 hr | 2 hr | static options |
 | NONE | — | — | real-time status endpoints |
 
 ---
@@ -185,7 +202,7 @@ import { CONV, NOT_CONV, REACHED, reachedCond } from '@/lib/metrics'
 ```
 
 `REACHED` is a 4-condition definition (excludes: ไม่รับสาย, ปิดเครื่อง, ไม่สะดวกคุย, ยังไม่ต้องการสินค้า).  
-See `docs/business-logic.md` for full definitions with business context.
+See `docs/business-logic.md` for full definitions.
 
 ---
 
@@ -227,89 +244,68 @@ export default function MyPageClient() {
 ```
 .github/workflows/nightly-build.yml
   → cron: 02:00 AM ICT (19:00 UTC) every day
-  → scripts/build-mart.ts
-  → refreshAllMarts(attributionDays)
+  → scripts/build-mart.ts → refreshAllMarts(attributionDays)
 ```
 
-### Manual (Data Hub UI or CLI)
+### Manual
 ```
-POST /api/data/refresh-mart   (Vercel, 10s timeout applies)
-npm run build-mart            (local, no timeout)
+POST /api/data/hub/build   (Vercel, 10s timeout applies)
+npm run build-mart          (local, no timeout)
 ```
 
 ### Build sequence
 ```
 refreshAllMarts(attributionDays)
-  → ensureSchemaExtensions()          (adds mart_builds, file_hash column if missing)
+  → ensureSchemaExtensions()
   → buildMartMain()
-      DROP + CREATE mmid_cmg_map      (mmid → primary_cmg, 3 cols, PK lookup)
-      DROP + CREATE sales_hoc_orders  (HOC-attributed row fact, 24 cols)
-        JOIN: telesales_calls + online/offline_sales + products + mmid_cmg_map
-        CASE WHEN → customer_type (new_customer / retention / *_not_converted)
+      DROP + CREATE mmid_cmg_map      (mmid → primary_cmg + first_connected_date)
+      DROP + CREATE sales_hoc_orders  (HOC-attributed row fact, customer_type)
       CREATE INDEX ×7 in parallel
   → buildMartPerformance()
-      DROP + CREATE mart_performance_cmg    (month × CMG aggregates, 11 cols)
-      DROP + CREATE mart_performance_month  (month costs + ROI, 9 cols)
+      DROP + CREATE mart_performance_cmg    (month × CMG aggregates)
+      DROP + CREATE mart_performance_month  (month costs + ROI)
       CREATE INDEX ×3 in parallel
   → INSERT INTO mart_builds (status, duration_ms, row_counts)
 ```
 
-**Note:** `mart_telesales_orders` no longer exists. All routes that previously queried it now use `mmid_cmg_map` (for CMG lookup) or `sales_hoc_orders` (for order data).
+`mart_telesales_orders` no longer exists — replaced by `mmid_cmg_map` + `sales_hoc_orders`.
 
 ---
 
 ## File Upload & Dedup
 
 ```
-Upload → SHA-256 hash of CSV text
-       → check upload_batches WHERE file_hash = $1
-       → if duplicate → reject 422 "This file has already been uploaded"
-       → else → upload to R2 (AES-256-GCM) → ETL → upsert → store hash
+Upload → SHA-256 hash → check upload_batches.file_hash
+       → duplicate → 422 reject
+       → else → R2 (AES-256-GCM) → ETL → upsert → store hash
 ```
-
-`file_hash` column added to `upload_batches` by `ensureSchemaExtensions()` or `npm run indexes`.
 
 ---
 
 ## Stale Data Warning
 
-`FreshnessBar` in `(dashboard)/layout.tsx` polls `/api/data/mart-freshness` every 5 min.  
-Shows amber banner if `last_refreshed` > 24 h or no mart data exists yet.
+`FreshnessBar` polls `/api/data/hub/freshness` every 5 min. Amber banner if `last_refreshed` > 24 h.
 
 ---
 
 ## Google Apps Script (GAS) Sync
 
-Script: `scripts/google-apps-script.js`
-
 ```
 exportIncrementalToStorage()
-  → GET /api/data/ingest/threshold   (get MAX first_connected_date)
-  → Filter sheet rows > threshold - 3 days
-  → POST /api/data/ingest/telesales-activity  { records: [...] }
-  → Upserted into telesales_calls (ON CONFLICT mmid DO UPDATE)
+  → GET /api/data/ingest/threshold
+  → POST /api/data/ingest/telesales-activity { records: [...] }
+  → upserted into telesales_calls (ON CONFLICT mmid DO UPDATE)
 ```
-
-**GAS Script Properties:**
-- `DASHBOARD_URL` — Vercel app URL
-- `INGEST_SECRET` — matches `INGEST_API_SECRET` env var
-- `VERCEL_BYPASS_SECRET` — from Vercel → Settings → Deployment Protection
-- `FALLBACK_DATE` — (optional) YYYY-MM-DD fallback when API unreachable
-
-**Debug functions:** `testConnection()`, `debugLeadSheets()`
 
 ---
 
 ## GitHub Actions Setup
 
-Add one secret in: **Settings → Secrets and variables → Actions → New repository secret**
+**Settings → Secrets and variables → Actions → New repository secret**
 
 | Secret | Value |
 |---|---|
 | `DATABASE_URL` | CockroachDB connection string |
-
-Manual trigger: **Actions → Nightly Mart Build → Run workflow**  
-Cost: ~60 min/month on private repo free plan (2,000 min/month included).
 
 ---
 
@@ -317,13 +313,14 @@ Cost: ~60 min/month on private repo free plan (2,000 min/month included).
 
 | Variable | Purpose |
 |---|---|
-| `DEV_MODE` | Bypass Clerk auth (dev only, double-locked) |
-| `MAINTENANCE_MODE` | Redirect all to /maintenance (Vercel env var) |
+| `DEV_MODE` | Bypass Clerk auth server-side (dev only, double-locked) |
+| `NEXT_PUBLIC_DEV_MODE` | Bypass Clerk auth client-side (skips ClerkProvider, shows dev NavUser) |
+| `MAINTENANCE_MODE` | Redirect all to /maintenance |
 | `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY` | Clerk public key |
 | `CLERK_SECRET_KEY` | Clerk server key |
-| `CLERK_WEBHOOK_SECRET` | Clerk webhook verification |
+| `CLERK_WEBHOOK_SECRET` | Clerk webhook verification (svix) |
 | `NEXT_PUBLIC_CLERK_SIGN_IN_URL` | `/login` |
-| `NEXT_PUBLIC_CLERK_AFTER_SIGN_IN_URL` | `/overview` |
+| `NEXT_PUBLIC_CLERK_AFTER_SIGN_IN_URL` | `/dashboard` |
 | `INVITE_CODE_VIEWER` | Viewer registration invite code |
 | `INVITE_CODE_ADMIN` | Admin registration invite code |
 | `INGEST_API_SECRET` | GAS → API shared secret (32+ chars) |
@@ -333,18 +330,19 @@ Cost: ~60 min/month on private repo free plan (2,000 min/month included).
 | `R2_ACCESS_KEY_ID` | R2 access key |
 | `R2_SECRET_ACCESS_KEY` | R2 secret key |
 | `R2_BUCKET_NAME` | R2 bucket name |
-| `DIFY_API_KEY` | Dify AI API key |
+| `DIFY_API_KEY` | Dify AI API key (server-side) |
 | `NEXT_PUBLIC_DIFY_API_URL` | Dify API base URL |
+| `NEXT_PUBLIC_DIFY_TOKEN` | Dify public token (client-side streaming) |
 | `ATTRIBUTION_DAYS` | Attribution window in days (default: 14, GitHub Actions only) |
 
 ---
 
 ## Known Constraints
 
-- **Vercel free plan:** 10s function timeout → manual Build Mart must finish within that window. Nightly automated build runs in GitHub Actions (no timeout).
+- **Vercel free plan:** 10s function timeout → manual mart build via `npm run build-mart` for long runs.
 - **CockroachDB:** No `STRING_AGG(DISTINCT ..., ORDER BY ...)` — use subquery workaround.
-- **CockroachDB:** `TRUNCATE` may block when async index-drop job is running → use `DELETE FROM ... WHERE true`.
+- **CockroachDB:** `TRUNCATE` may block → use `DELETE FROM ... WHERE true`.
 - **CockroachDB:** `ALTER COLUMN TYPE` in transaction not supported → add/copy/drop/rename pattern.
-- **Recharts SSR:** Must use `dynamic(() => import(...), { ssr: false })` for chart components.
+- **Recharts SSR:** Must use `dynamic(() => import(...), { ssr: false })` for all chart components.
 - **telesales_calls PK:** `mmid` — one row per customer, GAS upserts on conflict.
-- **mart tables:** Rebuilt from scratch on every build (DROP + CREATE). Mart indexes are recreated automatically by `buildMartMain()` and `buildMartPerformance()` — no manual index migration needed.
+- **ClerkProvider:** Conditionally included in root layout — omitted when `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY` is not set.

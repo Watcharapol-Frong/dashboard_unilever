@@ -5,52 +5,54 @@
 ```
 Admin uploads data (Data Hub)
     ↓
-Manager reviews overview (Overview) → spots issues
+Manager checks main dashboard → spots issues
     ↓
 Drill-down to Sales or Telesales → finds root cause
     ↓
 Agent works lead queue (Leads) → makes calls
     ↓
-Products / Incentives → helps prioritise what to sell and what bonuses are active
+Admin browses Raw Data → investigates individual records
 ```
 
 ---
 
-## 1. Overview `/overview`
+## 1. Dashboard `/dashboard`
 
 | | |
 |---|---|
-| **Purpose** | Single-page KPI snapshot across all months |
+| **Purpose** | Main KPI snapshot: sales, telesales trend, agent leaderboard, product bubble map |
 | **Audience** | Managers / Supervisors — morning check |
-| **Key questions** | Did we hit the sales target? Are new customers coming in? Is call volume healthy? |
+| **Key questions** | How are sales trending? Which agents are performing? Which Senior Buyers are driving volume? |
 | **Auth** | Any logged-in user |
-| **Filters** | Month range, Lead Tier, CMG — affect both KPI cards and charts |
-| **Action** | If metrics look off → open Sales or Telesales to find root cause |
+| **Filters** | Date range, CMG — affect KPI cards and charts |
+| **Action** | If KPIs look off → drill into Sales or Telesales |
 
-**KPI Cards:** HOC Sales, Achievement %, New Customers, Retention, Total Calls, ROI
+**KPI Cards:** HOC Sales, New Customers, Retention, Total Calls
 
-**Charts:** HOC Sales vs Target (ComposedChart), New vs Retention by month (Stacked Bar), ROI Trend (Line)
+**Charts:** Sales Trend (stacked bar — online/offline/target, monthly/weekly), Telesales Trend (bars + conversion rate line)
+
+**Bubble Map:** `SplitBubbleChart` — D3 bubble pack per Senior Buyer, bubbles sized by HOC sales, double-click drills into product brands
 
 ---
 
-## 2. Sales `/sales`
+## 2. Order Sales `/dashboard/sales`
 
 | | |
 |---|---|
-| **Purpose** | Analyse HOC Unilever sales (Online / Offline) with period comparison |
+| **Purpose** | HOC sales trend, channel split, product revenue by brand/buyer |
 | **Audience** | Sales Manager, Account Manager |
-| **Key questions** | How are sales trending this period? What is the New vs Retention split? |
+| **Key questions** | How are sales trending? Online vs Offline split? Which brands/buyers drive volume? |
 | **Auth** | Any logged-in user |
-| **Filters** | Date range (month chips or DateRangePicker), Channel, CMG, Agent, Conversion type — affect KPI and charts |
-| **Action** | If Avg Order Value drops → check Products; if Conversion is low → check Telesales |
+| **Filters** | Date range, CMG — affect KPI cards and charts |
+| **Action** | If sales dip → check telesales conversion; if brand mix shifts → check product table |
 
-**KPI Cards (4):** Total Sales, Avg Order Value, New Customers, Retention — each shows a delta % vs prior period
+**KPI Cards (4):** Total Sales, New Customers, Retention, Total Orders
 
-**Charts:** Sales Trend (AreaChart — Online + Offline stacked, interval auto-selects daily/weekly/monthly), Channel Distribution (Stacked Bar)
+**Charts:** Sales Trend line chart (online/offline/target, monthly/weekly toggle), Product Analyst bubble map by Senior Buyer
 
 ---
 
-## 3. Telesales `/telesales`
+## 3. Telesales `/dashboard/telesales`
 
 | | |
 |---|---|
@@ -86,47 +88,11 @@ Products / Incentives → helps prioritise what to sell and what bonuses are act
 
 **Pagination:** Server-side, 500 rows per page
 
----
 
-## 5. Products `/products`
-
-| | |
-|---|---|
-| **Purpose** | Analyse revenue at SKU and brand level |
-| **Audience** | Product Manager, Category Manager |
-| **Key questions** | Which SKUs are top sellers? Which brands drive new customers vs repeat buyers? |
-| **Auth** | Any logged-in user |
-| **Filters** | Date range, Brand, Class, Subclass, Senior Buyer, Buyer — affect KPI, charts, and all tables |
-| **Action** | SKU revenue unexpectedly low → check stock / adjust incentive |
-
-**KPI Cards (4):** Total Revenue, Avg Order Value, Total Qty Sold, Active SKUs
-
-**Charts:** Revenue Trend by Brand (Line — Top 5 + Other)
-
-**Tables (Tabs):** Top SKUs, New vs Retention (segment classification), By Brand (channel mix)
 
 ---
 
-## 6. Incentives `/incentives`
-
-| | |
-|---|---|
-| **Purpose** | Summarise incentive payouts and programme ROI |
-| **Audience** | Finance, Programme Manager |
-| **Key questions** | How much incentive was paid out? Is the programme delivering good ROI? Which tier triggered? |
-| **Auth** | Any logged-in user |
-| **Filters** | None — shows all months with available data |
-| **Action** | Low ROI → adjust tier structure or increase campaign pressure |
-
-**KPI Cards (2):** Total Incentives Paid, Overall Programme ROI
-
-**Charts:** Monthly Incentives vs ROI (ComposedChart — Bar + Line)
-
-**Tables (Tabs):** Monthly Incentive Summary, Incentive Tier Configuration (read-only)
-
----
-
-## 7. Data Hub `/data-hub`
+## 5. Data Hub `/data-hub`
 
 | | |
 |---|---|
@@ -139,18 +105,17 @@ Products / Incentives → helps prioritise what to sell and what bonuses are act
 **Supported file types:** Online Sales, Offline Sales, Leads, Products, Telesales, Targets, Costs, Incentives, Agent Headcount
 
 **Tabs:** Overview (status cards), Data Status (8-source summary table), History (upload log), Build Mart (attribution window selector + build trigger)
-
 ---
 
-## 8. Exports `/exports`
+## 6. Raw Data `/raw-data`
 
 | | |
 |---|---|
-| **Purpose** | Export data as CSV or Excel with custom column selection and granularity |
-| **Audience** | Admin users who need raw data for offline analysis |
-| **Auth** | Admin only (redirects non-admin users) |
-| **Action** | Select granularity + filters + columns → Preview → Download |
+| **Purpose** | Browse and export any source table directly |
+| **Audience** | Admin |
+| **Key questions** | What raw records exist? Are there data quality issues? |
+| **Auth** | Admin only |
 
-**Granularity:** Month / Week / Day / Order Line
+**Tables available:** online_sales, offline_sales, telesales_calls, leads, products, targets, costs, incentives, agent_headcount
 
-**Formats:** CSV (max 500 k rows), XLSX (max 100 k raw / 500 k aggregated)
+**Actions:** Paginate rows · Export table as CSV

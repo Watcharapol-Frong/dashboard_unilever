@@ -1,6 +1,6 @@
 # Business Logic Reference
 > Dashboard Unilever — Single source of truth for all business rules, metric definitions, and data flow.
-> Last derived from codebase: 2026-06-12
+> Last derived from codebase: 2026-06-15
 
 ---
 
@@ -20,7 +20,6 @@ Raw Input (uploaded via Data Hub or GAS sync)
     └─ agent_headcount      — monthly agent/supervisor headcount (CSV upload)
            │
            ▼ (Build Mart)
-    ├─ mart_telesales_orders   — ALL orders for called MMIDs (any product)
     ├─ sales_hoc_orders        — HOC orders only + attribution logic + customer_type
     ├─ mart_performance_cmg    — aggregated KPIs by month × CMG
     └─ mart_performance_month  — aggregated KPIs by month (cost, ROI, incentive)
@@ -213,16 +212,14 @@ total_expense = total_incentive
 
 ## 6. Dashboard Pages & What They Show
 
-| Page | Primary Question | Key Tables |
-|---|---|---|
-| Overview | How is the program performing this month overall? | `mart_performance_cmg`, `mart_performance_month`, `telesales_calls` |
-| Sales | What are the HOC sales numbers? Breakdown by channel/CMG? | `sales_hoc_orders` |
-| Telesales | How effective are calls? Funnel: Leads → Reached → Ordered | `telesales_calls`, `mart_telesales_orders`, `sales_hoc_orders` |
-| Leads | Who are the leads? What's their contact and conversion status? | `leads`, `telesales_calls`, `sales_hoc_orders` |
-| Products | Which products/brands are selling? New vs repeat? | `sales_hoc_orders`, `products` |
-| Incentives | What's the ROI? How much incentive was paid? | `mart_performance_month`, `mart_performance_cmg` |
-| Data Hub | Upload data, build mart, recover from backup | all tables |
-| Exports | Raw data pivot export for external analysis | `sales_hoc_orders`, `mart_telesales_orders` |
+| Page | Route | Primary Question | Key Tables |
+|---|---|---|---|
+| Dashboard | `/dashboard` | Sales KPIs, telesales trend, agent leaderboard | `sales_hoc_orders`, `telesales_calls`, `mart_performance_cmg` |
+| Order Sales | `/dashboard/sales` | HOC sales trend, online/offline split, products | `sales_hoc_orders`, `mart_performance_cmg` |
+| Telesales | `/dashboard/telesales` | Reach rate, conversion funnel, agent performance | `telesales_calls`, `sales_hoc_orders` |
+| Leads | `/leads` | Who are the leads? Contact/conversion status? | `leads`, `telesales_calls`, `sales_hoc_orders` |
+| Raw Data | `/raw-data` | Browse any source table | all source tables |
+| Data Hub | `/data-hub` | Upload data, build mart, recover from backup | all tables |
 
 ---
 
@@ -269,10 +266,13 @@ total_expense = total_incentive
 
 | Table | Grain | Purpose |
 |---|---|---|
-| `mart_telesales_orders` | 1 row per (mmid, order, product) | All orders for called customers, any product |
-| `sales_hoc_orders` | 1 row per (mmid, order, product) | HOC orders only + attribution + customer_type |
-| `mart_performance_cmg` | 1 row per (month, CMG) | Aggregated KPIs for Overview/Incentives |
-| `mart_performance_month` | 1 row per month | Cost, ROI, incentive totals |
+| `mmid_cmg_map` | `mmid` | Tiny lookup: mmid → primary_cmg + first_connected_date |
+| `sales_hoc_orders` | `(mmid, order_number, prod_num)` | HOC-attributed orders with customer_type |
+| `mart_performance_cmg` | `(month, dynamic_cmg)` | Aggregated KPIs at month × CMG grain |
+| `mart_performance_month` | `month` | Month-level costs, incentive, ROI |
+| `mart_builds` | `id` | Build audit log — status, duration_ms, row_counts |
+
+> `mart_telesales_orders` was removed (2026-06-15). Replaced by `mmid_cmg_map` (3-col lookup) + `sales_hoc_orders` built directly from source tables in a single CTE chain.
 
 ---
 
@@ -300,8 +300,8 @@ Google Apps Script reads from Google Sheets and POSTs to the API.
 
 | Role | Access |
 |---|---|
-| `admin` | All pages including Leads, Data Hub, Exports + all API routes |
-| `viewer` | Overview, Sales, Telesales, Products, Incentives only |
+| `admin` | All pages including Leads, Raw Data, Data Hub + all API routes |
+| `viewer` | Dashboard, Sales, Telesales only |
 | Unauthenticated | Redirected to `/login` |
 | GAS (Bearer token) | `/api/data/ingest/*` only |
 
@@ -314,3 +314,5 @@ Google Apps Script reads from Google Sheets and POSTs to the API.
 | 2026-05-01 | Incentive eligibility: DISTRIBUTOR excluded from May 2026 onward | Incentives page, ROI calculation |
 | 2026-06-12 | Metric Layer created (`src/lib/metrics.ts`) | All routes now use consistent definitions |
 | 2026-06-12 | REACHED bug fix: 2-condition → 4-condition across all routes | Reached/Connected numbers now consistent across all pages |
+| 2026-06-15 | `mart_telesales_orders` replaced by `mmid_cmg_map` + `sales_hoc_orders` | Faster build, less storage, single CTE chain |
+| 2026-06-15 | Clerk auth restored — middleware, register, webhook | Users can now log in and register via invite code |

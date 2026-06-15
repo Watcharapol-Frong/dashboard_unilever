@@ -24,14 +24,12 @@ Operational analytics platform for the Unilever HOC telesales programme on Makro
 
 | Page | Audience | Highlights |
 |------|----------|------------|
-| **Overview** | All users | 6 KPI cards · HOC Sales vs Target · New vs Retention trend · ROI · month-range chip selector · CMG + channel filters |
-| **Sales** | Sales Manager | Period-over-period comparison · daily/weekly/monthly area chart · online/offline split |
-| **Telesales** | Supervisor | Reach rate · conversion funnel (Sankey) · agent leaderboard · call-status breakdown by tier |
-| **Leads** | Admin | Server-side filtered + paginated lead list · contact/conversion status badges |
-| **Products** | Category Manager | SKU / brand revenue · New vs Retention segmentation · channel mix |
-| **Incentives** | Finance | Monthly payouts · tier config · programme ROI |
+| **Dashboard** | All users | Sales KPI · Telesales trend · Bubble map by Senior Buyer · Agent leaderboard |
+| **Order Sales** | Sales Manager | HOC sales trend (monthly/weekly) · online/offline split · product revenue by brand |
+| **Telesales** | Supervisor | Reach rate · conversion funnel · agent leaderboard · call-status breakdown by tier |
+| **Leads** *(admin)* | Admin | Server-side filtered + paginated lead list · contact/conversion status badges |
+| **Raw Data** *(admin)* | Admin | Browse + export any source table |
 | **Data Hub** *(admin)* | Admin | CSV upload pipeline · ETL status · mart rebuild with attribution window selector |
-| **Exports** *(admin)* | Admin | Pivot exports — CSV/XLSX at month/week/day/order-line granularity |
 | **AI Assistant** | All users | Context-aware chatbot powered by Dify |
 
 ---
@@ -158,27 +156,25 @@ src/
   app/
     (auth)/           — login / register pages
     (dashboard)/      — dashboard pages (layout: BuildProvider + FreshnessBar)
-      overview/
-      sales/
-        orders/
-      telesales/
-        call-log/
-      leads/
-      products/
-      incentives/
-      data-hub/
-      exports/
+      dashboard/          — Main KPI overview
+        sales/            — Order Sales
+        telesales/        — Telesales performance
+          call-log/       — (exists, not in nav)
+      leads/              — Lead list (admin)
+      raw-data/           — Raw table viewer (admin)
+      data-hub/           — Upload + mart build (admin)
     api/data/         — REST data endpoints (see API Reference)
     maintenance/      — shown when MAINTENANCE_MODE=true
   components/
     dashboard/        — KpiCard, KpiGrid, FilterBar, FilterSelect, PageState,
-                        MonthChipGroup, FreshnessBar, ChatBot, HelpSheet
+                        MonthChipGroup, FreshnessBar, ChatBot, SalesTrendChart,
+                        TelesalesTrendMiniChart, RadialGauge, TargetGaugeBar
     layout/           — TopBar, Sidebar
     ui/               — shadcn/ui primitives
   context/
     BuildContext.tsx      — mart build state (persists across navigation)
     LanguageContext.tsx
-    DateRangeContext.tsx
+    UploadQueueContext.tsx
   hooks/
     useDashboardSWR.ts    — typed SWR hook (5-min dedup, no revalidate-on-focus)
     useMonthRange.ts      — month chip range selector (defaults to last month)
@@ -298,9 +294,9 @@ cp .env.local.example .env.local
 
 ### Admin User
 
-1. Create a Clerk user via the Clerk dashboard.
-2. Set `publicMetadata: { "role": "admin" }` on that user.
-3. All other authenticated users default to viewer role.
+1. Register at `/register` using the `INVITE_CODE_ADMIN` invite code.
+2. Role (`admin` or `viewer`) is set automatically via `clerkClient.users.createUser`.
+3. To promote an existing user: set `publicMetadata: { "role": "admin" }` in the Clerk dashboard.
 
 ---
 
