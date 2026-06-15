@@ -1078,12 +1078,9 @@ export function DataHubClient() {
                 <div className="rounded-lg border border-blue-200 bg-blue-50 p-4 flex items-center gap-3">
                   <RefreshCw className="h-4 w-4 text-blue-600 animate-spin shrink-0" />
                   <div className="flex-1">
-                    <p className="text-sm text-blue-700 font-medium">Building mart tables…</p>
-                    <p className="text-xs text-blue-500 mt-0.5">Running in CockroachDB — may take 30–90 seconds</p>
+                    <p className="text-sm text-blue-700 font-medium">Triggering GitHub Actions…</p>
+                    <p className="text-xs text-blue-500 mt-0.5">Sending build request to GitHub</p>
                   </div>
-                  <span className="text-sm font-mono text-blue-600 shrink-0">
-                    {String(Math.floor(elapsedSeconds / 60)).padStart(2, '0')}:{String(elapsedSeconds % 60).padStart(2, '0')}
-                  </span>
                 </div>
               )}
 
@@ -1097,11 +1094,18 @@ export function DataHubClient() {
                       ? <CheckCircle className="h-4 w-4 text-green-600 shrink-0" />
                       : <XCircle className="h-4 w-4 text-red-500 shrink-0" />}
                     <p className="text-sm font-semibold">
-                      {buildResult.ok
+                      {buildResult.ok && buildResult.triggered
+                        ? `Build triggered — ${buildResult.attribution_days}-day attribution window`
+                        : buildResult.ok
                         ? `Build complete — ${buildResult.attribution_days}-day window applied`
                         : 'Build failed'}
                     </p>
                   </div>
+                  {buildResult.ok && buildResult.triggered && (
+                    <p className="text-xs text-green-700">
+                      GitHub Actions is now running the build (≈2–5 min). Refresh this page after it completes to see updated mart stats.
+                    </p>
+                  )}
                   {buildResult.ok && buildResult.rows && (
                     <div className="grid grid-cols-2 gap-3 pt-1">
                       <div className="rounded-xl bg-white border border-green-100 p-3 text-center shadow-sm">

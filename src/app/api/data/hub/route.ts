@@ -182,7 +182,7 @@ export async function GET() {
   }
 
   const res = NextResponse.json({ status, history: batches, mart })
-  res.headers.set('Cache-Control', 'public, s-maxage=120, stale-while-revalidate=300')
+  res.headers.set('Cache-Control', 'no-store')
   return res
   } catch (err) {
     console.error('[hub]', err)

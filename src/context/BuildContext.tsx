@@ -4,6 +4,7 @@ import { mutate as swrMutate } from 'swr'
 
 export interface BuildResult {
   ok: boolean
+  triggered?: boolean
   rows?: { mart_main: number; performance: number }
   attribution_days?: number
   error?: string
@@ -50,22 +51,26 @@ export function BuildProvider({ children }: { children: React.ReactNode }) {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ attribution_days: effectiveDays }),
       })
-      const data = await res.json() as { ok: boolean; mart_main?: number; performance?: number; error?: string }
+      const data = await res.json() as { ok: boolean; triggered?: boolean; mart_main?: number; performance?: number; attribution_days?: number; error?: string }
 
       if (!data.ok) {
         setBuildResult({ ok: false, error: data.error ?? 'Build failed' })
         return
       }
 
-      setBuildResult({
-        ok: true,
-        attribution_days: effectiveDays,
-        rows: { mart_main: data.mart_main ?? 0, performance: data.performance ?? 0 },
-      })
-
-      // Revalidate all dashboard data endpoints + increment version for non-SWR pages
-      setBuildVersion(v => v + 1)
-      swrMutate((key) => typeof key === 'string' && key.startsWith('/api/data/'))
+      if (data.triggered) {
+        // GitHub Actions triggered — build runs asynchronously
+        setBuildResult({ ok: true, triggered: true, attribution_days: effectiveDays })
+      } else {
+        // Direct build result (legacy / local)
+        setBuildResult({
+          ok: true,
+          attribution_days: effectiveDays,
+          rows: { mart_main: data.mart_main ?? 0, performance: data.performance ?? 0 },
+        })
+        setBuildVersion(v => v + 1)
+        swrMutate((key) => typeof key === 'string' && key.startsWith('/api/data/'))
+      }
     } catch {
       setBuildResult({ ok: false, error: 'Network error' })
     } finally {
