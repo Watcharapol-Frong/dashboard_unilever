@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useEffect } from 'react'
 import type { DateRange } from 'react-day-picker'
 import { ShoppingCart, Users, ReceiptText, Repeat2 } from 'lucide-react'
 
@@ -10,7 +10,7 @@ import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from '@/components/ui/table'
 import {
-  BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer,
+  BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, LabelList,
 } from 'recharts'
 
 import { useDashboardSWR } from '@/hooks/useDashboardSWR'
@@ -172,6 +172,13 @@ export function SalesClient() {
     () => (data?.months ?? []).map(m => m.substring(0, 7)),
     [data?.months]
   )
+
+  useEffect(() => {
+    if (months.length > 0 && rangeFrom === null && rangeTo === null) {
+      setRangeFrom(months[0])
+      setRangeTo(months[months.length - 1])
+    }
+  }, [months, rangeFrom, rangeTo])
 
   // ── Render ────────────────────────────────────────────────────────────────────
   if (isLoading && !data) return <PageLoading cols={4} />
@@ -361,7 +368,7 @@ export function SalesClient() {
               </span>
             </div>
           </div>
-          <ResponsiveContainer width="100%" height={72}>
+          <ResponsiveContainer width="100%" height={90}>
             <BarChart
               layout="vertical"
               data={[{
@@ -371,7 +378,7 @@ export function SalesClient() {
                 _online_val:  kpi.total_online,
                 _offline_val: kpi.total_offline,
               }]}
-              margin={{ top: 0, right: 0, left: 0, bottom: 0 }}
+              margin={{ top: 24, right: 0, left: 0, bottom: 0 }}
               barSize={32}
             >
               <XAxis type="number" domain={[0, 100]} hide />
@@ -400,8 +407,28 @@ export function SalesClient() {
                   )
                 }}
               />
-              <Bar dataKey="online"  stackId="s" fill="#003DA6" radius={[4, 0, 0, 4]} />
-              <Bar dataKey="offline" stackId="s" fill="#60a5fa" radius={[0, 4, 4, 0]} />
+              <Bar dataKey="online"  stackId="s" fill="#003DA6" radius={[4, 0, 0, 4]}>
+                <LabelList
+                  dataKey="online"
+                  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                  content={({ x, y, width, value }: any) => {
+                    const pct = value as number
+                    if (!pct || pct < 8) return null
+                    return <text x={(x as number) + (width as number) / 2} y={(y as number) - 5} textAnchor="middle" fontSize={11} fill="#6b7280">{Math.round(pct)}%</text>
+                  }}
+                />
+              </Bar>
+              <Bar dataKey="offline" stackId="s" fill="#60a5fa" radius={[0, 4, 4, 0]}>
+                <LabelList
+                  dataKey="offline"
+                  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                  content={({ x, y, width, value }: any) => {
+                    const pct = value as number
+                    if (!pct || pct < 8) return null
+                    return <text x={(x as number) + (width as number) / 2} y={(y as number) - 5} textAnchor="middle" fontSize={11} fill="#6b7280">{Math.round(pct)}%</text>
+                  }}
+                />
+              </Bar>
             </BarChart>
           </ResponsiveContainer>
           <p className="text-xs text-muted-foreground border-t pt-2">
@@ -425,7 +452,7 @@ export function SalesClient() {
               </span>
             </div>
           </div>
-          <ResponsiveContainer width="100%" height={72}>
+          <ResponsiveContainer width="100%" height={90}>
             <BarChart
               layout="vertical"
               data={[{
@@ -435,7 +462,7 @@ export function SalesClient() {
                 _conv_val:     kpi.converted_sales,
                 _not_conv_val: kpi.not_converted_sales,
               }]}
-              margin={{ top: 0, right: 0, left: 0, bottom: 0 }}
+              margin={{ top: 24, right: 0, left: 0, bottom: 0 }}
               barSize={32}
             >
               <XAxis type="number" domain={[0, 100]} hide />
@@ -464,8 +491,28 @@ export function SalesClient() {
                   )
                 }}
               />
-              <Bar dataKey="converted"     stackId="s" fill="#22c55e" radius={[4, 0, 0, 4]} />
-              <Bar dataKey="not_converted" stackId="s" fill="#fbbf24" radius={[0, 4, 4, 0]} />
+              <Bar dataKey="converted"     stackId="s" fill="#22c55e" radius={[4, 0, 0, 4]}>
+                <LabelList
+                  dataKey="converted"
+                  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                  content={({ x, y, width, value }: any) => {
+                    const pct = value as number
+                    if (!pct || pct < 8) return null
+                    return <text x={(x as number) + (width as number) / 2} y={(y as number) - 5} textAnchor="middle" fontSize={11} fill="#6b7280">{Math.round(pct)}%</text>
+                  }}
+                />
+              </Bar>
+              <Bar dataKey="not_converted" stackId="s" fill="#fbbf24" radius={[0, 4, 4, 0]}>
+                <LabelList
+                  dataKey="not_converted"
+                  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                  content={({ x, y, width, value }: any) => {
+                    const pct = value as number
+                    if (!pct || pct < 8) return null
+                    return <text x={(x as number) + (width as number) / 2} y={(y as number) - 5} textAnchor="middle" fontSize={11} fill="#6b7280">{Math.round(pct)}%</text>
+                  }}
+                />
+              </Bar>
             </BarChart>
           </ResponsiveContainer>
           <p className="text-xs text-muted-foreground border-t pt-2">

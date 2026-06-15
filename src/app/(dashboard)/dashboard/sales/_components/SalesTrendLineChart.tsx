@@ -92,9 +92,18 @@ export function SalesTrendLineChart({ cmgFilter, effectiveStart, effectiveEnd }:
     })
   }, [monthlyData, effectiveStart, effectiveEnd])
 
-  // Weekly — only fetch when tab active + date range set
-  const weeklyKey = view === 'weekly' && effectiveStart && effectiveEnd
-    ? `/api/data/dashboard/sales-trend?view=weekly&start=${effectiveStart}&end=${effectiveEnd}${cmgQuery}`
+  // Weekly — fall back to full monthly range when no filter is active
+  const fallbackStart = monthlyData?.[0]?.period?.substring(0, 10) ?? null
+  const fallbackEnd = useMemo(() => {
+    if (!monthlyData?.length) return null
+    const [y, m] = monthlyData[monthlyData.length - 1].period.split('-').map(Number)
+    return new Date(Date.UTC(y, m, 0)).toISOString().split('T')[0]
+  }, [monthlyData])
+  const weeklyStart = effectiveStart ?? fallbackStart
+  const weeklyEnd   = effectiveEnd   ?? fallbackEnd
+
+  const weeklyKey = view === 'weekly' && weeklyStart && weeklyEnd
+    ? `/api/data/dashboard/sales-trend?view=weekly&start=${weeklyStart}&end=${weeklyEnd}${cmgQuery}`
     : null
 
   const { data: weeklyRes } = useSWR<{ ok: boolean; data: TrendRow[] }>(

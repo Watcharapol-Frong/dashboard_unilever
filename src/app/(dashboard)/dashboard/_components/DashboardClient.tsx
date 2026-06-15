@@ -100,6 +100,14 @@ export function DashboardClient() {
     return [...set].sort()
   }, [data])
 
+  // Auto-select full available range on first load
+  useEffect(() => {
+    if (allMonths.length > 0 && rangeFrom === null && rangeTo === null) {
+      setRangeFrom(allMonths[0])
+      setRangeTo(allMonths[allMonths.length - 1])
+    }
+  }, [allMonths, rangeFrom, rangeTo])
+
   const handleChipClick = (m: string) => {
     // Switching to chips clears custom mode
     if (filterMode === 'custom') setFilterMode('chips')
@@ -292,8 +300,8 @@ export function DashboardClient() {
 
         {/* Row 2: Customer Segment */}
         {cmgOptions.length > 0 && (
-          <div className="flex items-center gap-3">
-            <span className="w-28 shrink-0 text-xs text-muted-foreground">Filters</span>
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="w-12 shrink-0 text-xs text-muted-foreground">Filters</span>
             <Popover>
               <PopoverTrigger asChild>
                 <button className="flex h-8 items-center gap-1.5 rounded-md border border-input bg-background px-3 text-sm text-foreground shadow-sm hover:bg-accent hover:text-accent-foreground">

@@ -60,6 +60,14 @@ export function MultiSelect({ label, value, onChange, options, width = 'w-36' }:
       </PopoverTrigger>
       <PopoverContent className="w-52 p-1" align="start">
         <div className="max-h-64 overflow-y-auto">
+          <div
+            className="flex items-center gap-2.5 px-2 py-1.5 rounded-sm hover:bg-accent cursor-pointer select-none"
+            onClick={() => onChange([])}
+          >
+            <Checkbox checked={allSelected} className="pointer-events-none" />
+            <span className="text-sm leading-none font-medium">All</span>
+          </div>
+          <div className="h-px bg-border my-1" />
           {options.map(o => (
             <div
               key={o.value}
@@ -74,17 +82,6 @@ export function MultiSelect({ label, value, onChange, options, width = 'w-36' }:
             </div>
           ))}
         </div>
-        {!allSelected && (
-          <>
-            <div className="h-px bg-border my-1" />
-            <button
-              className="w-full text-left text-xs text-muted-foreground hover:text-foreground px-2 py-1.5 rounded-sm hover:bg-accent"
-              onClick={() => onChange([])}
-            >
-              Select all
-            </button>
-          </>
-        )}
       </PopoverContent>
     </Popover>
   )

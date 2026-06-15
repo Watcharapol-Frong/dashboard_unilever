@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useEffect } from 'react'
 import type { DateRange } from 'react-day-picker'
 import { Phone, PhoneForwarded, UserCheck, Percent } from 'lucide-react'
 
@@ -175,6 +175,13 @@ export function TelesalesClient() {
     [data?.months]
   )
 
+  useEffect(() => {
+    if (months.length > 0 && rangeFrom === null && rangeTo === null) {
+      setRangeFrom(months[0])
+      setRangeTo(months[months.length - 1])
+    }
+  }, [months, rangeFrom, rangeTo])
+
   // ── Render ────────────────────────────────────────────────────────────────────
   if (isLoading && !data) return <PageLoading cols={4} />
   if (error)              return <PageError message={error.message} />
@@ -214,7 +221,7 @@ export function TelesalesClient() {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const row: Record<string, any> = { tier, _total: total }
       stackKeys.forEach(k => {
-        row[k]          = total > 0 ? ((counts[k] || 0) / total) * 100 : 0
+        row[k]          = total > 0 ? Math.round(((counts[k] || 0) / total) * 1000) / 10 : 0
         row[`_n_${k}`]  = counts[k] || 0
       })
       return row
@@ -365,7 +372,7 @@ export function TelesalesClient() {
             <XAxis
               type="number"
               domain={[0, 100]}
-              tickFormatter={v => `${v}%`}
+              tickFormatter={v => `${Math.round(v)}%`}
               tick={{ fontSize: 11, fill: '#6b7280' }}
               axisLine={false}
               tickLine={false}
