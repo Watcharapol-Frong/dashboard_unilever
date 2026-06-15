@@ -3,7 +3,7 @@
 import { useState, useMemo } from 'react'
 import useSWR from 'swr'
 import {
-  ComposedChart, Bar, XAxis, YAxis,
+  ComposedChart, Bar, Line, XAxis, YAxis,
   CartesianGrid, Tooltip, LabelList, ResponsiveContainer,
 } from 'recharts'
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
@@ -167,6 +167,11 @@ export function SalesTrendChart({ cmgFilter, effectiveStart, effectiveEnd }: Pro
               {label}
             </span>
           ))}
+          {view === 'monthly' && (
+            <span className="flex items-center gap-1.5">
+              <span className="inline-block h-0.5 w-4 bg-[#f59e0b]" />ROI
+            </span>
+          )}
         </div>
       </div>
 
@@ -189,7 +194,7 @@ export function SalesTrendChart({ cmgFilter, effectiveStart, effectiveEnd }: Pro
         <ResponsiveContainer width="100%" height={240}>
           <ComposedChart
             data={chartData}
-            margin={{ top: 24, right: 8, left: 0, bottom: 0 }}
+            margin={{ top: 24, right: view === 'monthly' ? 48 : 8, left: 0, bottom: 0 }}
             barGap={1}
             barCategoryGap="32%"
           >
@@ -201,19 +206,31 @@ export function SalesTrendChart({ cmgFilter, effectiveStart, effectiveEnd }: Pro
               tickLine={false}
             />
             <YAxis
+              yAxisId="left"
               tickFormatter={axisLabel}
               tick={{ fontSize: 11, fill: '#6b7280' }}
               axisLine={false}
               tickLine={false}
               width={60}
             />
+            {view === 'monthly' && (
+              <YAxis
+                yAxisId="right"
+                orientation="right"
+                tickFormatter={v => `${v}×`}
+                tick={{ fontSize: 11, fill: '#6b7280' }}
+                axisLine={false}
+                tickLine={false}
+                width={44}
+              />
+            )}
             <Tooltip content={<ChartTooltip />} cursor={{ fill: '#f9fafb' }} />
 
             {/* Stacked Sales — Online (bottom) */}
-            <Bar stackId="s" dataKey="online_sales" name="Online" fill="#003DA6" maxBarSize={44} radius={[0, 0, 2, 2]} />
+            <Bar yAxisId="left" stackId="s" dataKey="online_sales" name="Online" fill="#003DA6" maxBarSize={44} radius={[0, 0, 2, 2]} />
 
             {/* Stacked Sales — Offline (top) with data labels */}
-            <Bar stackId="s" dataKey="offline_sales" name="Offline" fill="#60a5fa" maxBarSize={44} radius={[4, 4, 0, 0]}>
+            <Bar yAxisId="left" stackId="s" dataKey="offline_sales" name="Offline" fill="#60a5fa" maxBarSize={44} radius={[4, 4, 0, 0]}>
               {showLabels && (
                 <LabelList
                   dataKey="_total_sales"
@@ -241,7 +258,21 @@ export function SalesTrendChart({ cmgFilter, effectiveStart, effectiveEnd }: Pro
 
             {/* Target bar — monthly view only */}
             {view === 'monthly' && (
-              <Bar dataKey="target" name="Target" fill="#e5e7eb" maxBarSize={44} radius={[4, 4, 2, 2]} />
+              <Bar yAxisId="left" dataKey="target" name="Target" fill="#e5e7eb" maxBarSize={44} radius={[4, 4, 2, 2]} />
+            )}
+
+            {/* ROI line — monthly view only */}
+            {view === 'monthly' && (
+              <Line
+                yAxisId="right"
+                type="monotone"
+                dataKey="roi"
+                name="ROI"
+                stroke="#f59e0b"
+                strokeWidth={2}
+                dot={{ r: 3, fill: '#f59e0b' }}
+                activeDot={{ r: 4 }}
+              />
             )}
           </ComposedChart>
         </ResponsiveContainer>

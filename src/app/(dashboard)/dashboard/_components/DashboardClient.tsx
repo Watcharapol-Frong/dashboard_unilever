@@ -22,6 +22,8 @@ import {
   fmtBaht, fmt, formatPct,
   colorAchievement, colorRoi, colorRate,
 } from '@/lib/formatters'
+import { useLanguage } from '@/context/LanguageContext'
+import { t } from '@/lib/i18n'
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 type SalesRow = {
@@ -56,6 +58,7 @@ const monthOverlaps = (period: string, start: string, end: string) =>
 
 // ── Component ─────────────────────────────────────────────────────────────────
 export function DashboardClient() {
+  const { lang } = useLanguage()
   // ── CMG multiselect ─────────────────────────────────────────────────────────
   const [cmgFilter, setCmgFilter] = useState<string[]>([])
   const cmgQuery = cmgFilter.length > 0
@@ -220,7 +223,7 @@ export function DashboardClient() {
   if (isLoading && !data) return <PageLoading cols={4} />
   if (error)              return <PageError message={error.message} />
   if (!data || (data.sales.length === 0 && data.telesales.length === 0)) {
-    return <PageEmpty message="No data available" hint="Run Build Mart in Data Hub first" />
+    return <PageEmpty message={t('common.noData', lang)} hint={t('common.buildFirst', lang)} />
   }
 
   return (
@@ -308,7 +311,7 @@ export function DashboardClient() {
                 <button className="flex h-8 items-center gap-1.5 rounded-md border border-input bg-background px-3 text-sm text-foreground shadow-sm hover:bg-accent hover:text-accent-foreground">
                   <span>
                     {cmgFilter.length === 0
-                      ? 'All Segments'
+                      ? t('common.allSegments', lang)
                       : cmgFilter.length === 1
                       ? cmgFilter[0]
                       : `${cmgFilter.length} of ${cmgOptions.length} Segments`}
@@ -345,20 +348,20 @@ export function DashboardClient() {
       <section className="space-y-3">
         <div className="flex items-center gap-2">
           <ShoppingCart className="h-4 w-4 text-[#003DA6]" />
-          <h2 className="text-sm font-semibold">Sales Performance</h2>
+          <h2 className="text-sm font-semibold">{t('nav.salesPerformance', lang)}</h2>
           <span className="text-xs text-muted-foreground">· by order date</span>
         </div>
         <KpiGrid cols={4}>
           <KpiCard
-            title="HOC Sales"
+            title={t('kpi.hocSales', lang)}
             value={fmtBaht(aggSales.hoc_sales)}
             icon={ShoppingCart}
             comparison={isSingleMonth ? mom(aggSales.hoc_sales, sPrev?.hoc_sales) : undefined}
             comparisonLabel="vs previous month"
-            subtitle={`Target ${fmtBaht(aggSales.target)}`}
+            subtitle={`${t('common.target', lang)} ${fmtBaht(aggSales.target)}`}
           />
           <KpiCard
-            title="Achievement"
+            title={t('kpi.achievement', lang)}
             value={aggSales.target > 0 ? formatPct(aggSales.achievement) : '—'}
             icon={Target}
             valueClassName={colorAchievement(aggSales.achievement * 100)}
@@ -395,14 +398,14 @@ export function DashboardClient() {
       <section className="space-y-3">
         <div className="flex items-center gap-2">
           <PhoneCall className="h-4 w-4 text-[#003DA6]" />
-          <h2 className="text-sm font-semibold">Telesales Performance</h2>
+          <h2 className="text-sm font-semibold">{t('topbar.telesales', lang)} Performance</h2>
           <span className="text-xs text-muted-foreground">· by call date</span>
         </div>
         {aggTele ? (
           <>
             <KpiGrid cols={4}>
               <KpiCard
-                title="Total Calls"
+                title={t('kpi.totalCalls', lang)}
                 value={fmt(aggTele.total_calls)}
                 icon={PhoneCall}
                 comparison={isSingleMonth ? mom(aggTele.total_calls, tPrev?.total_calls) : undefined}
@@ -410,11 +413,11 @@ export function DashboardClient() {
                 subtitle="customers contacted"
               />
               <KpiCard
-                title="Reached"
+                title={t('telesales.reached', lang)}
                 value={fmt(aggTele.reached)}
                 icon={PhoneForwarded}
                 valueClassName={colorRate(aggTele.reach_rate, [0.6, 0.4])}
-                subtitle={`${formatPct(aggTele.reach_rate)} reach rate`}
+                subtitle={`${formatPct(aggTele.reach_rate)} ${t('telesales.reachRate', lang).toLowerCase()}`}
               />
               <KpiCard
                 title="Converted"
@@ -425,7 +428,7 @@ export function DashboardClient() {
                 subtitle="became customers"
               />
               <KpiCard
-                title="Conversion Rate"
+                title={t('telesales.convRate', lang)}
                 value={aggTele.reached > 0 ? formatPct(aggTele.conversion_rate) : '—'}
                 icon={Percent}
                 valueClassName={colorRate(aggTele.conversion_rate, [0.3, 0.15])}
@@ -437,7 +440,7 @@ export function DashboardClient() {
             <TelesalesTrendMiniChart effectiveStart={effectiveStart} effectiveEnd={effectiveEnd} />
           </>
         ) : (
-          <PageEmpty message="No telesales data for selected period" />
+          <PageEmpty message={t('telesales.noData', lang)} />
         )}
       </section>
     </div>

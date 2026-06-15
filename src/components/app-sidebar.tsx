@@ -6,7 +6,7 @@ import { usePathname } from "next/navigation"
 import { useUser } from "@clerk/nextjs"
 import {
   LayoutDashboard, ShoppingCart, Phone, Users,
-  Database, Table2,
+  Database, Table2, HelpCircle,
 } from "lucide-react"
 
 import {
@@ -15,18 +15,21 @@ import {
   SidebarMenu, SidebarMenuButton, SidebarMenuItem, SidebarRail,
 } from "@/components/ui/sidebar"
 import { NavUser } from "@/components/nav-user"
-
-const dashboardNav = [
-  { title: "Main",        url: "/dashboard",           icon: LayoutDashboard, exact: true  },
-  { title: "Order Sales", url: "/dashboard/sales",     icon: ShoppingCart,    exact: false },
-  { title: "Telesales",   url: "/dashboard/telesales", icon: Phone,           exact: false },
-  { title: "Leads",       url: "/leads",               icon: Users,           exact: false },
-]
+import { useLanguage } from "@/context/LanguageContext"
+import { t } from "@/lib/i18n"
 
 export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
   const pathname = usePathname()
   const { user } = useUser()
   const isAdmin = user?.publicMetadata?.role === 'admin'
+  const { lang } = useLanguage()
+
+  const dashboardNav = [
+    { title: t('topbar.overview', lang), url: "/dashboard",           icon: LayoutDashboard, exact: true  },
+    { title: t('nav.sales', lang),       url: "/dashboard/sales",     icon: ShoppingCart,    exact: false },
+    { title: t('nav.telesales', lang),   url: "/dashboard/telesales", icon: Phone,           exact: false },
+    { title: t('nav.leads', lang),       url: "/leads",               icon: Users,           exact: false },
+  ]
 
   const active = (url: string, exact: boolean) =>
     exact ? pathname === url : pathname.startsWith(url)
@@ -51,7 +54,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
 
       <SidebarContent>
         <SidebarGroup>
-          <SidebarGroupLabel>Dashboard</SidebarGroupLabel>
+          <SidebarGroupLabel>{t('topbar.dashboard', lang)}</SidebarGroupLabel>
           <SidebarGroupContent>
             <SidebarMenu>
               {dashboardNav.map(item => (
@@ -94,11 +97,11 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
                   <SidebarMenuButton
                     asChild
                     isActive={pathname.startsWith('/data-hub')}
-                    tooltip="Data Hub"
+                    tooltip={t('nav.dataHub', lang)}
                   >
                     <Link href="/data-hub">
                       <Database />
-                      <span>Data Hub</span>
+                      <span>{t('nav.dataHub', lang)}</span>
                     </Link>
                   </SidebarMenuButton>
                 </SidebarMenuItem>
@@ -110,6 +113,16 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
       </SidebarContent>
 
       <SidebarFooter>
+        <SidebarMenu>
+          <SidebarMenuItem>
+            <SidebarMenuButton tooltip="Get Help" asChild>
+              <a href="#" onClick={e => e.preventDefault()}>
+                <HelpCircle />
+                <span>Get Help</span>
+              </a>
+            </SidebarMenuButton>
+          </SidebarMenuItem>
+        </SidebarMenu>
         <NavUser />
       </SidebarFooter>
       <SidebarRail />

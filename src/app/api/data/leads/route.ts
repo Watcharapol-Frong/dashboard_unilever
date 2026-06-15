@@ -17,19 +17,21 @@ export async function GET(req: NextRequest) {
     const tier    = sp.get('tier')           || null
     const contact = sp.get('contact')        || null
     const conv    = sp.get('conv')           || null
-    const cmg     = sp.get('cmg')            || null
-    const agent   = sp.get('agent')          || null
+    const cmgParam   = sp.get('cmg')
+    const agentParam = sp.get('agent')
+    const cmgArr   = cmgParam   ? cmgParam.split(',').map(s => s.trim()).filter(Boolean)   : []
+    const agentArr = agentParam ? agentParam.split(',').map(s => s.trim()).filter(Boolean) : []
 
     const offset = (page - 1) * limit
 
-    const params: (string | number | null)[] = []
+    const params: (string | number | string[] | null)[] = []
     const conditions: string[] = []
 
     if (tier)    { params.push(tier);    conditions.push(`l.lead_customers = $${params.length}`) }
     if (contact) { params.push(contact); conditions.push(`COALESCE(cs.contact_status,'not_called') = $${params.length}`) }
     if (conv)    { params.push(conv);    conditions.push(`CASE WHEN os.is_converted THEN 'converted' WHEN os.mmid IS NOT NULL THEN 'not_converted' ELSE 'no_hoc_order' END = $${params.length}`) }
-    if (cmg)     { params.push(cmg);     conditions.push(`os.primary_cmg = $${params.length}`) }
-    if (agent)   { params.push(agent);   conditions.push(`cs.agent = $${params.length}`) }
+    if (cmgArr.length > 0)   { params.push(cmgArr);   conditions.push(`os.primary_cmg = ANY($${params.length})`) }
+    if (agentArr.length > 0) { params.push(agentArr); conditions.push(`cs.agent = ANY($${params.length})`) }
     if (search)  { params.push(`%${search}%`); conditions.push(`(l.mmid ILIKE $${params.length} OR COALESCE(l.cust_name,'') ILIKE $${params.length})`) }
 
     const whereClause = conditions.length ? `WHERE ${conditions.join(' AND ')}` : ''

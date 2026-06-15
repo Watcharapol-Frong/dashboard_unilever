@@ -8,9 +8,12 @@ import { KpiCard }   from '@/components/dashboard/KpiCard'
 import { KpiGrid }   from '@/components/dashboard/KpiGrid'
 import { FilterBar } from '@/components/dashboard/FilterBar'
 import { FilterSelect } from '@/components/dashboard/FilterSelect'
+import { MultiSelect } from '@/components/dashboard/MultiSelect'
 import { PageLoadingTable, PageEmpty, PageError } from '@/components/dashboard/PageState'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { fmtPct } from '@/lib/formatters'
+import { useLanguage } from '@/context/LanguageContext'
+import { t } from '@/lib/i18n'
 import { leadsColumns, type Lead } from './columns'
 
 interface Summary {
@@ -41,13 +44,14 @@ function buildUrl(base: string, params: Record<string, string | number>) {
 }
 
 export default function LeadsClient() {
+  const { lang } = useLanguage()
   const [search,          setSearch]          = useState('')
   const [debouncedSearch, setDebouncedSearch] = useState('')
   const [filterTier,    setFilterTier]    = useState('all')
   const [filterContact, setFilterContact] = useState('all')
   const [filterConv,    setFilterConv]    = useState('all')
-  const [filterCmg,     setFilterCmg]     = useState('all')
-  const [filterAgent,   setFilterAgent]   = useState('all')
+  const [filterCmg,     setFilterCmg]     = useState<string[]>([])
+  const [filterAgent,   setFilterAgent]   = useState<string[]>([])
   const [page,          setPage]          = useState(1)
 
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
@@ -66,7 +70,7 @@ export default function LeadsClient() {
 
   const pageUrl = useMemo(() => buildUrl('/api/data/leads', {
     page, search: debouncedSearch, tier: filterTier, contact: filterContact,
-    conv: filterConv, cmg: filterCmg, agent: filterAgent,
+    conv: filterConv, cmg: filterCmg.join(','), agent: filterAgent.join(','),
   }), [page, debouncedSearch, filterTier, filterContact, filterConv, filterCmg, filterAgent])
 
   const { data: leadsPage, isLoading: pageLoading, error: pageError } =
@@ -84,17 +88,17 @@ export default function LeadsClient() {
   const totalPages = Math.max(1, Math.ceil(total / limit))
 
   const hasFilter = !!(search || filterTier !== 'all' || filterContact !== 'all' ||
-                    filterConv !== 'all' || filterCmg !== 'all' || filterAgent !== 'all')
+                    filterConv !== 'all' || filterCmg.length > 0 || filterAgent.length > 0)
 
   const clearFilters = () => {
     setSearch(''); setFilterTier('all'); setFilterContact('all')
-    setFilterConv('all'); setFilterCmg('all'); setFilterAgent('all')
+    setFilterConv('all'); setFilterCmg([]); setFilterAgent([])
   }
 
   if (summaryLoading) return <PageLoadingTable kpiCols={4} rows={8} />
   if (summaryError)   return <PageError message={summaryError.message} />
   if (!kpi || kpi.total === 0) return (
-    <PageEmpty message="No leads data available" hint="Upload a leads file and run Build Mart first" />
+    <PageEmpty message={t('leads.noData', lang)} hint="Upload a leads file and run Build Mart first" />
   )
 
   return (
@@ -102,26 +106,26 @@ export default function LeadsClient() {
 
       <KpiGrid cols={4}>
         <KpiCard
-          title="Total Leads"
+          title={t('telesales.totalLeads', lang)}
           value={kpi.total.toLocaleString()}
           subtitle="Assigned telesales leads"
           icon={Users}
         />
         <KpiCard
-          title="Contacted"
+          title={t('leads.contacted', lang)}
           value={kpi.contacted.toLocaleString()}
           subtitle={fmtPct(kpi.contacted, kpi.total)}
           icon={PhoneCall}
         />
         <KpiCard
-          title="Converted"
+          title={t('leads.converted', lang)}
           value={kpi.converted.toLocaleString()}
           subtitle={fmtPct(kpi.converted, kpi.total)}
           valueClassName="text-blue-600"
           icon={Award}
         />
         <KpiCard
-          title="Orders"
+          title={t('nav.orders', lang)}
           value={kpi.orders.toLocaleString()}
           subtitle={kpi.converted > 0 ? `avg ${(kpi.orders / kpi.converted).toFixed(1)}x / person` : undefined}
           valueClassName="text-green-600"
@@ -133,13 +137,13 @@ export default function LeadsClient() {
         <CardHeader className="pb-3">
           <div className="flex items-center gap-2">
             <Filter className="h-4 w-4 text-[#003DA6]" />
-            <CardTitle className="text-sm font-medium">Filter Leads</CardTitle>
+            <CardTitle className="text-sm font-medium">Filter {t('leads.title', lang)}</CardTitle>
           </div>
         </CardHeader>
         <CardContent>
           <FilterBar hasFilter={hasFilter} onClear={clearFilters}>
             <FilterSelect
-              label="All Tiers"
+              label={t('leads.allTiers', lang)}
               value={filterTier}
               onChange={setFilterTier}
               options={tiers.map(v => ({ value: v, label: v }))}
@@ -149,7 +153,7 @@ export default function LeadsClient() {
               value={filterContact}
               onChange={setFilterContact}
               options={[
-                { value: 'reached',            label: 'Reached' },
+                { value: 'reached',            label: t('leads.contacted', lang) },
                 { value: 'called_not_reached', label: 'Not Reached' },
                 { value: 'not_called',         label: 'Not Called' },
               ]}
@@ -159,23 +163,27 @@ export default function LeadsClient() {
               value={filterConv}
               onChange={setFilterConv}
               options={[
-                { value: 'converted',     label: 'Converted' },
-                { value: 'not_converted', label: 'Not Converted' },
+                { value: 'converted',     label: t('leads.converted', lang) },
+                { value: 'not_converted', label: t('leads.notConverted', lang) },
                 { value: 'no_hoc_order',  label: 'No Order' },
               ]}
             />
-            <FilterSelect
-              label="All CMG"
-              value={filterCmg}
-              onChange={setFilterCmg}
-              options={cmgs.map(v => ({ value: v, label: v }))}
-            />
-            <FilterSelect
-              label="All Agents"
-              value={filterAgent}
-              onChange={setFilterAgent}
-              options={agents.map(v => ({ value: v, label: v }))}
-            />
+            {cmgs.length > 0 && (
+              <MultiSelect
+                label="All CMG"
+                value={filterCmg}
+                onChange={setFilterCmg}
+                options={cmgs.map(v => ({ value: v, label: v }))}
+              />
+            )}
+            {agents.length > 0 && (
+              <MultiSelect
+                label={t('common.allAgents', lang)}
+                value={filterAgent}
+                onChange={setFilterAgent}
+                options={agents.map(v => ({ value: v, label: v }))}
+              />
+            )}
           </FilterBar>
         </CardContent>
       </Card>

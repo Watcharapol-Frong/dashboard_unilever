@@ -608,7 +608,7 @@ export function DataHubClient() {
           {isValidating && !status ? (
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
               {Array.from({ length: 4 }).map((_, i) => (
-                <div key={i} className="border border-gray-100 rounded-lg p-3 bg-white space-y-3">
+                <div key={i} className="border border-gray-100 rounded-lg p-4 bg-white space-y-3">
                   <Skeleton className="h-4 w-28" />
                   <Skeleton className="h-6 w-24" />
                   <Skeleton className="h-3 w-32" />
@@ -616,108 +616,59 @@ export function DataHubClient() {
               ))}
             </div>
           ) : (
-            <div className="space-y-4">
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
-                {/* Online Sales */}
-                <div className="border border-gray-100 shadow-sm rounded-lg p-3 bg-white hover:shadow-md transition-all">
-                  <div className="flex items-center justify-between gap-2 border-b border-gray-50 pb-2 mb-2">
-                    <div className="flex items-center gap-1.5">
-                      <ShoppingBag className="h-3.5 w-3.5 text-[#0F0E9A]" />
-                      <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">Online Sales</span>
-                    </div>
-                    <span className="text-[10px] text-muted-foreground font-mono">{status ? `${fmt(status.online_sales.total_rows)} rows` : '—'}</span>
-                  </div>
-                  <p className="text-lg font-black text-[#0F0E9A] tabular-nums">{status ? fmtBaht(status.online_sales.total_sales) : '—'}</p>
-                  <div className="flex justify-between text-[10px] text-muted-foreground mt-1">
-                    <span>Range</span>
-                    <span className="font-semibold text-foreground">{status?.online_sales.total_rows ? `${fmtDate(status.online_sales.earliest_date)} – ${fmtDate(status.online_sales.latest_date)}` : '—'}</span>
-                  </div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+              {/* Online Sales */}
+              <div className="border border-gray-100 rounded-lg p-4 bg-white">
+                <div className="flex items-center gap-1.5 mb-2">
+                  <ShoppingBag className="h-3.5 w-3.5 text-[#0F0E9A]" />
+                  <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">Online Sales</span>
                 </div>
-
-                {/* Offline Sales */}
-                <div className="border border-gray-100 shadow-sm rounded-lg p-3 bg-white hover:shadow-md transition-all">
-                  <div className="flex items-center justify-between gap-2 border-b border-gray-50 pb-2 mb-2">
-                    <div className="flex items-center gap-1.5">
-                      <Store className="h-3.5 w-3.5 text-purple-600" />
-                      <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">Offline Sales</span>
-                    </div>
-                    <span className="text-[10px] text-muted-foreground font-mono">{status ? `${fmt(status.offline_sales.total_rows)} rows` : '—'}</span>
-                  </div>
-                  <p className="text-lg font-black text-purple-700 tabular-nums">{status ? fmtBaht(status.offline_sales.total_sales) : '—'}</p>
-                  <div className="flex justify-between text-[10px] text-muted-foreground mt-1">
-                    <span>Range</span>
-                    <span className="font-semibold text-foreground">{status?.offline_sales.total_rows ? `${fmtDate(status.offline_sales.earliest_date)} – ${fmtDate(status.offline_sales.latest_date)}` : '—'}</span>
-                  </div>
-                </div>
-
-                {/* Telesales */}
-                <div className="border border-gray-100 shadow-sm rounded-lg p-3 bg-white hover:shadow-md transition-all">
-                  <div className="flex items-center justify-between gap-2 border-b border-gray-50 pb-2 mb-2">
-                    <div className="flex items-center gap-1.5">
-                      <PhoneCall className="h-3.5 w-3.5 text-[#003DA6]" />
-                      <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">Telesales</span>
-                    </div>
-                    <span className="text-[10px] text-muted-foreground font-mono">{status ? `${fmt(status.telesales.total_rows)} calls` : '—'}</span>
-                  </div>
-                  <p className="text-lg font-black text-[#003DA6] tabular-nums">{status ? fmt(status.telesales.total_rows) : '—'}<span className="text-xs font-normal text-muted-foreground ml-1">calls</span></p>
-                  <div className="flex justify-between text-[10px] text-muted-foreground mt-1">
-                    <span>Agents</span>
-                    <span className="font-semibold text-foreground">{status?.telesales.total_agents ? `${fmt(status.telesales.total_agents)} active` : '—'}</span>
-                  </div>
-                </div>
-
-                {/* Target & SKUs */}
-                <div className="border border-gray-100 shadow-sm rounded-lg p-3 bg-white hover:shadow-md transition-all">
-                  <div className="flex items-center justify-between gap-2 border-b border-gray-50 pb-2 mb-2">
-                    <div className="flex items-center gap-1.5">
-                      <Target className="h-3.5 w-3.5 text-indigo-600" />
-                      <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">Target & SKUs</span>
-                    </div>
-                    <span className="text-[10px] text-muted-foreground font-mono">{status ? `${fmt(status.products.total_rows)} SKUs` : '—'}</span>
-                  </div>
-                  <p className="text-lg font-black text-indigo-600 tabular-nums">{status ? fmtBaht(status.targets.total_target) : '—'}</p>
-                  <div className="flex justify-between text-[10px] text-muted-foreground mt-1">
-                    <span>Brands</span>
-                    <span className="font-semibold text-foreground">{status?.products.total_brands ? `${fmt(status.products.total_brands)} brands` : '—'}</span>
-                  </div>
-                </div>
+                <p className="text-lg font-black text-[#0F0E9A] tabular-nums">{status ? fmtBaht(status.online_sales.total_sales) : '—'}</p>
+                <p className="text-[10px] text-muted-foreground mt-1">
+                  {status?.online_sales.total_rows ? `${fmtDate(status.online_sales.earliest_date)} – ${fmtDate(status.online_sales.latest_date)}` : '—'}
+                </p>
+                <p className="text-[10px] text-muted-foreground">{fmtUpload(status?.online_sales.last_uploaded ?? null)}</p>
               </div>
 
-              {/* Combined banner */}
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-                <div className="md:col-span-2 border border-gray-100 shadow-sm rounded-lg p-3 bg-white">
-                  <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider border-b border-gray-50 pb-1.5 mb-2">Combined Performance Overview</p>
-                  <div className="grid grid-cols-2 gap-4">
-                    <div>
-                      <p className="text-[10px] text-muted-foreground font-semibold">Total Combined Sales</p>
-                      <p className="text-xl font-extrabold text-[#003DA6] tabular-nums mt-0.5">
-                        {status ? fmtBaht(status.online_sales.total_sales + status.offline_sales.total_sales) : '—'}
-                      </p>
-                    </div>
-                    <div>
-                      <p className="text-[10px] text-muted-foreground font-semibold">Total Aggregated Orders</p>
-                      <p className="text-xl font-extrabold tabular-nums mt-0.5">
-                        {status ? fmt(status.online_sales.total_rows + status.offline_sales.total_rows) : '—'}
-                      </p>
-                    </div>
-                  </div>
+              {/* Offline Sales */}
+              <div className="border border-gray-100 rounded-lg p-4 bg-white">
+                <div className="flex items-center gap-1.5 mb-2">
+                  <Store className="h-3.5 w-3.5 text-purple-600" />
+                  <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">Offline Sales</span>
                 </div>
-                <div className="border border-gray-100 shadow-sm rounded-lg p-3 bg-white">
-                  <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider border-b border-gray-50 pb-1.5 mb-2">ETL Upload Status</p>
-                  <div className="grid grid-cols-4 gap-1">
-                    {[
-                      { label: 'Files',   value: batches?.length ?? 0,                                    color: 'text-foreground' },
-                      { label: 'Success', value: batches?.filter(b => b.status === 'success').length ?? 0, color: 'text-green-600' },
-                      { label: 'Partial', value: batches?.filter(b => b.status === 'partial').length ?? 0, color: 'text-amber-600' },
-                      { label: 'Failed',  value: batches?.filter(b => b.status === 'failed').length ?? 0,  color: 'text-red-600'   },
-                    ].map(item => (
-                      <div key={item.label} className="text-center">
-                        <p className={cn('text-base font-extrabold tabular-nums leading-tight', item.color)}>{item.value}</p>
-                        <p className="text-[9px] font-bold text-muted-foreground">{item.label}</p>
-                      </div>
-                    ))}
-                  </div>
+                <p className="text-lg font-black text-purple-700 tabular-nums">{status ? fmtBaht(status.offline_sales.total_sales) : '—'}</p>
+                <p className="text-[10px] text-muted-foreground mt-1">
+                  {status?.offline_sales.total_rows ? `${fmtDate(status.offline_sales.earliest_date)} – ${fmtDate(status.offline_sales.latest_date)}` : '—'}
+                </p>
+                <p className="text-[10px] text-muted-foreground">{fmtUpload(status?.offline_sales.last_uploaded ?? null)}</p>
+              </div>
+
+              {/* Telesales */}
+              <div className="border border-gray-100 rounded-lg p-4 bg-white">
+                <div className="flex items-center gap-1.5 mb-2">
+                  <PhoneCall className="h-3.5 w-3.5 text-[#003DA6]" />
+                  <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">Telesales</span>
                 </div>
+                <p className="text-lg font-black text-[#003DA6] tabular-nums">
+                  {status ? fmt(status.telesales.total_rows) : '—'}<span className="text-xs font-normal text-muted-foreground ml-1">calls</span>
+                </p>
+                <p className="text-[10px] text-muted-foreground mt-1">
+                  {status?.telesales.total_agents ? `${fmt(status.telesales.total_agents)} agents` : '—'}
+                </p>
+                <p className="text-[10px] text-muted-foreground">{fmtUpload(status?.telesales.last_uploaded ?? null)}</p>
+              </div>
+
+              {/* Target & SKUs */}
+              <div className="border border-gray-100 rounded-lg p-4 bg-white">
+                <div className="flex items-center gap-1.5 mb-2">
+                  <Target className="h-3.5 w-3.5 text-indigo-600" />
+                  <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">Target & SKUs</span>
+                </div>
+                <p className="text-lg font-black text-indigo-600 tabular-nums">{status ? fmtBaht(status.targets.total_target) : '—'}</p>
+                <p className="text-[10px] text-muted-foreground mt-1">
+                  {status?.products.total_brands ? `${fmt(status.products.total_brands)} brands · ${fmt(status.products.total_rows)} SKUs` : '—'}
+                </p>
+                <p className="text-[10px] text-muted-foreground">{fmtUpload(status?.targets.last_uploaded ?? null)}</p>
               </div>
             </div>
           )}
@@ -755,7 +706,6 @@ export function DataHubClient() {
                     {[
                       {
                         icon: <ShoppingBag className="h-4 w-4 text-[#0F0E9A]" />,
-                        bg: 'bg-[#0F0E9A]/10 text-[#0F0E9A]',
                         name: 'Online Sales', table: 'online_sales',
                         rows: status?.online_sales.total_rows ?? 0,
                         metric: status ? `${fmtBaht(status.online_sales.total_sales)} total` : '—',
@@ -765,7 +715,6 @@ export function DataHubClient() {
                       },
                       {
                         icon: <Store className="h-4 w-4 text-purple-600" />,
-                        bg: 'bg-purple-50 text-purple-600',
                         name: 'Offline Sales', table: 'offline_sales',
                         rows: status?.offline_sales.total_rows ?? 0,
                         metric: status ? `${fmtBaht(status.offline_sales.total_sales)} total` : '—',
@@ -775,7 +724,6 @@ export function DataHubClient() {
                       },
                       {
                         icon: <Users className="h-4 w-4 text-[#003DA6]" />,
-                        bg: 'bg-[#003DA6]/10 text-[#003DA6]',
                         name: 'Leads', table: 'leads',
                         rows: status?.leads.total_rows ?? 0,
                         metric: '—',
@@ -785,7 +733,6 @@ export function DataHubClient() {
                       },
                       {
                         icon: <Package className="h-4 w-4 text-indigo-600" />,
-                        bg: 'bg-indigo-50 text-indigo-600',
                         name: 'Products', table: 'products',
                         rows: status?.products.total_rows ?? 0,
                         metric: status ? `${fmt(status.products.total_brands)} brands` : '—',
@@ -795,7 +742,6 @@ export function DataHubClient() {
                       },
                       {
                         icon: <PhoneCall className="h-4 w-4 text-[#003DA6]" />,
-                        bg: 'bg-[#003DA6]/10 text-[#003DA6]',
                         name: 'Telesales Calls', table: 'telesales_calls',
                         rows: status?.telesales.total_rows ?? 0,
                         metric: status ? `${fmt(status.telesales.total_agents)} agents` : '—',
@@ -805,7 +751,6 @@ export function DataHubClient() {
                       },
                       {
                         icon: <Target className="h-4 w-4 text-purple-600" />,
-                        bg: 'bg-purple-50 text-purple-600',
                         name: 'Sales Targets', table: 'targets',
                         rows: status?.targets.total_rows ?? 0,
                         metric: status ? `${fmtBaht(status.targets.total_target)} total` : '—',
@@ -815,7 +760,6 @@ export function DataHubClient() {
                       },
                       {
                         icon: <DollarSign className="h-4 w-4 text-rose-600" />,
-                        bg: 'bg-rose-50 text-rose-600',
                         name: 'Marketing Costs', table: 'costs',
                         rows: status?.costs.total_rows ?? 0,
                         metric: '—',
@@ -825,7 +769,6 @@ export function DataHubClient() {
                       },
                       {
                         icon: <Award className="h-4 w-4 text-amber-600" />,
-                        bg: 'bg-amber-50 text-amber-600',
                         name: 'Incentive Rules', table: 'incentives',
                         rows: status?.incentives.total_tiers ?? 0,
                         metric: status?.incentives.tiers.length ? status.incentives.tiers.map(t => `${(t * 100).toFixed(0)}%`).join(', ') : '—',
@@ -836,10 +779,8 @@ export function DataHubClient() {
                     ].map(row => (
                       <tr key={row.table} className="hover:bg-gray-50/50 transition-colors">
                         <td className="px-5 py-4">
-                          <div className="flex items-center gap-3">
-                            <div className={cn('h-8 w-8 rounded-lg flex items-center justify-center shrink-0 shadow-sm', row.bg)}>
-                              {row.icon}
-                            </div>
+                          <div className="flex items-center gap-2">
+                            {row.icon}
                             <div>
                               <p className="font-semibold text-sm">{row.name}</p>
                               <p className="text-[10px] text-muted-foreground font-mono">{row.table}</p>
@@ -882,122 +823,116 @@ export function DataHubClient() {
         {/* ── Build Mart ───────────────────────────────────────────────────── */}
         <TabsContent value="build" className="space-y-4 mt-4">
           {/* Mart Status */}
-          <Card className="shadow-sm border-gray-100">
-            <CardHeader className="pb-3 border-b border-gray-50">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <Database className="h-4 w-4 text-[#003DA6]" />
-                  <CardTitle className="text-sm font-semibold">Current Mart Status</CardTitle>
+          <div className="space-y-3">
+            <div className="flex items-center gap-2">
+              <Database className="h-4 w-4 text-[#003DA6]" />
+              <span className="text-sm font-semibold">Current Mart Status</span>
+            </div>
+            {isValidating && !mart ? (
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                {[0, 1].map(i => (
+                  <div key={i} className="rounded-lg border border-gray-100 p-3 space-y-2">
+                    <Skeleton className="h-3 w-32" /><Skeleton className="h-6 w-20" /><Skeleton className="h-3 w-full" />
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                {/* sales_hoc_orders */}
+                <div className={cn(
+                  'rounded-lg border p-3',
+                  (mart?.main.row_count ?? 0) > 0 ? 'border-green-200 bg-green-50/20' : 'border-gray-200 bg-gray-50/50',
+                )}>
+                  <div className="flex items-center justify-between mb-1">
+                    <code className="text-[10px] font-mono font-bold text-muted-foreground">sales_hoc_orders</code>
+                    <span className={cn('h-2 w-2 rounded-full', (mart?.main.row_count ?? 0) > 0 ? 'bg-green-500' : 'bg-gray-300')} />
+                  </div>
+                  <p className="text-xl font-extrabold tabular-nums">
+                    {fmt(mart?.main.row_count ?? 0)}<span className="text-xs font-normal text-muted-foreground ml-1">rows</span>
+                  </p>
+                  <div className="mt-2 space-y-0.5 text-xs text-muted-foreground">
+                    <div className="flex justify-between">
+                      <span>Order Range</span>
+                      <span className="font-semibold text-foreground">
+                        {mart?.main.min_date && mart?.main.max_date ? `${fmtDate(mart.main.min_date)} – ${fmtDate(mart.main.max_date)}` : '—'}
+                      </span>
+                    </div>
+                    {mart?.main.avg_days_to_order != null && (
+                      <div className="flex justify-between">
+                        <span>Avg Order Delay</span>
+                        <span className="font-semibold text-foreground">{mart.main.avg_days_to_order} days</span>
+                      </div>
+                    )}
+                    <div className="flex justify-between">
+                      <span>Last Refreshed</span>
+                      <span className="font-semibold text-foreground">{fmtUpload(mart?.main.last_refreshed ?? null)}</span>
+                    </div>
+                  </div>
+                </div>
+
+                {/* mart_performance_cmg */}
+                <div className={cn(
+                  'rounded-lg border p-3',
+                  (mart?.performance.row_count ?? 0) > 0 ? 'border-green-200 bg-green-50/20' : 'border-gray-200 bg-gray-50/50',
+                )}>
+                  <div className="flex items-center justify-between mb-1">
+                    <code className="text-[10px] font-mono font-bold text-muted-foreground">mart_performance_cmg</code>
+                    <span className={cn('h-2 w-2 rounded-full', (mart?.performance.row_count ?? 0) > 0 ? 'bg-green-500' : 'bg-gray-300')} />
+                  </div>
+                  <p className="text-xl font-extrabold tabular-nums">
+                    {fmt(mart?.performance.row_count ?? 0)}<span className="text-xs font-normal text-muted-foreground ml-1">rows</span>
+                  </p>
+                  <div className="mt-2 space-y-0.5 text-xs text-muted-foreground">
+                    <div className="flex justify-between">
+                      <span>Month Range</span>
+                      <span className="font-semibold text-foreground">
+                        {mart?.performance.min_month && mart?.performance.max_month ? `${fmtMonth(mart.performance.min_month)} – ${fmtMonth(mart.performance.max_month)}` : '—'}
+                      </span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span>Last Refreshed</span>
+                      <span className="font-semibold text-foreground">{fmtUpload(mart?.performance.last_refreshed ?? null)}</span>
+                    </div>
+                  </div>
                 </div>
               </div>
-            </CardHeader>
-            <CardContent className="pt-4">
-              {isValidating && !mart ? (
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  {[0, 1].map(i => (
-                    <div key={i} className="rounded-xl border p-4 space-y-3">
-                      <Skeleton className="h-3 w-32" /><Skeleton className="h-8 w-24" /><Skeleton className="h-3 w-full" />
+            )}
+
+            {/* Recent builds */}
+            {(mart?.recent_builds?.length ?? 0) > 0 && (
+              <div className="space-y-1.5">
+                <p className="text-xs font-bold text-muted-foreground uppercase tracking-wider">Recent Builds</p>
+                <div className="space-y-1">
+                  {mart!.recent_builds.map(b => (
+                    <div key={b.id} className={cn(
+                      'flex items-center justify-between gap-4 rounded-lg border px-3 py-2 text-xs',
+                      b.status === 'success' ? 'border-green-100 bg-green-50/30'
+                        : b.status === 'failed' ? 'border-red-100 bg-red-50/30'
+                        : 'border-gray-100 bg-gray-50/30',
+                    )}>
+                      <div className="flex items-center gap-2">
+                        {b.status === 'success'
+                          ? <CheckCircle className="h-3.5 w-3.5 text-green-500 shrink-0" />
+                          : b.status === 'failed'
+                          ? <XCircle className="h-3.5 w-3.5 text-red-500 shrink-0" />
+                          : <Clock className="h-3.5 w-3.5 text-gray-400 shrink-0" />}
+                        <span className="text-muted-foreground">{fmtUpload(b.started_at)}</span>
+                      </div>
+                      <div className="flex items-center gap-3 text-muted-foreground">
+                        {b.attribution_days && <span>{b.attribution_days}d attribution</span>}
+                        {b.duration_ms && <span>{(b.duration_ms / 1000).toFixed(1)}s</span>}
+                        {b.row_counts && (
+                          <span className="font-semibold text-foreground">
+                            {fmt(b.row_counts.mart_main ?? 0)} rows
+                          </span>
+                        )}
+                      </div>
                     </div>
                   ))}
                 </div>
-              ) : (
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  {/* sales_hoc_orders */}
-                  <div className={cn(
-                    'rounded-xl border p-4 space-y-2 hover:shadow-sm transition-all',
-                    (mart?.main.row_count ?? 0) > 0 ? 'border-green-200 bg-green-50/30' : 'border-gray-200 bg-gray-50/50',
-                  )}>
-                    <div className="flex items-center justify-between">
-                      <span className="text-xs font-bold text-muted-foreground uppercase tracking-wider">sales_hoc_orders</span>
-                      <span className={cn('h-2 w-2 rounded-full', (mart?.main.row_count ?? 0) > 0 ? 'bg-green-500' : 'bg-gray-300')} />
-                    </div>
-                    <p className="text-3xl font-extrabold tracking-tight tabular-nums">
-                      {fmt(mart?.main.row_count ?? 0)}<span className="text-sm font-normal text-muted-foreground ml-1.5">rows</span>
-                    </p>
-                    <div className="pt-2 border-t border-dashed border-gray-200/50 space-y-1 text-xs text-muted-foreground">
-                      <div className="flex justify-between">
-                        <span>Order Range</span>
-                        <span className="font-semibold text-foreground">
-                          {mart?.main.min_date && mart?.main.max_date ? `${fmtDate(mart.main.min_date)} – ${fmtDate(mart.main.max_date)}` : '—'}
-                        </span>
-                      </div>
-                      {mart?.main.avg_days_to_order != null && (
-                        <div className="flex justify-between">
-                          <span>Avg Order Delay</span>
-                          <span className="font-semibold text-foreground">{mart.main.avg_days_to_order} days</span>
-                        </div>
-                      )}
-                      <div className="flex justify-between">
-                        <span>Last Refreshed</span>
-                        <span className="font-semibold text-foreground">{fmtUpload(mart?.main.last_refreshed ?? null)}</span>
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* mart_performance_cmg */}
-                  <div className={cn(
-                    'rounded-xl border p-4 space-y-2 hover:shadow-sm transition-all',
-                    (mart?.performance.row_count ?? 0) > 0 ? 'border-green-200 bg-green-50/30' : 'border-gray-200 bg-gray-50/50',
-                  )}>
-                    <div className="flex items-center justify-between">
-                      <span className="text-xs font-bold text-muted-foreground uppercase tracking-wider">mart_performance_cmg</span>
-                      <span className={cn('h-2 w-2 rounded-full', (mart?.performance.row_count ?? 0) > 0 ? 'bg-green-500' : 'bg-gray-300')} />
-                    </div>
-                    <p className="text-3xl font-extrabold tracking-tight tabular-nums">
-                      {fmt(mart?.performance.row_count ?? 0)}<span className="text-sm font-normal text-muted-foreground ml-1.5">rows</span>
-                    </p>
-                    <div className="pt-2 border-t border-dashed border-gray-200/50 space-y-1 text-xs text-muted-foreground">
-                      <div className="flex justify-between">
-                        <span>Month Range</span>
-                        <span className="font-semibold text-foreground">
-                          {mart?.performance.min_month && mart?.performance.max_month ? `${fmtMonth(mart.performance.min_month)} – ${fmtMonth(mart.performance.max_month)}` : '—'}
-                        </span>
-                      </div>
-                      <div className="flex justify-between">
-                        <span>Last Refreshed</span>
-                        <span className="font-semibold text-foreground">{fmtUpload(mart?.performance.last_refreshed ?? null)}</span>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              )}
-
-              {/* Recent builds */}
-              {(mart?.recent_builds?.length ?? 0) > 0 && (
-                <div className="mt-4 space-y-2">
-                  <p className="text-xs font-bold text-muted-foreground uppercase tracking-wider">Recent Builds</p>
-                  <div className="space-y-1.5">
-                    {mart!.recent_builds.map(b => (
-                      <div key={b.id} className={cn(
-                        'flex items-center justify-between gap-4 rounded-lg border px-4 py-2.5 text-xs',
-                        b.status === 'success' ? 'border-green-100 bg-green-50/30'
-                          : b.status === 'failed' ? 'border-red-100 bg-red-50/30'
-                          : 'border-gray-100 bg-gray-50/30',
-                      )}>
-                        <div className="flex items-center gap-2">
-                          {b.status === 'success'
-                            ? <CheckCircle className="h-3.5 w-3.5 text-green-500 shrink-0" />
-                            : b.status === 'failed'
-                            ? <XCircle className="h-3.5 w-3.5 text-red-500 shrink-0" />
-                            : <Clock className="h-3.5 w-3.5 text-gray-400 shrink-0" />}
-                          <span className="text-muted-foreground">{fmtUpload(b.started_at)}</span>
-                        </div>
-                        <div className="flex items-center gap-4 text-muted-foreground">
-                          {b.attribution_days && <span>{b.attribution_days}d attribution</span>}
-                          {b.duration_ms && <span>{(b.duration_ms / 1000).toFixed(1)}s</span>}
-                          {b.row_counts && (
-                            <span className="font-semibold text-foreground">
-                              {fmt(b.row_counts.mart_main ?? 0)} rows
-                            </span>
-                          )}
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
-            </CardContent>
-          </Card>
+              </div>
+            )}
+          </div>
 
           {/* Build Card */}
           <Card className="shadow-sm border-gray-100">

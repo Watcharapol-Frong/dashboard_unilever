@@ -22,6 +22,8 @@ import { TelesalesTrendMiniChart } from '@/components/dashboard/TelesalesTrendMi
 import { SalesFunnelChart } from './SalesFunnelChart'
 import { PageLoading, PageEmpty, PageError } from '@/components/dashboard/PageState'
 import { fmt, formatPct, colorRate } from '@/lib/formatters'
+import { useLanguage } from '@/context/LanguageContext'
+import { t } from '@/lib/i18n'
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 type Summary = {
@@ -100,6 +102,7 @@ const monthLastDay = (isoFirst: string): string => {
 
 // ── Component ─────────────────────────────────────────────────────────────────
 export function TelesalesClient() {
+  const { lang } = useLanguage()
   // ── Date range ────────────────────────────────────────────────────────────────
   const [rangeFrom,   setRangeFrom]   = useState<string | null>(null)
   const [rangeTo,     setRangeTo]     = useState<string | null>(null)
@@ -188,7 +191,7 @@ export function TelesalesClient() {
   // ── Render ────────────────────────────────────────────────────────────────────
   if (isLoading && !data) return <PageLoading cols={4} />
   if (error)              return <PageError message={error.message} />
-  if (!data)              return <PageEmpty message="No data" hint="Run Build Mart in Data Hub first" />
+  if (!data)              return <PageEmpty message={t('common.noData', lang)} hint={t('common.buildFirst', lang)} />
 
   const { summary, by_agent, by_tier_status, options } = data
   const cmgOptions   = options.cmg.map(c => ({ value: c, label: c }))
@@ -299,14 +302,14 @@ export function TelesalesClient() {
         <div className="flex flex-wrap items-center gap-2">
           <span className="w-12 shrink-0 text-xs text-muted-foreground">Filters</span>
           {cmgOptions.length > 0 && (
-            <MultiSelect label="All Segments" value={cmg} onChange={setCmg} options={cmgOptions} />
+            <MultiSelect label={t('common.allSegments', lang)} value={cmg} onChange={setCmg} options={cmgOptions} />
           )}
           {agentOptions.length > 0 && (
-            <MultiSelect label="All Agents" value={agent} onChange={setAgent} options={agentOptions} />
+            <MultiSelect label={t('common.allAgents', lang)} value={agent} onChange={setAgent} options={agentOptions} />
           )}
           {hasFilter && (
             <button onClick={clearAll} className="text-xs text-muted-foreground underline hover:text-foreground">
-              Clear filters
+              {t('common.resetFilters', lang)}
             </button>
           )}
         </div>
@@ -315,20 +318,20 @@ export function TelesalesClient() {
       {/* ── KPI Cards ─────────────────────────────────────────────────────────── */}
       <KpiGrid cols={4}>
         <KpiCard
-          title="Total Calls"
+          title={t('kpi.totalCalls', lang)}
           value={fmt(summary.total_calls)}
           icon={Phone}
           subtitle={`${fmt(summary.total_leads)} leads total`}
         />
         <KpiCard
-          title="Reach Rate"
+          title={t('telesales.reachRate', lang)}
           value={summary.total_calls > 0 ? formatPct(reachRate) : '—'}
           icon={PhoneForwarded}
           valueClassName={colorRate(reachRate, [0.6, 0.4])}
           subtitle={`${fmt(summary.reached)} reached · ${fmt(summary.not_reached)} not reached`}
         />
         <KpiCard
-          title="Conversion Rate"
+          title={t('telesales.convRate', lang)}
           value={summary.reached > 0 ? formatPct(convRate) : '—'}
           icon={Percent}
           valueClassName={colorRate(convRate, [0.3, 0.15])}
@@ -407,7 +410,7 @@ export function TelesalesClient() {
         <div className="rounded-lg border bg-card">
           <div className="flex items-center justify-between px-4 py-3 border-b">
             <div>
-              <h3 className="text-sm font-semibold">Agent Leaderboard</h3>
+              <h3 className="text-sm font-semibold">{t('sales.leaderboard', lang)}</h3>
               <p className="text-xs text-muted-foreground mt-0.5">Ranked by total calls</p>
             </div>
             <span className="text-xs text-muted-foreground">{by_agent.length} agents</span>
@@ -416,7 +419,7 @@ export function TelesalesClient() {
             <TableHeader>
               <TableRow>
                 <TableHead className="w-10 text-center px-3">#</TableHead>
-                <TableHead>Agent</TableHead>
+                <TableHead>{t('common.agent', lang)}</TableHead>
                 <TableHead className="text-right">Total Calls</TableHead>
                 <TableHead className="text-right">Reached</TableHead>
                 <TableHead className="text-right">Not Reached</TableHead>

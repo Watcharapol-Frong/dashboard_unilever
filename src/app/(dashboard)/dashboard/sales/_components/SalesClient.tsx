@@ -19,6 +19,8 @@ import { MultiSelect } from '@/components/dashboard/MultiSelect'
 import { SalesTrendLineChart } from './SalesTrendLineChart'
 import { PageLoading, PageEmpty, PageError } from '@/components/dashboard/PageState'
 import { fmtBaht, fmt, formatPct, colorRate } from '@/lib/formatters'
+import { useLanguage } from '@/context/LanguageContext'
+import { t } from '@/lib/i18n'
 import dynamic from 'next/dynamic'
 import type { BubbleRecord } from '@/components/charts/SplitBubbleChart'
 
@@ -77,6 +79,7 @@ const monthLastDay = (isoFirst: string): string => {
 
 // ── Component ─────────────────────────────────────────────────────────────────
 export function SalesClient() {
+  const { lang } = useLanguage()
   // ── Date range ────────────────────────────────────────────────────────────────
   const [rangeFrom,   setRangeFrom]   = useState<string | null>(null)
   const [rangeTo,     setRangeTo]     = useState<string | null>(null)
@@ -183,7 +186,7 @@ export function SalesClient() {
   // ── Render ────────────────────────────────────────────────────────────────────
   if (isLoading && !data) return <PageLoading cols={4} />
   if (error)              return <PageError message={error.message} />
-  if (!data)              return <PageEmpty message="No data" hint="Run Build Mart in Data Hub first" />
+  if (!data)              return <PageEmpty message={t('common.noData', lang)} hint={t('common.buildFirst', lang)} />
 
   const { kpi, options, by_bubble } = data
   const cmgOptions   = options.cmg.map(c => ({ value: c, label: c }))
@@ -269,18 +272,18 @@ export function SalesClient() {
         <div className="flex flex-wrap items-center gap-2">
           <span className="w-12 shrink-0 text-xs text-muted-foreground">Filters</span>
           <FilterSelect
-            label="All Channels"
+            label={t('common.allChannels', lang)}
             value={channel}
             onChange={setChannel}
             options={[
-              { value: 'online',  label: 'Online'  },
-              { value: 'offline', label: 'Offline' },
+              { value: 'online',  label: t('common.online', lang)  },
+              { value: 'offline', label: t('common.offline', lang) },
             ]}
             width="w-36"
           />
           {cmgOptions.length > 0 && (
             <MultiSelect
-              label="All Segments"
+              label={t('common.allSegments', lang)}
               value={cmg}
               onChange={setCmg}
               options={cmgOptions}
@@ -288,7 +291,7 @@ export function SalesClient() {
           )}
           {agentOptions.length > 0 && (
             <MultiSelect
-              label="All Agents"
+              label={t('common.allAgents', lang)}
               value={agent}
               onChange={setAgent}
               options={agentOptions}
@@ -299,7 +302,7 @@ export function SalesClient() {
               onClick={clearAll}
               className="text-xs text-muted-foreground underline hover:text-foreground"
             >
-              Clear filters
+              {t('common.resetFilters', lang)}
             </button>
           )}
         </div>
@@ -315,7 +318,7 @@ export function SalesClient() {
 
       <KpiGrid cols={4}>
         <KpiCard
-          title="Total Sales"
+          title={t('sales.totalSales', lang)}
           value={fmtBaht(kpi.converted_sales)}
           icon={ShoppingCart}
           comparison={kpi.cmp_converted_sales ?? undefined}
@@ -323,19 +326,19 @@ export function SalesClient() {
           subtitle={`${fmtBaht(kpi.converted_online)} online · ${fmtBaht(kpi.converted_offline)} offline`}
         />
         <KpiCard
-          title="Avg Order Value"
+          title={t('sales.avgOrderValue', lang)}
           value={kpi.avg_order_value > 0 ? fmtBaht(kpi.avg_order_value) : '—'}
           icon={ReceiptText}
-          subtitle={`${fmt(kpi.converted_orders)} orders`}
+          subtitle={`${fmt(kpi.converted_orders)} ${t('common.orders', lang)}`}
         />
         <KpiCard
-          title="New Customers"
+          title={t('kpi.newCustomers', lang)}
           value={fmt(kpi.new_customers)}
           icon={Users}
           subtitle={totalBuyers > 0 ? `${((kpi.new_customers / totalBuyers) * 100).toFixed(1)}% of buyers` : '—'}
         />
         <KpiCard
-          title="Retention"
+          title={t('kpi.repeatCustomers', lang)}
           value={fmt(kpi.retention_customers)}
           icon={Repeat2}
           subtitle={totalBuyers > 0 ? `${((kpi.retention_customers / totalBuyers) * 100).toFixed(1)}% of buyers` : '—'}
@@ -355,14 +358,14 @@ export function SalesClient() {
         {/* Channel Split */}
         <div className="rounded-lg border bg-card p-4 space-y-3">
           <div>
-            <h3 className="text-sm font-semibold">Channel Split</h3>
+            <h3 className="text-sm font-semibold">{t('sales.channelBreakdown', lang)}</h3>
             <p className="text-xs text-muted-foreground mt-0.5">Total sales by channel</p>
           </div>
           <div className="space-y-3">
             <div className="space-y-1.5">
               <div className="flex items-center justify-between text-xs">
                 <span className="flex items-center gap-1.5 text-muted-foreground">
-                  <span className="inline-block h-2 w-2 rounded-sm bg-[#003DA6]" />Online
+                  <span className="inline-block h-2 w-2 rounded-sm bg-[#003DA6]" />{t('common.online', lang)}
                 </span>
                 <span className="tabular-nums font-medium">
                   {fmtBaht(kpi.total_online)}
@@ -376,7 +379,7 @@ export function SalesClient() {
             <div className="space-y-1.5">
               <div className="flex items-center justify-between text-xs">
                 <span className="flex items-center gap-1.5 text-muted-foreground">
-                  <span className="inline-block h-2 w-2 rounded-sm bg-[#60a5fa]" />Offline
+                  <span className="inline-block h-2 w-2 rounded-sm bg-[#60a5fa]" />{t('common.offline', lang)}
                 </span>
                 <span className="tabular-nums font-medium">
                   {fmtBaht(kpi.total_offline)}
@@ -403,7 +406,7 @@ export function SalesClient() {
             <div className="space-y-1.5">
               <div className="flex items-center justify-between text-xs">
                 <span className="flex items-center gap-1.5 text-muted-foreground">
-                  <span className="inline-block h-2 w-2 rounded-sm bg-green-500" />Converted
+                  <span className="inline-block h-2 w-2 rounded-sm bg-green-500" />{t('sales.convertedOrders', lang)}
                 </span>
                 <span className="tabular-nums font-medium">
                   {fmtBaht(kpi.converted_sales)}
@@ -417,7 +420,7 @@ export function SalesClient() {
             <div className="space-y-1.5">
               <div className="flex items-center justify-between text-xs">
                 <span className="flex items-center gap-1.5 text-muted-foreground">
-                  <span className="inline-block h-2 w-2 rounded-sm bg-amber-400" />Not Converted
+                  <span className="inline-block h-2 w-2 rounded-sm bg-amber-400" />{t('sales.notConverted', lang)}
                 </span>
                 <span className="tabular-nums font-medium">
                   {fmtBaht(kpi.not_converted_sales)}
@@ -446,7 +449,7 @@ export function SalesClient() {
         <div className="rounded-lg border bg-card">
           <div className="flex items-center justify-between px-4 py-3 border-b">
             <div>
-              <h3 className="text-sm font-semibold">Agent Performance</h3>
+              <h3 className="text-sm font-semibold">{t('sales.leaderboard', lang)}</h3>
               <p className="text-xs text-muted-foreground mt-0.5">Ranked by converted sales</p>
             </div>
             <span className="text-xs text-muted-foreground">{agentRows.length} agents</span>
@@ -455,7 +458,7 @@ export function SalesClient() {
             <TableHeader>
               <TableRow>
                 <TableHead className="w-10 text-center px-3">#</TableHead>
-                <TableHead>Agent</TableHead>
+                <TableHead>{t('common.agent', lang)}</TableHead>
                 <TableHead className="text-right">Sales</TableHead>
                 <TableHead className="text-right">Orders</TableHead>
                 <TableHead className="text-right">Calls</TableHead>
