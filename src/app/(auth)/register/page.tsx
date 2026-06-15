@@ -157,6 +157,18 @@ export default function RegisterPage() {
           </Link>
         </p>
       </div>
+
+      {/* Terms & Privacy */}
+      <p className="mt-6 text-center text-xs text-muted-foreground">
+        By registering, you agree to our{' '}
+        <Link href="/terms" className="underline underline-offset-4 hover:text-foreground">
+          Terms of Service
+        </Link>{' '}
+        and{' '}
+        <Link href="/privacy" className="underline underline-offset-4 hover:text-foreground">
+          Privacy Policy
+        </Link>
+      </p>
     </div>
   )
 }
