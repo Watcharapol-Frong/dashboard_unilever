@@ -26,10 +26,7 @@ function ChartTooltip({ active, payload, label }: any) {
   const d: TrendRow = payload[0]?.payload ?? {}
   const online  = d.online_sales  ?? 0
   const offline = d.offline_sales ?? 0
-  const target  = d.target        ?? 0
   const total   = online + offline
-  const ach     = target > 0 ? (total / target) * 100 : null
-  const achColor = ach === null ? '' : ach >= 100 ? 'text-green-600' : ach >= 80 ? 'text-yellow-600' : 'text-red-500'
 
   return (
     <div className="min-w-44 rounded-lg border bg-background px-3 py-2.5 text-xs shadow-md space-y-2">
@@ -48,17 +45,6 @@ function ChartTooltip({ active, payload, label }: any) {
           </span>
           <span className="tabular-nums">{fmtBaht(offline)}</span>
         </div>
-        {target > 0 && (
-          <div className="flex justify-between gap-6 border-t pt-1">
-            <span className="text-muted-foreground">Target</span>
-            <span className="tabular-nums">
-              {fmtBaht(target)}
-              {ach !== null && (
-                <span className={`ml-1.5 ${achColor}`}>({ach.toFixed(1)}%)</span>
-              )}
-            </span>
-          </div>
-        )}
       </div>
     </div>
   )
@@ -134,9 +120,6 @@ export function SalesTrendLineChart({ cmgFilter, effectiveStart, effectiveEnd }:
             <span className="flex items-center gap-1.5">
               <span className="inline-block h-0.5 w-4 rounded-full bg-[#60a5fa]" />Offline
             </span>
-            <span className="flex items-center gap-1.5">
-              <span className="inline-block h-0.5 w-4 rounded-full bg-[#d1d5db]" style={{ borderTop: '1px dashed #d1d5db' }} />Target
-            </span>
           </div>
           <ToggleGroup
             type="single"
@@ -187,17 +170,6 @@ export function SalesTrendLineChart({ cmgFilter, effectiveStart, effectiveEnd }:
               dot={{ r: 3, fill: '#60a5fa', strokeWidth: 0 }}
               activeDot={{ r: 5 }}
             />
-            {view === 'monthly' && (
-              <Line
-                type="monotone"
-                dataKey="target"
-                name="Target"
-                stroke="#d1d5db"
-                strokeWidth={1.5}
-                strokeDasharray="5 4"
-                dot={false}
-              />
-            )}
           </LineChart>
         </ResponsiveContainer>
       </div>
