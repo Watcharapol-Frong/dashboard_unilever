@@ -380,7 +380,6 @@ export function DashboardClient() {
             value={aggSales.roi > 0 ? `${aggSales.roi.toFixed(1)}×` : '—'}
             icon={TrendingUp}
             valueClassName={colorRoi(aggSales.roi)}
-            subtitle={`${fmtBaht(aggSales.expense)} expense`}
             tooltip="Programme-level ROI — costs are not split by CMG, so this figure covers all CMGs regardless of the CMG filter."
           />
         </KpiGrid>
