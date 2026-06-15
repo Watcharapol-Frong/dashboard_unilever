@@ -14,9 +14,9 @@ export async function POST(request: Request) {
         desc: 'Optimize GROUP BY mmid + engagement classification'
       },
       {
-        name: 'idx_mart_telesales_orders_mmid_cmg',
-        sql: `CREATE INDEX IF NOT EXISTS idx_mart_telesales_orders_mmid_cmg
-              ON mart_telesales_orders(mmid, primary_cmg)`,
+        name: 'idx_mmid_cmg_map_mmid',
+        sql: `CREATE INDEX IF NOT EXISTS idx_mmid_cmg_map_mmid
+              ON mmid_cmg_map(mmid, primary_cmg)`,
         desc: 'Optimize segment/CMG filtering'
       },
       {

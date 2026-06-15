@@ -8,10 +8,6 @@ import { Button } from '@/components/ui/button'
 import { Avatar, AvatarFallback } from '@/components/ui/avatar'
 import { cn } from '@/lib/utils'
 import {
-  IconAdjustmentsHorizontal,
-  IconBolt,
-  IconMessageCircle,
-  IconPaperclip,
   IconRefresh,
   IconSparkles,
 } from "@tabler/icons-react";
