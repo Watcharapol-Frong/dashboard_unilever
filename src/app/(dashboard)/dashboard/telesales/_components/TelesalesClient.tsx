@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useMemo, useEffect } from 'react'
+import { useState, useMemo } from 'react'
 import type { DateRange } from 'react-day-picker'
 import { Phone, PhoneForwarded, UserCheck, Percent } from 'lucide-react'
 
@@ -170,23 +170,10 @@ export function TelesalesClient() {
     `/api/data/dashboard/telesales${qs ? `?${qs}` : ''}`
   )
 
-  // ── Default month chip once months load ───────────────────────────────────────
-  const defaultMonth = useMemo(() => {
-    const d = new Date()
-    d.setMonth(d.getMonth() - 1)
-    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`
-  }, [])
-
   const months = useMemo(
     () => (data?.months ?? []).map(m => m.substring(0, 7)),
     [data?.months]
   )
-
-  useEffect(() => {
-    if (months.length && rangeFrom === null) {
-      setRangeFrom(months.includes(defaultMonth) ? defaultMonth : months[months.length - 1])
-    }
-  }, [months, rangeFrom, defaultMonth])
 
   // ── Render ────────────────────────────────────────────────────────────────────
   if (isLoading && !data) return <PageLoading cols={4} />

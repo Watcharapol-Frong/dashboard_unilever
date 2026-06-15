@@ -110,7 +110,7 @@ interface Props {
 }
 
 export function SalesTrendChart({ cmgFilter, effectiveStart, effectiveEnd }: Props) {
-  const [view, setView] = useState<View>('weekly')
+  const [view, setView] = useState<View>('monthly')
   const { buildVersion } = useBuild()
 
   const cmgQuery = cmgFilter.length > 0

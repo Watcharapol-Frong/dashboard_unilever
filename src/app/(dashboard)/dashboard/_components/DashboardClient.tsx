@@ -87,12 +87,6 @@ export function DashboardClient() {
   }
 
   // ── Month chip range (YYYY-MM) ───────────────────────────────────────────────
-  const defaultMonth = useMemo(() => {
-    const d = new Date()
-    d.setMonth(d.getMonth() - 1)
-    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`
-  }, [])
-
   const [rangeFrom,  setRangeFrom]  = useState<string | null>(null)
   const [rangeTo,    setRangeTo]    = useState<string | null>(null)
   const [hoverMonth, setHoverMonth] = useState<string | null>(null)
@@ -105,12 +99,6 @@ export function DashboardClient() {
     ])
     return [...set].sort()
   }, [data])
-
-  useEffect(() => {
-    if (allMonths.length && rangeFrom === null) {
-      setRangeFrom(allMonths.includes(defaultMonth) ? defaultMonth : allMonths[allMonths.length - 1])
-    }
-  }, [allMonths, rangeFrom, defaultMonth])
 
   const handleChipClick = (m: string) => {
     // Switching to chips clears custom mode
@@ -164,7 +152,7 @@ export function DashboardClient() {
   // ── Aggregate sales ──────────────────────────────────────────────────────────
   const salesInRange = useMemo(() => {
     if (!data) return []
-    if (!effectiveStart || !effectiveEnd) return data.sales.slice(-1)
+    if (!effectiveStart || !effectiveEnd) return data.sales
     return data.sales.filter(s => monthOverlaps(s.month, effectiveStart, effectiveEnd))
   }, [data, effectiveStart, effectiveEnd])
 
@@ -189,7 +177,7 @@ export function DashboardClient() {
   // ── Aggregate telesales ──────────────────────────────────────────────────────
   const teleInRange = useMemo(() => {
     if (!data) return []
-    if (!effectiveStart || !effectiveEnd) return data.telesales.slice(-1)
+    if (!effectiveStart || !effectiveEnd) return data.telesales
     return data.telesales.filter(t => monthOverlaps(t.month, effectiveStart, effectiveEnd))
   }, [data, effectiveStart, effectiveEnd])
 
@@ -305,7 +293,7 @@ export function DashboardClient() {
         {/* Row 2: Customer Segment */}
         {cmgOptions.length > 0 && (
           <div className="flex items-center gap-3">
-            <span className="w-28 shrink-0 text-xs text-muted-foreground">Customer Segment</span>
+            <span className="w-28 shrink-0 text-xs text-muted-foreground">Filters</span>
             <Popover>
               <PopoverTrigger asChild>
                 <button className="flex h-8 items-center gap-1.5 rounded-md border border-input bg-background px-3 text-sm text-foreground shadow-sm hover:bg-accent hover:text-accent-foreground">

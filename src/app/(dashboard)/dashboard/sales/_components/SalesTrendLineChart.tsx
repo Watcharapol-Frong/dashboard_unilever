@@ -71,7 +71,7 @@ interface Props {
 }
 
 export function SalesTrendLineChart({ cmgFilter, effectiveStart, effectiveEnd }: Props) {
-  const [view, setView] = useState<View>('weekly')
+  const [view, setView] = useState<View>('monthly')
 
   const cmgQuery = cmgFilter.length > 0
     ? `&cmg=${cmgFilter.map(encodeURIComponent).join(',')}`

@@ -71,7 +71,7 @@ function ChartTooltip({ active, payload, label }: any) {
 }
 
 export function TelesalesTrendMiniChart({ effectiveStart, effectiveEnd }: Props) {
-  const [view, setView] = useState<View>('weekly')
+  const [view, setView] = useState<View>('monthly')
   const { buildVersion } = useBuild()
 
   // Monthly — all time, filtered client-side
