@@ -24,6 +24,7 @@ import { PageLoading, PageEmpty, PageError } from '@/components/dashboard/PageSt
 import { fmt, formatPct, colorRate } from '@/lib/formatters'
 import { useLanguage } from '@/context/LanguageContext'
 import { t } from '@/lib/i18n'
+import { useLocalState } from '@/hooks/useLocalState'
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 type Summary = {
@@ -104,8 +105,8 @@ const monthLastDay = (isoFirst: string): string => {
 export function TelesalesClient() {
   const { lang } = useLanguage()
   // ── Date range ────────────────────────────────────────────────────────────────
-  const [rangeFrom,   setRangeFrom]   = useState<string | null>(null)
-  const [rangeTo,     setRangeTo]     = useState<string | null>(null)
+  const [rangeFrom,   setRangeFrom]   = useLocalState<string | null>('tele:month:from', null)
+  const [rangeTo,     setRangeTo]     = useLocalState<string | null>('tele:month:to', null)
   const [hoverMonth,  setHoverMonth]  = useState<string | null>(null)
   const [filterMode,  setFilterMode]  = useState<'chips' | 'custom'>('chips')
   const [customRange, setCustomRange] = useState<DateRange>({ from: undefined, to: undefined })
@@ -150,8 +151,8 @@ export function TelesalesClient() {
   }
 
   // ── Attribute filters ─────────────────────────────────────────────────────────
-  const [cmg,   setCmg]   = useState<string[]>([])
-  const [agent, setAgent] = useState<string[]>([])
+  const [cmg,   setCmg]   = useLocalState<string[]>('tele:cmg', [])
+  const [agent, setAgent] = useLocalState<string[]>('tele:agent', [])
 
   const hasFilter = cmg.length > 0 || agent.length > 0
   const clearAll  = () => { setCmg([]); setAgent([]) }

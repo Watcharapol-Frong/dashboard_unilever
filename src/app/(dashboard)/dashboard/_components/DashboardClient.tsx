@@ -24,6 +24,7 @@ import {
 } from '@/lib/formatters'
 import { useLanguage } from '@/context/LanguageContext'
 import { t } from '@/lib/i18n'
+import { useLocalState } from '@/hooks/useLocalState'
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 type SalesRow = {
@@ -60,7 +61,7 @@ const monthOverlaps = (period: string, start: string, end: string) =>
 export function DashboardClient() {
   const { lang } = useLanguage()
   // ── CMG multiselect ─────────────────────────────────────────────────────────
-  const [cmgFilter, setCmgFilter] = useState<string[]>([])
+  const [cmgFilter, setCmgFilter] = useLocalState<string[]>('dash:cmg', [])
   const cmgQuery = cmgFilter.length > 0
     ? `?cmg=${cmgFilter.map(encodeURIComponent).join(',')}`
     : ''
@@ -87,8 +88,8 @@ export function DashboardClient() {
   }
 
   // ── Month chip range (YYYY-MM) ───────────────────────────────────────────────
-  const [rangeFrom,  setRangeFrom]  = useState<string | null>(null)
-  const [rangeTo,    setRangeTo]    = useState<string | null>(null)
+  const [rangeFrom,  setRangeFrom]  = useLocalState<string | null>('dash:month:from', null)
+  const [rangeTo,    setRangeTo]    = useLocalState<string | null>('dash:month:to', null)
   const [hoverMonth, setHoverMonth] = useState<string | null>(null)
 
   const allMonths = useMemo(() => {

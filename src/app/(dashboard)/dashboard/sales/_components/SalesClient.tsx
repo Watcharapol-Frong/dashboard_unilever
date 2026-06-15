@@ -24,6 +24,7 @@ import { PageLoading, PageEmpty, PageError } from '@/components/dashboard/PageSt
 import { fmtBaht, fmt, formatPct, colorRate } from '@/lib/formatters'
 import { useLanguage } from '@/context/LanguageContext'
 import { t } from '@/lib/i18n'
+import { useLocalState } from '@/hooks/useLocalState'
 import dynamic from 'next/dynamic'
 import type { BubbleRecord } from '@/components/charts/SplitBubbleChart'
 
@@ -84,8 +85,8 @@ const monthLastDay = (isoFirst: string): string => {
 export function SalesClient() {
   const { lang } = useLanguage()
   // ── Date range ────────────────────────────────────────────────────────────────
-  const [rangeFrom,   setRangeFrom]   = useState<string | null>(null)
-  const [rangeTo,     setRangeTo]     = useState<string | null>(null)
+  const [rangeFrom,   setRangeFrom]   = useLocalState<string | null>('sales:month:from', null)
+  const [rangeTo,     setRangeTo]     = useLocalState<string | null>('sales:month:to', null)
   const [hoverMonth,  setHoverMonth]  = useState<string | null>(null)
   const [filterMode,  setFilterMode]  = useState<'chips' | 'custom'>('chips')
   const [customRange, setCustomRange] = useState<DateRange>({ from: undefined, to: undefined })
@@ -130,9 +131,9 @@ export function SalesClient() {
   }
 
   // ── Attribute filters ─────────────────────────────────────────────────────────
-  const [channel, setChannel] = useState<string>('all')
-  const [cmg,     setCmg]     = useState<string[]>([])
-  const [agent,   setAgent]   = useState<string[]>([])
+  const [channel, setChannel] = useLocalState<string>('sales:channel', 'all')
+  const [cmg,     setCmg]     = useLocalState<string[]>('sales:cmg', [])
+  const [agent,   setAgent]   = useLocalState<string[]>('sales:agent', [])
 
   const hasFilter = channel !== 'all' || cmg.length > 0 || agent.length > 0
 
