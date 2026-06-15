@@ -20,17 +20,17 @@ export type BubbleRecord = {
 type HDatum = {
   id: string
   label: string
-  productName?: string  // full product name shown in tooltip (leaf nodes only)
+  productName?: string
   type: 'root' | 'buyer' | 'brand' | 'product'
   value?: number
   qty?: number
   brand?: string
   buyerName?: string
-  prodNums?: string[]   // product IDs contained in this brand (used for search highlight)
+  prodNums?: string[]
   children?: HDatum[]
 }
 
-// ── Color palette (matches other charts in the project) ───────────────────────
+// ── Color palette ─────────────────────────────────────────────────────────────
 const PALETTE = [
   '#003DA6', '#EE2737', '#F5A623', '#10b981',
   '#8b5cf6', '#06b6d4', '#f97316', '#ec4899',
@@ -56,7 +56,6 @@ function topN<T extends { sales: number }>(items: T[], n: number) {
 function buildBrandHierarchy(records: BubbleRecord[], senior: string): HDatum {
   const sRecs = records.filter(r => r.senior_buyer_name === senior)
 
-  // buyer → brand → {sales, qty, prodNums}
   const buyerMap = new Map<string, Map<string, { sales: number; qty: number; prodNums: Set<string> }>>()
   for (const r of sRecs) {
     if (!buyerMap.has(r.buyer_name)) buyerMap.set(r.buyer_name, new Map())
@@ -120,7 +119,6 @@ function buildProductHierarchy(
 ): HDatum {
   const isOther = brand === '__other__'
 
-  // Identify the top-4 real brands for this buyer (used to define "other")
   const buyerRecs = records.filter(r => r.senior_buyer_name === senior && r.buyer_name === buyer)
   const brandSales = new Map<string, number>()
   for (const r of buyerRecs) brandSales.set(r.brand, (brandSales.get(r.brand) ?? 0) + r.converted_sales)
@@ -134,7 +132,6 @@ function buildProductHierarchy(
     (isOther ? !top4Brands.has(r.brand) : r.brand === brand)
   )
 
-  // Aggregate by prod_num (same product can appear multiple times)
   const prodMap = new Map<string, { prodNum: string; name: string; sales: number; qty: number }>()
   for (const r of filtered) {
     const ex = prodMap.get(r.prod_num) ?? { prodNum: r.prod_num, name: r.product_name, sales: 0, qty: 0 }
@@ -147,8 +144,8 @@ function buildProductHierarchy(
   const children: HDatum[] = [
     ...top.map(p => ({
       id: `prod|${p.prodNum}`,
-      label: p.prodNum,        // show product ID on bubble
-      productName: p.name,     // show product name in tooltip
+      label: p.prodNum,
+      productName: p.name,
       type: 'product' as const,
       value: p.sales,
       qty: p.qty,
@@ -185,7 +182,7 @@ interface PanelProps {
 }
 
 function BubblePanel({ senior, records, colorMap, search, width, height }: PanelProps) {
-  const [drill, setDrill] = useState<DrillState>(null)
+  const [drill,   setDrill]   = useState<DrillState>(null)
   const [tooltip, setTooltip] = useState<TooltipState>(null)
 
   const hierData = useMemo(() => {
@@ -210,12 +207,12 @@ function BubblePanel({ senior, records, colorMap, search, width, height }: Panel
     }
   }, [hierData, width, height])
 
-  const searchQ = search.toLowerCase().trim()
+  const searchQ  = search.toLowerCase().trim()
   const hasSearch = searchQ.length > 0
 
   const getColor = useCallback((d: HDatum): string => {
     if (d.type === 'buyer' || d.type === 'root') return 'transparent'
-    const key = d.brand ?? d.label
+    const key  = d.brand ?? d.label
     const base = colorMap.get(key) ?? OTHER_COLOR
     if (!hasSearch) return base
     const match = d.label.toLowerCase().includes(searchQ)
@@ -230,8 +227,7 @@ function BubblePanel({ senior, records, colorMap, search, width, height }: Panel
   }, [])
 
   return (
-    <div className="relative overflow-hidden rounded-lg border border-slate-200 bg-slate-50/40"
-      style={{ width, height }}>
+    <div className="relative overflow-hidden" style={{ width, height }}>
 
       {/* Breadcrumb when drilled */}
       {drill && (
@@ -283,16 +279,16 @@ function BubblePanel({ senior, records, colorMap, search, width, height }: Panel
 
           /* Brand / product bubbles */
           if (data.type === 'brand' || data.type === 'product') {
-            const color = getColor(data)
-            const matched = hasSearch && (
+            const color    = getColor(data)
+            const matched  = hasSearch && (
               data.label.toLowerCase().includes(searchQ) ||
               (data.brand ?? '').toLowerCase().includes(searchQ) ||
               (data.productName ?? '').toLowerCase().includes(searchQ) ||
               (data.prodNums ?? []).some(p => p.toLowerCase().includes(searchQ))
             )
-            const canDrill = data.type === 'brand' && !drill
+            const canDrill  = data.type === 'brand' && !drill
             const showLabel = r > 18
-            const fs = Math.max(8, Math.min(10, r * 0.3))
+            const fs       = Math.max(8, Math.min(10, r * 0.3))
             const maxChars = Math.max(3, Math.floor((r * 1.8) / (fs * 0.55)))
 
             return (
@@ -405,7 +401,7 @@ export function SplitBubbleChart({ data, height = 440 }: { data: BubbleRecord[];
     return [...sm.entries()].sort((a, b) => b[1] - a[1]).slice(0, 2).map(([s]) => s)
   }, [data])
 
-  // Summary totals per senior buyer (for comparison header)
+  // Summary totals per senior buyer
   const seniorTotals = useMemo(() => {
     const m = new Map<string, { sales: number; qty: number }>()
     for (const r of data) {
@@ -488,52 +484,55 @@ export function SplitBubbleChart({ data, height = 440 }: { data: BubbleRecord[];
         </div>
       )}
 
-      {/* Left / Right split panels */}
+      {/* Left / Right split panels — Senior Buyer header inside each frame */}
       <div ref={containerRef} className="flex" style={{ gap: GAP }}>
-        {seniors.map((senior, idx) => (
-          <div key={senior} style={{ width: panelW || '50%' }} className="flex flex-col gap-1">
-            {/* Panel header: badge centred, summary metrics in the inner corner */}
-            {(() => {
-              const totals = seniorTotals.get(senior)
-              const isLeft = idx === 0
-              const badgeStyle = isLeft
-                ? { background: '#eff6ff', borderColor: '#bfdbfe', color: '#1e40af' }
-                : { background: '#fef3c7', borderColor: '#fde68a', color: '#92400e' }
-              const metrics = totals ? (
-                <div className={`flex flex-col ${isLeft ? 'items-end text-right' : 'items-start text-left'}`}>
-                  <span className="text-[12px] font-semibold tabular-nums text-foreground leading-tight">
-                    {fmtBaht(totals.sales)}
-                  </span>
-                  <span className="text-[11px] text-muted-foreground tabular-nums leading-tight">
-                    {fmt(totals.qty)} pcs
-                  </span>
-                </div>
-              ) : <div />
-              return (
-                <div className="grid items-center mb-1" style={{ gridTemplateColumns: '1fr auto 1fr' }}>
-                  {isLeft ? <div /> : metrics}
-                  <span
-                    className="inline-block rounded-full border px-3 py-0.5 text-[11px] font-semibold mx-2"
-                    style={badgeStyle}
-                  >
-                    {senior}
-                  </span>
-                  {isLeft ? metrics : <div />}
-                </div>
-              )
-            })()}
-            {panelW > 0 && (
-              <BubblePanel
-                senior={senior}
-                records={data}
-                colorMap={colorMap}
-                search={search}
-                width={panelW}
-                height={height}
-              />
-            )}
-          </div>
-        ))}
+        {seniors.map((senior, idx) => {
+          const totals = seniorTotals.get(senior)
+          const isLeft = idx === 0
+          const badgeStyle = isLeft
+            ? { background: '#eff6ff', borderColor: '#bfdbfe', color: '#1e40af' }
+            : { background: '#fef3c7', borderColor: '#fde68a', color: '#92400e' }
+
+          return (
+            <div
+              key={senior}
+              className="rounded-lg border border-slate-200 overflow-hidden flex flex-col bg-slate-50/40"
+              style={{ width: panelW || '50%' }}
+            >
+              {/* Header row inside the frame */}
+              <div className="flex items-center justify-between px-3 py-2 bg-white/80 border-b border-slate-100">
+                <span
+                  className="inline-block rounded-full border px-3 py-0.5 text-[11px] font-semibold"
+                  style={badgeStyle}
+                >
+                  {senior}
+                </span>
+                {totals && (
+                  <div className="text-right leading-tight">
+                    <div className="text-[12px] font-semibold tabular-nums text-foreground">
+                      {fmtBaht(totals.sales)}
+                    </div>
+                    <div className="text-[11px] text-muted-foreground tabular-nums">
+                      {fmt(totals.qty)} pcs
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* Bubble panel */}
+              {panelW > 0 && (
+                <BubblePanel
+                  senior={senior}
+                  records={data}
+                  colorMap={colorMap}
+                  search={search}
+                  width={panelW}
+                  height={height}
+                />
+              )}
+            </div>
+          )
+        })}
       </div>
     </div>
   )
