@@ -11,8 +11,6 @@ export async function GET(request: Request) {
     const { searchParams } = new URL(request.url)
     const cmg   = (searchParams.get('cmg') || '').split(',').filter(Boolean)
     const view  = searchParams.get('view') || 'monthly'
-    const month = searchParams.get('month') || ''
-
     const cmgParams: unknown[] = []
     const cmgSql = cmg.length > 0
       ? (cmgParams.push(cmg), `AND dynamic_cmg = ANY($${cmgParams.length})`)

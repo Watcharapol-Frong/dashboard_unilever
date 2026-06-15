@@ -4,7 +4,7 @@ import { useState, useMemo } from 'react'
 import useSWR from 'swr'
 import {
   LineChart, Line, XAxis, YAxis,
-  CartesianGrid, Tooltip, ResponsiveContainer, ReferenceLine,
+  CartesianGrid, Tooltip, ResponsiveContainer,
 } from 'recharts'
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
 import { useDashboardSWR } from '@/hooks/useDashboardSWR'

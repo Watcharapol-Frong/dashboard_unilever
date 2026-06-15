@@ -11,9 +11,9 @@ const SVG_H = 110
 
 export function SalesFunnelChart({ stages, title = 'Sales Funnel' }: Props) {
   const n = stages.length
-  if (n === 0) return null
 
   const { areaPath, linePath } = useMemo(() => {
+    if (n === 0) return { areaPath: '', linePath: '' }
     const maxVal = Math.max(...stages.map(s => s.value), 1)
     const colW   = SVG_W / n
     const cx     = (i: number) => (i + 0.5) * colW

@@ -31,13 +31,6 @@ const LEGEND = [
   { color: '#10b981', label: 'Converted' },
 ] as const
 
-const TOOLTIP_STYLE = {
-  background: 'hsl(var(--background))',
-  border: '1px solid hsl(var(--border))',
-  borderRadius: 'var(--radius)',
-  fontSize: 12,
-} as const
-
 function periodLabel(iso: string, view: View) {
   const [y, m, d] = iso.split('-').map(Number)
   return view === 'monthly'

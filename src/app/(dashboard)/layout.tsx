@@ -2,7 +2,6 @@ import { AppSidebar } from '@/components/app-sidebar'
 import { TopBar } from '@/components/layout/TopBar'
 import { Prefetcher } from '@/components/layout/Prefetcher'
 import { FreshnessBar } from '@/components/dashboard/FreshnessBar'
-import { DateRangeProvider } from '@/context/DateRangeContext'
 import { UploadQueueProvider } from '@/context/UploadQueueContext'
 import { BuildProvider } from '@/context/BuildContext'
 import { LanguageProvider } from '@/context/LanguageContext'
@@ -12,8 +11,7 @@ import { ChatBot } from '@/components/dashboard/ChatBot'
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
   return (
     <LanguageProvider>
-      <DateRangeProvider>
-        <UploadQueueProvider>
+      <UploadQueueProvider>
         <BuildProvider>
           <SidebarProvider>
             <AppSidebar />
@@ -28,8 +26,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
             </SidebarInset>
           </SidebarProvider>
         </BuildProvider>
-        </UploadQueueProvider>
-      </DateRangeProvider>
+      </UploadQueueProvider>
     </LanguageProvider>
   )
 }

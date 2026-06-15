@@ -28,11 +28,6 @@ const axisLabel = (n: number) => {
   return `฿${n}`
 }
 
-const monthShort = (iso: string) => {
-  const [y, m] = iso.substring(0, 7).split('-').map(Number)
-  return new Date(y, m - 1, 1).toLocaleDateString('en-GB', { month: 'short', year: '2-digit' })
-}
-
 const periodLabel = (iso: string, view: View) => {
   const [y, m, d] = iso.split('-').map(Number)
   return view === 'monthly'

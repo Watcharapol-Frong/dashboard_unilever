@@ -17,7 +17,6 @@ import { useDashboardSWR } from '@/hooks/useDashboardSWR'
 import { KpiCard } from '@/components/dashboard/KpiCard'
 import { KpiGrid } from '@/components/dashboard/KpiGrid'
 import { MonthChipGroup } from '@/components/dashboard/MonthChipGroup'
-import { FilterSelect } from '@/components/dashboard/FilterSelect'
 import { MultiSelect } from '@/components/dashboard/MultiSelect'
 import { TelesalesTrendMiniChart } from '@/components/dashboard/TelesalesTrendMiniChart'
 import { SalesFunnelChart } from './SalesFunnelChart'
@@ -197,8 +196,6 @@ export function TelesalesClient() {
 
   const interested             = summary.interested ?? 0
   const reachRate              = summary.total_calls > 0 ? summary.reached / summary.total_calls : 0
-  const interestedRate         = summary.reached > 0 ? interested / summary.reached : 0
-  const convRateFromInterested = interested > 0 ? summary.total_converted / interested : 0
   const convRate               = summary.reached > 0 ? summary.total_converted / summary.reached : 0
 
   // ── Call status 100% stacked bar data ────────────────────────────────────────
