@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server'
-import { withAdmin } from '@/lib/auth'
+import { withAuth } from '@/lib/auth'
 import { query, queryOne } from '@/lib/db'
 import { setCacheHeader } from '@/lib/query'
 import { CONV, REACHED } from '@/lib/metrics'
@@ -7,7 +7,7 @@ import { CONV, REACHED } from '@/lib/metrics'
 export const dynamic = 'force-dynamic'
 
 export async function GET() {
-  return withAdmin(async () => {
+  return withAuth(async () => {
     const [stats, tiers, cmgs, agents] = await Promise.all([
       queryOne<{
         total: string; contacted: string; converted: string; total_orders: string

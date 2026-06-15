@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { withAdmin } from '@/lib/auth'
+import { withAuth } from '@/lib/auth'
 import { query } from '@/lib/db'
 import { setCacheHeader } from '@/lib/query'
 import { CONV, REACHED } from '@/lib/metrics'
@@ -9,7 +9,7 @@ export const dynamic = 'force-dynamic'
 const PAGE_SIZE = 500
 
 export async function GET(req: NextRequest) {
-  return withAdmin(async () => {
+  return withAuth(async () => {
     const sp      = req.nextUrl.searchParams
     const page    = Math.max(1, Number(sp.get('page')  ?? 1))
     const limit   = Math.min(PAGE_SIZE, Math.max(1, Number(sp.get('limit') ?? PAGE_SIZE)))
