@@ -220,7 +220,7 @@ export async function GET(request: Request) {
     }
 
     // ── Phase 2: Fetch all remaining data in parallel ─────────────────────────
-    const [currKpiOrNull, prevKpi, periodsRaw, cmgOptsRaw, agentOptsRaw, monthsRaw, ordersData, byProductRaw, byBrandRaw] = await Promise.all([
+    const [currKpiOrNull, prevKpi, periodsRaw, cmgOptsRaw, agentOptsRaw, monthsRaw, ordersData, byProductRaw, byBrandRaw, byBubbleRaw] = await Promise.all([
       // Current KPI: date-scoped when range provided; null when no range (use preloaded scope)
       hasDateRange
         ? fetchKpis(curr.where, curr.params)
@@ -304,6 +304,27 @@ export async function GET(request: Request) {
         HAVING SUM(sales_in_vat) FILTER (WHERE ${CONV}) > 0
         ORDER BY SUM(sales_in_vat) FILTER (WHERE ${CONV}) DESC
         LIMIT 6
+      `, trendFilter.params),
+
+      // Bubble chart: flat records with buyer hierarchy for split packed bubble
+      query<{
+        senior_buyer_name: string; buyer_name: string; brand: string
+        prod_num: string; product_name: string; converted_sales: string; qty: string
+      }>(`
+        SELECT
+          COALESCE(p.senior_buyer_name, '(No Category)') AS senior_buyer_name,
+          COALESCE(p.buyer_name, '(No Buyer)')           AS buyer_name,
+          COALESCE(sho.brands, '(Unknown)')              AS brand,
+          sho.prod_num,
+          COALESCE(sho.product_name_en, sho.prod_num)   AS product_name,
+          COALESCE(SUM(sho.sales_in_vat) FILTER (WHERE ${CONV}), 0)::text AS converted_sales,
+          COALESCE(SUM(sho.sales_qty)    FILTER (WHERE ${CONV}), 0)::text AS qty
+        FROM sales_hoc_orders sho
+        LEFT JOIN products p ON p.prod_num = sho.prod_num
+        ${trendFilter.where}
+        GROUP BY p.senior_buyer_name, p.buyer_name, sho.brands, sho.prod_num, sho.product_name_en
+        HAVING COALESCE(SUM(sho.sales_in_vat) FILTER (WHERE ${CONV}), 0) > 0
+        ORDER BY SUM(sho.sales_in_vat) FILTER (WHERE ${CONV}) DESC
       `, trendFilter.params),
     ])
 
@@ -402,6 +423,15 @@ export async function GET(request: Request) {
           brand:           r.brand,
           converted_sales: Number(r.converted_sales),
           qty:             Number(r.qty),
+        })),
+        by_bubble: byBubbleRaw.map(r => ({
+          senior_buyer_name: r.senior_buyer_name,
+          buyer_name:        r.buyer_name,
+          brand:             r.brand,
+          prod_num:          r.prod_num,
+          product_name:      r.product_name,
+          converted_sales:   Number(r.converted_sales),
+          qty:               Number(r.qty),
         })),
       },
     })

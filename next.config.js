@@ -6,6 +6,7 @@ const nextConfig = {
   },
   distDir: process.env.NEXT_DIST_DIR || '.next',
   serverExternalPackages: ['papaparse'],
+  transpilePackages: ['d3-hierarchy'],
   eslint: {
     ignoreDuringBuilds: true,
   },

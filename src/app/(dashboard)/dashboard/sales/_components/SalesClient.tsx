@@ -19,6 +19,13 @@ import { MultiSelect } from '@/components/dashboard/MultiSelect'
 import { SalesTrendLineChart } from './SalesTrendLineChart'
 import { PageLoading, PageEmpty, PageError } from '@/components/dashboard/PageState'
 import { fmtBaht, fmt, formatPct, colorRate } from '@/lib/formatters'
+import dynamic from 'next/dynamic'
+import type { BubbleRecord } from '@/components/charts/SplitBubbleChart'
+
+const SplitBubbleChart = dynamic(
+  () => import('@/components/charts/SplitBubbleChart').then(m => ({ default: m.SplitBubbleChart })),
+  { ssr: false }
+)
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 type KpiData = {
@@ -39,25 +46,11 @@ type KpiData = {
   current_period_label: string | null
 }
 
-type ProductRow = {
-  prod_num: string
-  product_name: string
-  converted_sales: number
-  qty: number
-}
-
-type BrandRow = {
-  brand: string
-  converted_sales: number
-  qty: number
-}
-
 type ApiData = {
   kpi: KpiData
   options: { cmg: string[]; agents: string[] }
   months: string[]
-  by_product: ProductRow[]
-  by_brand: BrandRow[]
+  by_bubble: BubbleRecord[]
 }
 
 type AgentRow = {
@@ -192,7 +185,7 @@ export function SalesClient() {
   if (error)              return <PageError message={error.message} />
   if (!data)              return <PageEmpty message="No data" hint="Run Build Mart in Data Hub first" />
 
-  const { kpi, options, by_product, by_brand } = data
+  const { kpi, options, by_bubble } = data
   const cmgOptions   = options.cmg.map(c => ({ value: c, label: c }))
   const agentOptions = options.agents.map(a => ({ value: a, label: a }))
 
@@ -443,87 +436,10 @@ export function SalesClient() {
 
       </div>
 
-      {/* ── Product Analyst ───────────────────────────────────────────────────── */}
-      {(by_product.length > 0 || by_brand.length > 0) && (() => {
-        const maxProduct = by_product[0]?.converted_sales ?? 1
-        const maxBrand   = by_brand[0]?.converted_sales   ?? 1
-        return (
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-
-            {/* Top Products */}
-            {by_product.length > 0 && (
-              <div className="rounded-lg border bg-card p-4 space-y-3">
-                <div>
-                  <h3 className="text-sm font-semibold">Top Products</h3>
-                  <p className="text-xs text-muted-foreground mt-0.5">By converted sales</p>
-                </div>
-                <div className="space-y-2.5">
-                  {by_product.map(row => {
-                    const pct = maxProduct > 0 ? (row.converted_sales / maxProduct) * 100 : 0
-                    return (
-                      <div key={row.prod_num} className="space-y-1">
-                        <div className="flex items-center justify-between gap-2 text-xs">
-                          <span
-                            className="truncate text-foreground font-medium max-w-[55%]"
-                            title={row.product_name}
-                          >
-                            {row.product_name}
-                          </span>
-                          <span className="tabular-nums text-muted-foreground shrink-0">
-                            {fmtBaht(row.converted_sales)}
-                            <span className="ml-1 opacity-60">· {fmt(row.qty)} pcs</span>
-                          </span>
-                        </div>
-                        <div className="h-1.5 overflow-hidden rounded-full bg-gray-100">
-                          <div
-                            className="h-full rounded-full bg-[#003DA6] transition-all"
-                            style={{ width: `${pct}%` }}
-                          />
-                        </div>
-                      </div>
-                    )
-                  })}
-                </div>
-              </div>
-            )}
-
-            {/* Top Brands */}
-            {by_brand.length > 0 && (
-              <div className="rounded-lg border bg-card p-4 space-y-3">
-                <div>
-                  <h3 className="text-sm font-semibold">Top Brands</h3>
-                  <p className="text-xs text-muted-foreground mt-0.5">By converted sales</p>
-                </div>
-                <div className="space-y-2.5">
-                  {by_brand.map(row => {
-                    const pct = maxBrand > 0 ? (row.converted_sales / maxBrand) * 100 : 0
-                    return (
-                      <div key={row.brand} className="space-y-1">
-                        <div className="flex items-center justify-between gap-2 text-xs">
-                          <span className="truncate font-medium text-foreground max-w-[55%]">
-                            {row.brand}
-                          </span>
-                          <span className="tabular-nums text-muted-foreground shrink-0">
-                            {fmtBaht(row.converted_sales)}
-                            <span className="ml-1 opacity-60">· {fmt(row.qty)} pcs</span>
-                          </span>
-                        </div>
-                        <div className="h-1.5 overflow-hidden rounded-full bg-gray-100">
-                          <div
-                            className="h-full rounded-full bg-[#60a5fa] transition-all"
-                            style={{ width: `${pct}%` }}
-                          />
-                        </div>
-                      </div>
-                    )
-                  })}
-                </div>
-              </div>
-            )}
-
-          </div>
-        )
-      })()}
+      {/* ── Product Sales Bubble Map ───────────────────────────────────────────── */}
+      {by_bubble.length > 0 && (
+        <SplitBubbleChart data={by_bubble} height={440} />
+      )}
 
       {/* ── Agent Performance ─────────────────────────────────────────────────── */}
       {agentRows && agentRows.length > 0 && (
