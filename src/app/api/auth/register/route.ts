@@ -5,7 +5,7 @@ export const dynamic = 'force-dynamic'
 
 export async function POST(request: Request) {
   const body = await request.json()
-  const { step, inviteCode } = body
+  const { step, inviteCode, name, email } = body
 
   if (!inviteCode) {
     return NextResponse.json({ error: 'Invite code is required' }, { status: 400 })
@@ -19,24 +19,25 @@ export async function POST(request: Request) {
   else if (inviteCode === VIEWER_CODE) role = 'viewer'
   else return NextResponse.json({ error: 'Invalid invite code' }, { status: 400 })
 
-  // Step 1 — just validate the invite code and return the role
   if (step === 'validate') {
     return NextResponse.json({ ok: true, role })
   }
 
-  // Step 2 — create the user via Clerk Backend API
-  const { email, password, firstName, lastName } = body
-  if (!email || !password) {
-    return NextResponse.json({ error: 'Email and password are required' }, { status: 400 })
+  if (!name || !email) {
+    return NextResponse.json({ error: 'Name and email are required' }, { status: 400 })
   }
+
+  // Split name into first/last for Clerk
+  const parts     = name.trim().split(/\s+/)
+  const firstName = parts[0]
+  const lastName  = parts.slice(1).join(' ') || undefined
 
   try {
     const client = await clerkClient()
     await client.users.createUser({
       emailAddress: [email],
-      password,
-      firstName: firstName || undefined,
-      lastName:  lastName  || undefined,
+      firstName,
+      lastName,
       publicMetadata: { role },
     })
     return NextResponse.json({ ok: true })
