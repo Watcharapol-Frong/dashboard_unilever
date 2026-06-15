@@ -135,10 +135,11 @@ export async function GET(request: Request) {
         JOIN agent_conversions ac ON ac.mmid = tc.mmid
         ${whereTc}
       `, params),
-      queryOne<{ total_calls: string; reached: string }>(`
+      queryOne<{ total_calls: string; reached: string; interested: string }>(`
         SELECT
           COUNT(DISTINCT mmid)::text AS total_calls,
-          COUNT(DISTINCT mmid) FILTER (WHERE ${REACHED})::text AS reached
+          COUNT(DISTINCT mmid) FILTER (WHERE ${REACHED})::text AS reached,
+          COUNT(DISTINCT mmid) FILTER (WHERE ${REACHED} AND call_status NOT IN ('ไม่สะดวกคุย', 'ยังไม่ต้องการสินค้า'))::text AS interested
         FROM telesales_calls
         ${where}
       `, params),
@@ -150,6 +151,7 @@ export async function GET(request: Request) {
     const repeatConverted = Number(totalConvertedRow?.repeat_converted ?? 0)
     const totalCalls     = Number(summaryRow?.total_calls ?? 0)
     const reached        = Number(summaryRow?.reached ?? 0)
+    const interested     = Number(summaryRow?.interested ?? 0)
 
     const [tierStatusRows, agentRows, trendRows, monthsRaw, cmgOpts, agentOpts, callRows] = await Promise.all([
       // Call status breakdown by tier
@@ -272,6 +274,7 @@ export async function GET(request: Request) {
           total_calls: totalCalls,
           reached,
           not_reached: totalCalls - reached,
+          interested,
           total_converted: totalConverted,
           new_converted: newConverted,
           repeat_converted: repeatConverted,
