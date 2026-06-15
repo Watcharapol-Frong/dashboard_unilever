@@ -220,7 +220,7 @@ export async function GET(request: Request) {
     }
 
     // ── Phase 2: Fetch all remaining data in parallel ─────────────────────────
-    const [currKpiOrNull, prevKpi, periodsRaw, cmgOptsRaw, agentOptsRaw, monthsRaw, ordersData] = await Promise.all([
+    const [currKpiOrNull, prevKpi, periodsRaw, cmgOptsRaw, agentOptsRaw, monthsRaw, ordersData, byProductRaw, byBrandRaw] = await Promise.all([
       // Current KPI: date-scoped when range provided; null when no range (use preloaded scope)
       hasDateRange
         ? fetchKpis(curr.where, curr.params)
@@ -276,6 +276,35 @@ export async function GET(request: Request) {
       (interval === 'daily' || search || hasFilter)
         ? fetchRecentOrders(trendFilter.where, trendFilter.params, page, pageSize)
         : Promise.resolve({ rows: [], total_count: 0 }),
+
+      // Top products by converted_sales
+      query<{ prod_num: string; product_name: string; converted_sales: string; qty: string }>(`
+        SELECT
+          prod_num,
+          COALESCE(product_name_en, prod_num) AS product_name,
+          COALESCE(SUM(sales_in_vat) FILTER (WHERE ${CONV}), 0)::text AS converted_sales,
+          COALESCE(SUM(sales_qty)    FILTER (WHERE ${CONV}), 0)::text AS qty
+        FROM sales_hoc_orders
+        ${trendFilter.where}
+        GROUP BY prod_num, product_name_en
+        HAVING SUM(sales_in_vat) FILTER (WHERE ${CONV}) > 0
+        ORDER BY SUM(sales_in_vat) FILTER (WHERE ${CONV}) DESC
+        LIMIT 8
+      `, trendFilter.params),
+
+      // Top brands by converted_sales
+      query<{ brand: string; converted_sales: string; qty: string }>(`
+        SELECT
+          COALESCE(brands, '(unknown)') AS brand,
+          COALESCE(SUM(sales_in_vat) FILTER (WHERE ${CONV}), 0)::text AS converted_sales,
+          COALESCE(SUM(sales_qty)    FILTER (WHERE ${CONV}), 0)::text AS qty
+        FROM sales_hoc_orders
+        ${trendFilter.where}
+        GROUP BY brands
+        HAVING SUM(sales_in_vat) FILTER (WHERE ${CONV}) > 0
+        ORDER BY SUM(sales_in_vat) FILTER (WHERE ${CONV}) DESC
+        LIMIT 6
+      `, trendFilter.params),
     ])
 
     // ── Parse current KPI ─────────────────────────────────────────────────────
@@ -363,6 +392,17 @@ export async function GET(request: Request) {
           sales_in_vat: Number(r.sales_in_vat),
         })),
         total_orders_count: ordersData.total_count,
+        by_product: byProductRaw.map(r => ({
+          prod_num:        r.prod_num,
+          product_name:    r.product_name,
+          converted_sales: Number(r.converted_sales),
+          qty:             Number(r.qty),
+        })),
+        by_brand: byBrandRaw.map(r => ({
+          brand:           r.brand,
+          converted_sales: Number(r.converted_sales),
+          qty:             Number(r.qty),
+        })),
       },
     })
     setCacheHeader(res, 'MEDIUM')
