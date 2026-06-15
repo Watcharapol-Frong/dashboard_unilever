@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { withAdmin } from '@/lib/auth'
+import { withAdmin, withAuth } from '@/lib/auth'
 import { query } from '@/lib/db'
 import { setCacheHeader } from '@/lib/query'
 
@@ -134,7 +134,7 @@ interface PivotRequest {
 
 // ── GET — filter options ───────────────────────────────────────────────────────
 export async function GET() {
-  return withAdmin(async () => {
+  return withAuth(async () => {
     const [months, cmgs] = await Promise.all([
       query<{ month: string }>(`
         SELECT DISTINCT month::text AS month
@@ -164,9 +164,13 @@ export async function GET() {
 
 // ── POST — pivot query / export ────────────────────────────────────────────────
 export async function POST(req: NextRequest) {
-  return withAdmin(async () => {
-    const body = await req.json() as PivotRequest
-    const { granularity, columns, filters, format } = body
+  const body = await req.json() as PivotRequest
+  const { granularity, columns, filters, format } = body
+
+  // CSV/XLSX export is admin-only; JSON preview is viewer-accessible
+  const guard = (format === 'csv' || format === 'xlsx') ? withAdmin : withAuth
+
+  return guard(async () => {
 
     if (!(granularity in GRANULARITIES)) {
       return NextResponse.json({ error: 'Invalid granularity' }, { status: 400 })

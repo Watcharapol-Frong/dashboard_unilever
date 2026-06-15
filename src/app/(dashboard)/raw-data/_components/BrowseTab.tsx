@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useRef, useMemo } from 'react'
 import useSWR from 'swr'
+import { useUser } from '@clerk/nextjs'
 import { ColumnDef } from '@tanstack/react-table'
 import { ChevronLeft, ChevronRight, Download, Phone, ShoppingBag, Store, Package } from 'lucide-react'
 import { DataTable } from '@/components/ui/data-table'
@@ -38,6 +39,9 @@ const fetcher = async (url: string) => {
 }
 
 export default function BrowseTab() {
+  const { user } = useUser()
+  const isAdmin = user?.publicMetadata?.role === 'admin'
+
   const [activeTable, setActiveTable] = useState<TableName>('telesales_calls')
   const [search,          setSearch]          = useState('')
   const [debouncedSearch, setDebouncedSearch] = useState('')
@@ -127,14 +131,16 @@ export default function BrowseTab() {
           ))}
         </div>
 
-        <button
-          onClick={handleExport}
-          disabled={exporting}
-          className="flex items-center gap-1.5 px-3.5 py-2 rounded-lg border border-gray-200 bg-background text-xs font-semibold text-muted-foreground hover:text-foreground hover:border-gray-300 transition-all disabled:opacity-50"
-        >
-          <Download className="h-3.5 w-3.5" />
-          {exporting ? 'Exporting…' : 'Export CSV'}
-        </button>
+        {isAdmin && (
+          <button
+            onClick={handleExport}
+            disabled={exporting}
+            className="flex items-center gap-1.5 px-3.5 py-2 rounded-lg border border-gray-200 bg-background text-xs font-semibold text-muted-foreground hover:text-foreground hover:border-gray-300 transition-all disabled:opacity-50"
+          >
+            <Download className="h-3.5 w-3.5" />
+            {exporting ? 'Exporting…' : 'Export CSV'}
+          </button>
+        )}
       </div>
 
       {/* Row count + search */}

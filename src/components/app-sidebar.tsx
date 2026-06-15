@@ -3,6 +3,7 @@
 import * as React from "react"
 import Link from "next/link"
 import { usePathname } from "next/navigation"
+import { useUser } from "@clerk/nextjs"
 import {
   LayoutDashboard, ShoppingCart, Phone, Users,
   Database, Table2,
@@ -24,6 +25,8 @@ const dashboardNav = [
 
 export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
   const pathname = usePathname()
+  const { user } = useUser()
+  const isAdmin = user?.publicMetadata?.role === 'admin'
 
   const active = (url: string, exact: boolean) =>
     exact ? pathname === url : pathname.startsWith(url)
@@ -86,18 +89,20 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
                 </SidebarMenuButton>
               </SidebarMenuItem>
 
-              <SidebarMenuItem>
-                <SidebarMenuButton
-                  asChild
-                  isActive={pathname.startsWith('/data-hub')}
-                  tooltip="Data Hub"
-                >
-                  <Link href="/data-hub">
-                    <Database />
-                    <span>Data Hub</span>
-                  </Link>
-                </SidebarMenuButton>
-              </SidebarMenuItem>
+              {isAdmin && (
+                <SidebarMenuItem>
+                  <SidebarMenuButton
+                    asChild
+                    isActive={pathname.startsWith('/data-hub')}
+                    tooltip="Data Hub"
+                  >
+                    <Link href="/data-hub">
+                      <Database />
+                      <span>Data Hub</span>
+                    </Link>
+                  </SidebarMenuButton>
+                </SidebarMenuItem>
+              )}
 
             </SidebarMenu>
           </SidebarGroupContent>

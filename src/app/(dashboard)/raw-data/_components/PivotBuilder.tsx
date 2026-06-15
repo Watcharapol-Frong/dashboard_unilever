@@ -2,6 +2,7 @@
 
 import { useState, useMemo, useCallback, useEffect } from 'react'
 import useSWR from 'swr'
+import { useUser } from '@clerk/nextjs'
 import { ColumnDef } from '@tanstack/react-table'
 import { Download, FileSpreadsheet, Loader2 } from 'lucide-react'
 import { DataTable } from '@/components/ui/data-table'
@@ -61,6 +62,9 @@ const CTYPE_LABELS: Record<string, string> = {
 
 // ── Component ─────────────────────────────────────────────────────────────────
 export default function PivotBuilder() {
+  const { user } = useUser()
+  const isAdmin = user?.publicMetadata?.role === 'admin'
+
   const [gran,    setGran]    = useState<GranularityId>('month')
   const [selCols, setSelCols] = useState<string[]>(DEFAULT_METRICS.month)
   const [filters, setFilters] = useState({
@@ -319,25 +323,27 @@ export default function PivotBuilder() {
         </div>
       )}
 
-      {/* Export buttons */}
-      <div className="flex items-center gap-2">
-        <button
-          onClick={() => handleExport('csv')}
-          disabled={!!exporting || !preview}
-          className="flex items-center gap-1.5 px-3.5 py-2 rounded-lg border border-gray-200 bg-background text-xs font-semibold text-muted-foreground hover:text-foreground hover:border-gray-300 transition-all disabled:opacity-40"
-        >
-          {exporting === 'csv' ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Download className="h-3.5 w-3.5" />}
-          Export CSV
-        </button>
-        <button
-          onClick={() => handleExport('xlsx')}
-          disabled={!!exporting || !preview}
-          className="flex items-center gap-1.5 px-3.5 py-2 rounded-lg border border-gray-200 bg-background text-xs font-semibold text-muted-foreground hover:text-foreground hover:border-gray-300 transition-all disabled:opacity-40"
-        >
-          {exporting === 'xlsx' ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <FileSpreadsheet className="h-3.5 w-3.5" />}
-          Export XLSX
-        </button>
-      </div>
+      {/* Export buttons — admin only */}
+      {isAdmin && (
+        <div className="flex items-center gap-2">
+          <button
+            onClick={() => handleExport('csv')}
+            disabled={!!exporting || !preview}
+            className="flex items-center gap-1.5 px-3.5 py-2 rounded-lg border border-gray-200 bg-background text-xs font-semibold text-muted-foreground hover:text-foreground hover:border-gray-300 transition-all disabled:opacity-40"
+          >
+            {exporting === 'csv' ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Download className="h-3.5 w-3.5" />}
+            Export CSV
+          </button>
+          <button
+            onClick={() => handleExport('xlsx')}
+            disabled={!!exporting || !preview}
+            className="flex items-center gap-1.5 px-3.5 py-2 rounded-lg border border-gray-200 bg-background text-xs font-semibold text-muted-foreground hover:text-foreground hover:border-gray-300 transition-all disabled:opacity-40"
+          >
+            {exporting === 'xlsx' ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <FileSpreadsheet className="h-3.5 w-3.5" />}
+            Export XLSX
+          </button>
+        </div>
+      )}
 
       {/* Status / preview */}
       {runError && (
