@@ -1,10 +1,11 @@
 import { clerkMiddleware, createRouteMatcher } from '@clerk/nextjs/server'
 import { NextRequest, NextResponse } from 'next/server'
 
-const IS_DEV_MODE     = process.env.DEV_MODE === 'true' && process.env.NODE_ENV === 'development'
+const IS_DEV_MODE      = process.env.DEV_MODE === 'true' && process.env.NODE_ENV === 'development'
 const MAINTENANCE_MODE = process.env.MAINTENANCE_MODE === 'true'
+const ALLOW_DEV_ACCESS = process.env.ALLOW_DEV_ACCESS === 'true'
 
-// Preview bypass: visit /api/dev-access once to set this cookie
+// Preview bypass: visit /api/dev-access once to set this cookie (Preview env only)
 const DEV_COOKIE = '__dev_bypass'
 const DEV_SECRET = 'frong-preview-2025'
 
@@ -25,9 +26,11 @@ export default clerkMiddleware(async (auth, request: NextRequest) => {
   // Local dev mode: bypass all Clerk auth
   if (IS_DEV_MODE) return NextResponse.next()
 
-  // Preview bypass cookie (Vercel preview deployments)
-  const devCookie = request.cookies.get(DEV_COOKIE)?.value
-  if (devCookie === DEV_SECRET) return NextResponse.next()
+  // Preview bypass cookie — only active when ALLOW_DEV_ACCESS=true (Preview env only)
+  if (ALLOW_DEV_ACCESS) {
+    const devCookie = request.cookies.get(DEV_COOKIE)?.value
+    if (devCookie === DEV_SECRET) return NextResponse.next()
+  }
 
   // Require login for all protected routes
   if (isProtected(request)) {
