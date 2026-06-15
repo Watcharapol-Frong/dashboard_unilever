@@ -9,6 +9,9 @@ import { Calendar } from '@/components/ui/calendar'
 import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from '@/components/ui/table'
+import {
+  BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer,
+} from 'recharts'
 
 import { useDashboardSWR } from '@/hooks/useDashboardSWR'
 import { KpiCard } from '@/components/dashboard/KpiCard'
@@ -355,83 +358,129 @@ export function SalesClient() {
       {/* ── Distribution panels ───────────────────────────────────────────────── */}
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
 
-        {/* Channel Split */}
+        {/* Channel Breakdown — 100% stacked bar */}
         <div className="rounded-lg border bg-card p-4 space-y-3">
-          <div>
-            <h3 className="text-sm font-semibold">{t('sales.channelBreakdown', lang)}</h3>
-            <p className="text-xs text-muted-foreground mt-0.5">Total sales by channel</p>
-          </div>
-          <div className="space-y-3">
-            <div className="space-y-1.5">
-              <div className="flex items-center justify-between text-xs">
-                <span className="flex items-center gap-1.5 text-muted-foreground">
-                  <span className="inline-block h-2 w-2 rounded-sm bg-[#003DA6]" />{t('common.online', lang)}
-                </span>
-                <span className="tabular-nums font-medium">
-                  {fmtBaht(kpi.total_online)}
-                  <span className="ml-1.5 text-muted-foreground">({onlinePct.toFixed(1)}%)</span>
-                </span>
-              </div>
-              <div className="h-2 overflow-hidden rounded-full bg-gray-100">
-                <div className="h-full rounded-full bg-[#003DA6] transition-all" style={{ width: `${onlinePct}%` }} />
-              </div>
+          <div className="flex items-start justify-between gap-2">
+            <div>
+              <h3 className="text-sm font-semibold">{t('sales.channelBreakdown', lang)}</h3>
+              <p className="text-xs text-muted-foreground mt-0.5">Total sales by channel</p>
             </div>
-            <div className="space-y-1.5">
-              <div className="flex items-center justify-between text-xs">
-                <span className="flex items-center gap-1.5 text-muted-foreground">
-                  <span className="inline-block h-2 w-2 rounded-sm bg-[#60a5fa]" />{t('common.offline', lang)}
-                </span>
-                <span className="tabular-nums font-medium">
-                  {fmtBaht(kpi.total_offline)}
-                  <span className="ml-1.5 text-muted-foreground">({offlinePct.toFixed(1)}%)</span>
-                </span>
-              </div>
-              <div className="h-2 overflow-hidden rounded-full bg-gray-100">
-                <div className="h-full rounded-full bg-[#60a5fa] transition-all" style={{ width: `${offlinePct}%` }} />
-              </div>
+            <div className="flex gap-3 text-xs text-muted-foreground shrink-0">
+              <span className="flex items-center gap-1.5">
+                <span className="inline-block h-2 w-2 rounded-sm bg-[#003DA6]" />{t('common.online', lang)}
+              </span>
+              <span className="flex items-center gap-1.5">
+                <span className="inline-block h-2 w-2 rounded-sm bg-[#60a5fa]" />{t('common.offline', lang)}
+              </span>
             </div>
           </div>
+          <ResponsiveContainer width="100%" height={72}>
+            <BarChart
+              layout="vertical"
+              data={[{
+                name: 'Sales',
+                online:  onlinePct,
+                offline: offlinePct,
+                _online_val:  kpi.total_online,
+                _offline_val: kpi.total_offline,
+              }]}
+              margin={{ top: 0, right: 0, left: 0, bottom: 0 }}
+              barSize={32}
+            >
+              <XAxis type="number" domain={[0, 100]} hide />
+              <YAxis type="category" dataKey="name" hide />
+              <Tooltip
+                cursor={false}
+                // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                content={({ active, payload }: any) => {
+                  if (!active || !payload?.length) return null
+                  const d = payload[0]?.payload
+                  return (
+                    <div className="rounded-lg border bg-background px-3 py-2.5 text-xs shadow-md space-y-1.5">
+                      <div className="flex items-center justify-between gap-6">
+                        <span className="flex items-center gap-1.5 text-muted-foreground">
+                          <span className="inline-block h-2 w-2 rounded-sm bg-[#003DA6]" />{t('common.online', lang)}
+                        </span>
+                        <span className="tabular-nums font-medium">{fmtBaht(d._online_val)} ({d.online.toFixed(1)}%)</span>
+                      </div>
+                      <div className="flex items-center justify-between gap-6">
+                        <span className="flex items-center gap-1.5 text-muted-foreground">
+                          <span className="inline-block h-2 w-2 rounded-sm bg-[#60a5fa]" />{t('common.offline', lang)}
+                        </span>
+                        <span className="tabular-nums font-medium">{fmtBaht(d._offline_val)} ({d.offline.toFixed(1)}%)</span>
+                      </div>
+                    </div>
+                  )
+                }}
+              />
+              <Bar dataKey="online"  stackId="s" fill="#003DA6" radius={[4, 0, 0, 4]} />
+              <Bar dataKey="offline" stackId="s" fill="#60a5fa" radius={[0, 4, 4, 0]} />
+            </BarChart>
+          </ResponsiveContainer>
           <p className="text-xs text-muted-foreground border-t pt-2">
             Total {fmtBaht(totalSales)} · {fmt(kpi.total_orders)} orders
           </p>
         </div>
 
-        {/* Conversion Split */}
+        {/* Conversion Split — 100% stacked bar */}
         <div className="rounded-lg border bg-card p-4 space-y-3">
-          <div>
-            <h3 className="text-sm font-semibold">Conversion Split</h3>
-            <p className="text-xs text-muted-foreground mt-0.5">HOC-attributed vs unattributed sales</p>
-          </div>
-          <div className="space-y-3">
-            <div className="space-y-1.5">
-              <div className="flex items-center justify-between text-xs">
-                <span className="flex items-center gap-1.5 text-muted-foreground">
-                  <span className="inline-block h-2 w-2 rounded-sm bg-green-500" />{t('sales.convertedOrders', lang)}
-                </span>
-                <span className="tabular-nums font-medium">
-                  {fmtBaht(kpi.converted_sales)}
-                  <span className="ml-1.5 text-muted-foreground">({convPct.toFixed(1)}%)</span>
-                </span>
-              </div>
-              <div className="h-2 overflow-hidden rounded-full bg-gray-100">
-                <div className="h-full rounded-full bg-green-500 transition-all" style={{ width: `${convPct}%` }} />
-              </div>
+          <div className="flex items-start justify-between gap-2">
+            <div>
+              <h3 className="text-sm font-semibold">Conversion Split</h3>
+              <p className="text-xs text-muted-foreground mt-0.5">HOC-attributed vs unattributed sales</p>
             </div>
-            <div className="space-y-1.5">
-              <div className="flex items-center justify-between text-xs">
-                <span className="flex items-center gap-1.5 text-muted-foreground">
-                  <span className="inline-block h-2 w-2 rounded-sm bg-amber-400" />{t('sales.notConverted', lang)}
-                </span>
-                <span className="tabular-nums font-medium">
-                  {fmtBaht(kpi.not_converted_sales)}
-                  <span className="ml-1.5 text-muted-foreground">({notConvPct.toFixed(1)}%)</span>
-                </span>
-              </div>
-              <div className="h-2 overflow-hidden rounded-full bg-gray-100">
-                <div className="h-full rounded-full bg-amber-400 transition-all" style={{ width: `${notConvPct}%` }} />
-              </div>
+            <div className="flex gap-3 text-xs text-muted-foreground shrink-0">
+              <span className="flex items-center gap-1.5">
+                <span className="inline-block h-2 w-2 rounded-sm bg-green-500" />{t('sales.convertedOrders', lang)}
+              </span>
+              <span className="flex items-center gap-1.5">
+                <span className="inline-block h-2 w-2 rounded-sm bg-amber-400" />{t('sales.notConverted', lang)}
+              </span>
             </div>
           </div>
+          <ResponsiveContainer width="100%" height={72}>
+            <BarChart
+              layout="vertical"
+              data={[{
+                name: 'Orders',
+                converted:     convPct,
+                not_converted: notConvPct,
+                _conv_val:     kpi.converted_sales,
+                _not_conv_val: kpi.not_converted_sales,
+              }]}
+              margin={{ top: 0, right: 0, left: 0, bottom: 0 }}
+              barSize={32}
+            >
+              <XAxis type="number" domain={[0, 100]} hide />
+              <YAxis type="category" dataKey="name" hide />
+              <Tooltip
+                cursor={false}
+                // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                content={({ active, payload }: any) => {
+                  if (!active || !payload?.length) return null
+                  const d = payload[0]?.payload
+                  return (
+                    <div className="rounded-lg border bg-background px-3 py-2.5 text-xs shadow-md space-y-1.5">
+                      <div className="flex items-center justify-between gap-6">
+                        <span className="flex items-center gap-1.5 text-muted-foreground">
+                          <span className="inline-block h-2 w-2 rounded-sm bg-green-500" />{t('sales.convertedOrders', lang)}
+                        </span>
+                        <span className="tabular-nums font-medium">{fmtBaht(d._conv_val)} ({d.converted.toFixed(1)}%)</span>
+                      </div>
+                      <div className="flex items-center justify-between gap-6">
+                        <span className="flex items-center gap-1.5 text-muted-foreground">
+                          <span className="inline-block h-2 w-2 rounded-sm bg-amber-400" />{t('sales.notConverted', lang)}
+                        </span>
+                        <span className="tabular-nums font-medium">{fmtBaht(d._not_conv_val)} ({d.not_converted.toFixed(1)}%)</span>
+                      </div>
+                    </div>
+                  )
+                }}
+              />
+              <Bar dataKey="converted"     stackId="s" fill="#22c55e" radius={[4, 0, 0, 4]} />
+              <Bar dataKey="not_converted" stackId="s" fill="#fbbf24" radius={[0, 4, 4, 0]} />
+            </BarChart>
+          </ResponsiveContainer>
           <p className="text-xs text-muted-foreground border-t pt-2">
             {fmt(kpi.new_customers)} new · {fmt(kpi.retention_customers)} repeat buyers
           </p>
