@@ -567,6 +567,26 @@ export function SalesClient() {
                   </TableCell>
                 </TableRow>
               ))}
+              {(() => {
+                const sumSales     = agentRows.reduce((s, r) => s + r.sales_total, 0)
+                const sumOrders    = agentRows.reduce((s, r) => s + r.order_total, 0)
+                const sumCalls     = agentRows.reduce((s, r) => s + r.call_total, 0)
+                const sumConverted = agentRows.reduce((s, r) => s + r.converted_customers, 0)
+                const totalConvRate = sumCalls > 0 ? sumConverted / sumCalls : 0
+                return (
+                  <TableRow className="border-t-2 bg-muted/40 font-semibold">
+                    <TableCell className="text-center px-3 text-xs text-muted-foreground">Σ</TableCell>
+                    <TableCell className="text-sm">Total</TableCell>
+                    <TableCell className="text-right tabular-nums text-sm">{fmtBaht(sumSales)}</TableCell>
+                    <TableCell className="text-right tabular-nums text-sm text-muted-foreground">{fmt(sumOrders)}</TableCell>
+                    <TableCell className="text-right tabular-nums text-sm text-muted-foreground">{fmt(sumCalls)}</TableCell>
+                    <TableCell className="text-right tabular-nums text-sm text-muted-foreground">{fmt(sumConverted)}</TableCell>
+                    <TableCell className={`text-right tabular-nums text-sm pr-4 font-semibold ${colorRate(totalConvRate, [0.3, 0.15])}`}>
+                      {sumCalls > 0 ? formatPct(totalConvRate) : '—'}
+                    </TableCell>
+                  </TableRow>
+                )
+              })()}
             </TableBody>
           </Table>
         </div>

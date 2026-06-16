@@ -14,6 +14,7 @@ function buildFilters(
   agent: string[],
   channel: string[],
   cmg: string[],
+  hasDateFilter?: boolean,
 ) {
   const params: any[] = []
   const bare: string[]     = ['first_connected_date IS NOT NULL']
@@ -86,6 +87,16 @@ function buildFilters(
     }
   }
 
+  // When a date range is active, scope conversions to orders placed on/after
+  // the customer's recorded call date — prevents historical conversions from
+  // inflating the count for the selected period.
+  const orderDateCond = (startDate || endDate)
+    ? `AND sales_hoc_orders.order_date >= (
+         SELECT first_connected_date FROM telesales_calls
+         WHERE telesales_calls.mmid = sales_hoc_orders.mmid
+       )`
+    : ''
+
   return {
     params,
     where:   'WHERE ' + bare.join(' AND '),
@@ -93,6 +104,7 @@ function buildFilters(
     agentConvCTE: `WITH agent_conversions AS (
       SELECT DISTINCT mmid FROM sales_hoc_orders
       WHERE ${orderConds.join(' AND ')}
+      ${orderDateCond}
     )`,
   }
 }

@@ -407,22 +407,22 @@ export function TelesalesClient() {
           {
             label: 'Total Calls',
             value: summary.total_calls,
-            description: 'จำนวนลูกค้าทั้งหมดที่ถูก call โดย telesales ในช่วงเวลาที่เลือก (นับตาม first_connected_date)',
+            description: 'Total unique customers contacted by telesales in the selected period (filtered by first_connected_date).',
           },
           {
             label: 'Reached',
             value: summary.reached,
-            description: 'ลูกค้าที่รับสายและมีการสนทนาเกิดขึ้น — ไม่นับเฉพาะสายที่ติดต่อไม่ได้จริงๆ ได้แก่ "ไม่รับสาย" และ "ปิดเครื่อง/ติดต่อไม่ได้" (ไม่สะดวกคุย / ยังไม่ต้องการสินค้า ยังนับเป็น Reached เพราะลูกค้ารับสายแล้ว)',
+            description: 'Customers who answered and had a conversation. Excludes only truly unreachable outcomes: "ไม่รับสาย" (no answer) and "ปิดเครื่อง/ติดต่อไม่ได้" (phone off). "Not convenient" and "not interested yet" still count as Reached.',
           },
           {
             label: 'Interested',
             value: interested,
-            description: 'ลูกค้าที่ Reached และไม่ตอบปฏิเสธ — ตัดออก: "ไม่สะดวกคุย" และ "ยังไม่ต้องการสินค้า" (ลูกค้ากลุ่มนี้รับสายแต่ยังไม่พร้อมซื้อ)',
+            description: 'Reached customers who did not explicitly decline. Excludes "ไม่สะดวกคุย" (not convenient) and "ยังไม่ต้องการสินค้า" (not ready to buy) — these customers answered but were not ready to purchase.',
           },
           {
             label: 'Converted',
             value: summary.total_converted,
-            description: 'ลูกค้าที่มีการสั่งซื้อ HOC ที่ถูก attribute ให้กับ telesales (ภายใน attribution window) — นับจากข้อมูล sales ทั้งหมดในระบบ ไม่จำกัดเฉพาะช่วงเวลาที่เลือก',
+            description: 'Customers with a HOC purchase attributed to telesales (within the attribution window). When a date range is selected, only orders placed on or after the customer\'s recorded call date are counted.',
           },
         ]}
       />
@@ -448,10 +448,10 @@ export function TelesalesClient() {
         <div className="text-center">
           <p className="text-xs text-muted-foreground">Interested, Not Converted</p>
           <p className="text-sm font-semibold tabular-nums text-amber-500">
-            {fmt(interested - summary.total_converted)}
+            {fmt(Math.max(0, interested - summary.total_converted))}
           </p>
           <p className="text-xs text-muted-foreground">
-            {interested > 0 ? formatPct((interested - summary.total_converted) / interested) : '—'} drop-off
+            {interested > 0 ? formatPct(Math.max(0, interested - summary.total_converted) / interested) : '—'} drop-off
           </p>
         </div>
       </div>
