@@ -22,7 +22,7 @@ export default function PrivacyPage() {
         {/* Header */}
         <div className="mb-10">
           <h1 className="text-3xl font-bold tracking-tight">Privacy Policy</h1>
-          <p className="mt-2 text-sm text-muted-foreground">Last updated: May 2025</p>
+          <p className="mt-2 text-sm text-muted-foreground">Last updated: June 2026</p>
         </div>
 
         <div className="space-y-8 text-sm leading-7 text-muted-foreground">
