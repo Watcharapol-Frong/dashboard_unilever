@@ -190,12 +190,13 @@ export function SalesClient() {
   const cmgOptions   = options.cmg.map(c => ({ value: c, label: c }))
   const agentOptions = options.agents.map(a => ({ value: a, label: a }))
 
-  const totalBuyers  = kpi.new_customers + kpi.retention_customers
-  const totalSales   = kpi.total_online + kpi.total_offline
-  const onlinePct    = totalSales > 0 ? (kpi.total_online  / totalSales) * 100 : 0
-  const offlinePct   = totalSales > 0 ? (kpi.total_offline / totalSales) * 100 : 0
-  const convPct      = totalSales > 0 ? (kpi.converted_sales     / totalSales) * 100 : 0
-  const notConvPct   = totalSales > 0 ? (kpi.not_converted_sales / totalSales) * 100 : 0
+  const totalBuyers    = kpi.new_customers + kpi.retention_customers
+  const totalSales     = kpi.total_online + kpi.total_offline
+  const convSales      = kpi.converted_online + kpi.converted_offline
+  const onlinePct      = convSales > 0 ? (kpi.converted_online  / convSales) * 100 : 0
+  const offlinePct     = convSales > 0 ? (kpi.converted_offline / convSales) * 100 : 0
+  const convPct        = totalSales > 0 ? (kpi.converted_sales     / totalSales) * 100 : 0
+  const notConvPct     = totalSales > 0 ? (kpi.not_converted_sales / totalSales) * 100 : 0
 
   return (
     <div className="space-y-6">
@@ -358,7 +359,7 @@ export function SalesClient() {
           <div className="flex items-start justify-between gap-2">
             <div>
               <h3 className="text-sm font-semibold">{t('sales.channelBreakdown', lang)}</h3>
-              <p className="text-xs text-muted-foreground mt-0.5">Total sales by channel</p>
+              <p className="text-xs text-muted-foreground mt-0.5">Converted sales by channel</p>
             </div>
             <div className="flex gap-3 text-xs text-muted-foreground shrink-0">
               <span className="flex items-center gap-1.5">
@@ -376,8 +377,8 @@ export function SalesClient() {
                 name: 'Sales',
                 online:  onlinePct,
                 offline: offlinePct,
-                _online_val:  kpi.total_online,
-                _offline_val: kpi.total_offline,
+                _online_val:  kpi.converted_online,
+                _offline_val: kpi.converted_offline,
               }]}
               margin={{ top: 24, right: 0, left: 0, bottom: 0 }}
               barSize={32}
@@ -433,7 +434,7 @@ export function SalesClient() {
             </BarChart>
           </ResponsiveContainer>
           <p className="text-xs text-muted-foreground border-t pt-2">
-            Total {fmtBaht(totalSales)} · {fmt(kpi.total_orders)} orders
+            Total {fmtBaht(kpi.converted_sales)} · {fmt(kpi.converted_orders)} converted orders
           </p>
         </div>
 
