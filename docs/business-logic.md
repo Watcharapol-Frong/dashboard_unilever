@@ -238,10 +238,13 @@ total_expense = total_incentive
 ### 7.3 Channel Filter
 - `online` / `offline` / both
 
-### 7.4 Attribution Filter (Telesales page)
-- Order date is intentionally NOT date-filtered on the telesales page
-- `customer_type` already encodes the attribution window
-- A retention order outside the call period still counts (it was credited at attribution time)
+### 7.4 Converted Scoping (Telesales page)
+When a date range filter is active, the Converted count in the Conversion Funnel is scoped:
+only `sales_hoc_orders` rows where `order_date >= telesales_calls.first_connected_date` for
+that customer are counted. This prevents historical conversions (from data periods before the
+selected range) from inflating the count.
+
+When no date filter is active (all-time view): no order_date restriction is applied.
 
 ---
 
@@ -294,6 +297,10 @@ Google Apps Script reads from Google Sheets and POSTs to the API.
 **MMID cleaning:** strips non-digits, rejects if > 14 digits, zero-pads to 14 digits  
 **Mobile cleaning:** strips non-digits, accepts 9 or 10 digits, zero-pads to 10
 
+**Payload chunking:** GAS sends records in batches of 1,000 per HTTP POST to avoid
+Vercel's ~4.5 MB payload limit (413 FUNCTION_PAYLOAD_TOO_LARGE). The API upserts in
+further sub-chunks of 500 rows to CockroachDB.
+
 ---
 
 ## 10. Roles & Permissions
@@ -316,3 +323,7 @@ Google Apps Script reads from Google Sheets and POSTs to the API.
 | 2026-06-12 | REACHED bug fix: 2-condition → 4-condition across all routes | Reached/Connected numbers now consistent across all pages |
 | 2026-06-15 | `mart_telesales_orders` replaced by `mmid_cmg_map` + `sales_hoc_orders` | Faster build, less storage, single CTE chain |
 | 2026-06-15 | Clerk auth restored — middleware, register, webhook | Users can now log in and register via invite code |
+| 2026-06-16 | Telesales Converted scoped to post-call orders when date filter active | Prevents historical conversions inflating period-filtered Converted count |
+| 2026-06-16 | GAS postToAPI_ chunked to 1,000 records/request | Fixes 413 FUNCTION_PAYLOAD_TOO_LARGE for large datasets |
+| 2026-06-16 | Channel Breakdown on Sales page uses converted_online/offline only | Metric consistency — all Sales page metrics now show converted data |
+| 2026-06-16 | useLocalState hook added — localStorage filter persistence | Filters persist across browser sessions |

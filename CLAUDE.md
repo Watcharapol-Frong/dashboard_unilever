@@ -14,7 +14,7 @@ npm run build-mart   # run mart build locally (no Vercel, no timeout)
                      # requires DATABASE_URL in env
 ```
 
-**Active branch:** `gemini-antigaravity-uxui`  
+**Active branch:** `main`  
 Always develop on this branch. Never push directly to `main` without explicit permission.
 
 ---
@@ -83,6 +83,7 @@ src/
   hooks/
     useDashboardSWR.ts   — typed SWR wrapper (5-min dedup, no revalidate on focus)
     useMonthRange.ts     — month chip range selector (default: last month)
+    useLocalState.ts     — drop-in useState with localStorage persistence (SSR-safe)
   lib/
     auth.ts              — withAuth(), withAdmin(), requireAuth(), requireAdmin()
                            DEV_MODE bypass when DEV_MODE=true + NODE_ENV=development
@@ -346,3 +347,4 @@ exportIncrementalToStorage()
 - **Recharts SSR:** Must use `dynamic(() => import(...), { ssr: false })` for all chart components.
 - **telesales_calls PK:** `mmid` — one row per customer, GAS upserts on conflict.
 - **ClerkProvider:** Conditionally included in root layout — omitted when `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY` is not set.
+- **GAS ingest:** Vercel 413 limit ~4.5 MB — `postToAPI_` sends records in batches of 1,000 per HTTP request.

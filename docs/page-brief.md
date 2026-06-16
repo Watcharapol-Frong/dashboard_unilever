@@ -46,9 +46,9 @@ Admin browses Raw Data → investigates individual records
 | **Filters** | Date range, CMG — affect KPI cards and charts |
 | **Action** | If sales dip → check telesales conversion; if brand mix shifts → check product table |
 
-**KPI Cards (4):** Total Sales, New Customers, Retention, Total Orders
+**KPI Cards (4):** Converted Sales, Avg Order Value, New Customers, Repeat Customers
 
-**Charts:** Sales Trend line chart (online/offline/target, monthly/weekly toggle), Product Analyst bubble map by Senior Buyer
+**Charts:** Sales Trend line chart (online/offline, monthly/weekly toggle — no Target line), Channel Breakdown (converted only), Conversion Split, Agent Leaderboard (with sum row), Product bubble map
 
 ---
 
@@ -65,9 +65,9 @@ Admin browses Raw Data → investigates individual records
 
 **KPI Cards (4):** Total Leads, Connected Rate (colour-coded), Conversion Rate (colour-coded), Orders (New + Repeat)
 
-**Charts:** Daily Calling Trend (AreaChart), Call Status by Tier (Horizontal Stacked Bar), Conversion Funnel (custom waterfall)
+**Charts:** Telesales Trend (bars + conversion rate), Call Status by Tier (Horizontal Stacked Bar), Conversion Funnel (custom SVG area — each stage has Info tooltip with English description)
 
-**Table:** Agent Leaderboard — Total Calls, Reached, Not Reached, Reach Rate, Conversion Rate, Calls/Day
+**Table:** Agent Leaderboard — Total Calls, Reached, Not Reached, Reach Rate, Conversion Rate, Calls/Day + **Total sum row**
 
 ---
 

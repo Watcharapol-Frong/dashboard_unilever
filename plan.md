@@ -1,6 +1,6 @@
 # Unilever HOC Telesales Dashboard — Technical Roadmap
 
-> Last updated: 2026-06-15
+> Last updated: 2026-06-16
 
 ---
 
@@ -81,6 +81,17 @@ CSV / Google Sheet
 | Raw Data | `/raw-data` | Admin | Done |
 | Data Hub | `/data-hub` | Admin | Done |
 
+### Page-Level Features
+
+| Feature | Status |
+|---------|--------|
+| Persistent filter state (localStorage) — month range + filters across pages | Done |
+| Default date range = full available range (auto-selected on data load) | Done |
+| Agent Leaderboard sum row — both Sales and Telesales pages | Done |
+| Channel Breakdown → converted-only (converted_online/offline) | Done |
+| Telesales Converted scoped to post-call orders when date filter active | Done |
+| GAS postToAPI_ chunked to 1,000 records per HTTP request | Done |
+
 ### UI & Component System
 
 | Component | Status |
@@ -89,14 +100,16 @@ CSV / Google Sheet
 | `KpiGrid` — responsive grid (cols 2/3/4/6) | Done |
 | `FilterBar` + `FilterSelect` — shared filter row + clear button | Done |
 | `MultiSelect` — multi-checkbox dropdown | Done |
+| `useLocalState` — localStorage-persisted useState drop-in (SSR-safe) | Done |
+| MultiSelect "All" checkbox at top of dropdown | Done |
+| `SalesFunnelChart` — per-stage Info tooltip with description | Done |
 | `PageState` — PageLoading, PageEmpty, PageError | Done |
 | `TopBar` — breadcrumb + sidebar trigger + freshness strip | Done |
 | `AppSidebar` — Dashboard / Data / Help sections + NavUser footer | Done |
 | `NavUser` — Clerk dropdown (or dev-mode amber placeholder) | Done |
-| `SalesTrendChart` — stacked bar (online/offline/target), monthly/weekly | Done |
+| `SalesTrendChart` — stacked bar (online/offline), monthly/weekly (Target line removed from /sales page) | Done |
 | `TelesalesTrendMiniChart` — bars + conversion rate line | Done |
 | `SplitBubbleChart` — D3 bubble map per Senior Buyer, drill-down on double-click | Done |
-| `SalesFunnelChart` — custom SVG area funnel | Done |
 | `FreshnessBar` — amber banner if mart > 24 h stale | Done |
 | `useDashboardSWR` — typed SWR hook | Done |
 | `BuildContext` — build state persisted across navigation | Done |

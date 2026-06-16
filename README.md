@@ -107,7 +107,7 @@ POST /api/data/upload/multipart/complete  → R2 assembles → ETL:
 
 ```
 GAS cron → GET /api/data/ingest/threshold   (latest first_connected_date)
-         → POST /api/data/ingest/telesales-activity (new records only)
+         → POST /api/data/ingest/telesales-activity (new records, chunked 1,000/request)
          → upserted into telesales_calls ON CONFLICT mmid DO UPDATE
 ```
 
@@ -178,6 +178,7 @@ src/
   hooks/
     useDashboardSWR.ts    — typed SWR hook (5-min dedup, no revalidate-on-focus)
     useMonthRange.ts      — month chip range selector (defaults to last month)
+    useLocalState.ts      — localStorage-persisted useState drop-in (SSR-safe)
   lib/
     auth.ts               — withAuth(), withAdmin(), requireAuth(), requireAdmin()
     db.ts                 — query(), queryOne(), queryRowCount()
