@@ -400,6 +400,46 @@ export function TelesalesClient() {
         </ResponsiveContainer>
       </div>
 
+      {/* ── Conversion Funnel ─────────────────────────────────────────────────── */}
+      <SalesFunnelChart
+        title="Conversion Funnel"
+        stages={[
+          { label: 'Total Calls', value: summary.total_calls },
+          { label: 'Reached',     value: summary.reached },
+          { label: 'Interested',  value: interested },
+          { label: 'Converted',   value: summary.total_converted },
+        ]}
+      />
+
+      {/* Drop-off stats */}
+      <div className="grid grid-cols-3 gap-2 rounded-lg border bg-card px-4 py-3">
+        <div className="text-center">
+          <p className="text-xs text-muted-foreground">Not Reached</p>
+          <p className="text-sm font-semibold tabular-nums text-red-500">{fmt(summary.not_reached)}</p>
+          <p className="text-xs text-muted-foreground">
+            {summary.total_calls > 0 ? formatPct(summary.not_reached / summary.total_calls) : '—'} drop-off
+          </p>
+        </div>
+        <div className="text-center">
+          <p className="text-xs text-muted-foreground">Reached, Not Interested</p>
+          <p className="text-sm font-semibold tabular-nums text-amber-500">
+            {fmt(summary.reached - interested)}
+          </p>
+          <p className="text-xs text-muted-foreground">
+            {summary.reached > 0 ? formatPct((summary.reached - interested) / summary.reached) : '—'} drop-off
+          </p>
+        </div>
+        <div className="text-center">
+          <p className="text-xs text-muted-foreground">Interested, Not Converted</p>
+          <p className="text-sm font-semibold tabular-nums text-amber-500">
+            {fmt(interested - summary.total_converted)}
+          </p>
+          <p className="text-xs text-muted-foreground">
+            {interested > 0 ? formatPct((interested - summary.total_converted) / interested) : '—'} drop-off
+          </p>
+        </div>
+      </div>
+
       {/* ── Agent Leaderboard ─────────────────────────────────────────────────── */}
       {by_agent.length > 0 && (
         <div className="rounded-lg border bg-card">
@@ -448,46 +488,6 @@ export function TelesalesClient() {
           </Table>
         </div>
       )}
-
-      {/* ── Conversion Funnel ─────────────────────────────────────────────────── */}
-      <SalesFunnelChart
-        title="Conversion Funnel"
-        stages={[
-          { label: 'Total Calls', value: summary.total_calls },
-          { label: 'Reached',     value: summary.reached },
-          { label: 'Interested',  value: interested },
-          { label: 'Converted',   value: summary.total_converted },
-        ]}
-      />
-
-      {/* Drop-off stats */}
-      <div className="grid grid-cols-3 gap-2 rounded-lg border bg-card px-4 py-3">
-        <div className="text-center">
-          <p className="text-xs text-muted-foreground">Not Reached</p>
-          <p className="text-sm font-semibold tabular-nums text-red-500">{fmt(summary.not_reached)}</p>
-          <p className="text-xs text-muted-foreground">
-            {summary.total_calls > 0 ? formatPct(summary.not_reached / summary.total_calls) : '—'} drop-off
-          </p>
-        </div>
-        <div className="text-center">
-          <p className="text-xs text-muted-foreground">Reached, Not Interested</p>
-          <p className="text-sm font-semibold tabular-nums text-amber-500">
-            {fmt(summary.reached - interested)}
-          </p>
-          <p className="text-xs text-muted-foreground">
-            {summary.reached > 0 ? formatPct((summary.reached - interested) / summary.reached) : '—'} drop-off
-          </p>
-        </div>
-        <div className="text-center">
-          <p className="text-xs text-muted-foreground">Interested, Not Converted</p>
-          <p className="text-sm font-semibold tabular-nums text-amber-500">
-            {fmt(interested - summary.total_converted)}
-          </p>
-          <p className="text-xs text-muted-foreground">
-            {interested > 0 ? formatPct((interested - summary.total_converted) / interested) : '—'} drop-off
-          </p>
-        </div>
-      </div>
 
     </div>
   )
