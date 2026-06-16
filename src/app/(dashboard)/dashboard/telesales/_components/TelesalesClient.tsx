@@ -500,6 +500,30 @@ export function TelesalesClient() {
                   </TableCell>
                 </TableRow>
               ))}
+              {(() => {
+                const sumCalls      = by_agent.reduce((s, r) => s + r.total_calls, 0)
+                const sumReached    = by_agent.reduce((s, r) => s + r.reached, 0)
+                const sumNotReached = by_agent.reduce((s, r) => s + r.not_reached, 0)
+                const sumConverted  = by_agent.reduce((s, r) => s + r.conversion_rate * r.reached, 0)
+                const totalReachRate = sumCalls > 0 ? sumReached / sumCalls : 0
+                const totalConvRate  = sumReached > 0 ? sumConverted / sumReached : 0
+                return (
+                  <TableRow className="border-t-2 bg-muted/40 font-semibold">
+                    <TableCell className="text-center px-3 text-xs text-muted-foreground">Σ</TableCell>
+                    <TableCell className="text-sm">Total</TableCell>
+                    <TableCell className="text-right tabular-nums text-sm">{fmt(sumCalls)}</TableCell>
+                    <TableCell className="text-right tabular-nums text-sm text-muted-foreground">{fmt(sumReached)}</TableCell>
+                    <TableCell className="text-right tabular-nums text-sm text-muted-foreground">{fmt(sumNotReached)}</TableCell>
+                    <TableCell className={`text-right tabular-nums text-sm font-semibold ${colorRate(totalReachRate, [0.6, 0.4])}`}>
+                      {formatPct(totalReachRate)}
+                    </TableCell>
+                    <TableCell className={`text-right tabular-nums text-sm font-semibold ${colorRate(totalConvRate, [0.3, 0.15])}`}>
+                      {sumReached > 0 ? formatPct(totalConvRate) : '—'}
+                    </TableCell>
+                    <TableCell className="text-right tabular-nums text-sm text-muted-foreground pr-4">—</TableCell>
+                  </TableRow>
+                )
+              })()}
             </TableBody>
           </Table>
         </div>
