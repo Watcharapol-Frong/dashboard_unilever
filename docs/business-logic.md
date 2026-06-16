@@ -1,6 +1,6 @@
 # Business Logic Reference
 > Dashboard Unilever — Single source of truth for all business rules, metric definitions, and data flow.
-> Last derived from codebase: 2026-06-15
+> Last derived from codebase: 2026-06-16
 
 ---
 
@@ -130,39 +130,62 @@ customer_type IN ('first_order_not_converted', 'retention_not_converted')
 Orders that exist but are outside the attribution window.
 
 ### 4.3 Reached (ติดต่อได้)
-A call is "reached" if the customer picked up and a productive interaction occurred.
+A call is "reached" if the customer picked up and a conversation occurred.
+Only truly unreachable outcomes are excluded — statuses where no contact was made at all.
 
-**Excluded statuses (NOT reached):**
+**Excluded (NOT reached — customer did NOT answer):**
 ```
-ไม่รับสาย*              — no answer (all variants)
+ไม่รับสาย*              — no answer (all variants, wildcard match)
 ปิดเครื่อง/ติดต่อไม่ได้  — phone off / unreachable
-ไม่สะดวกคุย             — not convenient to talk
-ยังไม่ต้องการสินค้า      — not interested in products
 ```
 
-SQL fragment:
+**Included as Reached (customer DID answer, conversation occurred):**
+```
+ไม่สะดวกคุย             — not convenient to talk right now
+ยังไม่ต้องการสินค้า      — not ready to buy yet
+(all other statuses)     — normal outcomes
+```
+
+SQL fragment (`src/lib/metrics.ts` → `REACHED`):
 ```sql
 call_status NOT LIKE 'ไม่รับสาย%'
 AND call_status IS DISTINCT FROM 'ปิดเครื่อง/ติดต่อไม่ได้'
-AND call_status IS DISTINCT FROM 'ไม่สะดวกคุย'
-AND call_status IS DISTINCT FROM 'ยังไม่ต้องการสินค้า'
 ```
 
-> ⚠️ Historical bug (fixed 2026-06-12): some routes used only 2 conditions (excluding only `ไม่รับสาย%` and `ปิดเครื่อง/ติดต่อไม่ได้`). All routes now use the 4-condition version above.
+`ไม่สะดวกคุย` and `ยังไม่ต้องการสินค้า` count as Reached because the customer answered — they are distinguished at the **Interested** stage instead.
 
-### 4.4 New Customer
+### 4.4 Interested
+A reached customer who did not explicitly decline to engage.
+
+**Excluded from Interested (Reached but NOT Interested):**
+```
+ไม่สะดวกคุย             — customer answered but was not convenient to talk
+ยังไม่ต้องการสินค้า      — customer answered but is not ready to buy yet
+```
+
+SQL fragment (applied in addition to REACHED):
+```sql
+call_status NOT IN ('ไม่สะดวกคุย', 'ยังไม่ต้องการสินค้า')
+```
+
+This creates the Conversion Funnel boundary:
+```
+Total Calls → [drop: Not Reached] → Reached → [drop: Not Interested] → Interested → [drop: Not Converted] → Converted
+```
+
+### 4.5 New Customer
 ```sql
 customer_type = 'new_customer'
 ```
 Customer whose first-ever HOC order falls within the attribution window.
 
-### 4.5 Retention (Repeat Customer)
+### 4.6 Retention (Repeat Customer)
 ```sql
 customer_type = 'retention'
 ```
 Customer who reordered HOC products within the attribution window.
 
-### 4.6 Conversion Rate
+### 4.7 Conversion Rate
 ```
 Converted Customers ÷ Total Leads Called
 ```
@@ -227,7 +250,7 @@ total_expense = total_incentive
 
 ### 7.1 Date Filter (most pages)
 - Filters on `order_date` (sales pages) or `first_connected_date` (telesales pages)
-- Default: last complete month
+- Default: **full available range** — auto-selected on first data load; persisted to `localStorage` across sessions
 - Range: click start month → click end month (chip UI)
 
 ### 7.2 CMG Filter
@@ -319,8 +342,8 @@ further sub-chunks of 500 rows to CockroachDB.
 | Date | Change | Impact |
 |---|---|---|
 | 2026-05-01 | Incentive eligibility: DISTRIBUTOR excluded from May 2026 onward | Incentives page, ROI calculation |
-| 2026-06-12 | Metric Layer created (`src/lib/metrics.ts`) | All routes now use consistent definitions |
-| 2026-06-12 | REACHED bug fix: 2-condition → 4-condition across all routes | Reached/Connected numbers now consistent across all pages |
+| 2026-06-12 | Metric Layer created (`src/lib/metrics.ts`) | All routes now import CONV, NOT_CONV, REACHED, reachedCond() — single source of truth |
+| 2026-06-12 | REACHED defined as 2-condition (excludes only ไม่รับสาย + ปิดเครื่อง); ไม่สะดวกคุย and ยังไม่ต้องการสินค้า count as Reached | Telesales Conversion Funnel: Reached → Interested → Converted stages |
 | 2026-06-15 | `mart_telesales_orders` replaced by `mmid_cmg_map` + `sales_hoc_orders` | Faster build, less storage, single CTE chain |
 | 2026-06-15 | Clerk auth restored — middleware, register, webhook | Users can now log in and register via invite code |
 | 2026-06-16 | Telesales Converted scoped to post-call orders when date filter active | Prevents historical conversions inflating period-filtered Converted count |
