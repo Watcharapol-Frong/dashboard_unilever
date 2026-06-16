@@ -404,10 +404,26 @@ export function TelesalesClient() {
       <SalesFunnelChart
         title="Conversion Funnel"
         stages={[
-          { label: 'Total Calls', value: summary.total_calls },
-          { label: 'Reached',     value: summary.reached },
-          { label: 'Interested',  value: interested },
-          { label: 'Converted',   value: summary.total_converted },
+          {
+            label: 'Total Calls',
+            value: summary.total_calls,
+            description: 'จำนวนลูกค้าทั้งหมดที่ถูก call โดย telesales ในช่วงเวลาที่เลือก (นับตาม first_connected_date)',
+          },
+          {
+            label: 'Reached',
+            value: summary.reached,
+            description: 'ลูกค้าที่รับสายและมีการสนทนาเกิดขึ้น — ไม่นับเฉพาะสายที่ติดต่อไม่ได้จริงๆ ได้แก่ "ไม่รับสาย" และ "ปิดเครื่อง/ติดต่อไม่ได้" (ไม่สะดวกคุย / ยังไม่ต้องการสินค้า ยังนับเป็น Reached เพราะลูกค้ารับสายแล้ว)',
+          },
+          {
+            label: 'Interested',
+            value: interested,
+            description: 'ลูกค้าที่ Reached และไม่ตอบปฏิเสธ — ตัดออก: "ไม่สะดวกคุย" และ "ยังไม่ต้องการสินค้า" (ลูกค้ากลุ่มนี้รับสายแต่ยังไม่พร้อมซื้อ)',
+          },
+          {
+            label: 'Converted',
+            value: summary.total_converted,
+            description: 'ลูกค้าที่มีการสั่งซื้อ HOC ที่ถูก attribute ให้กับ telesales (ภายใน attribution window) — นับจากข้อมูล sales ทั้งหมดในระบบ ไม่จำกัดเฉพาะช่วงเวลาที่เลือก',
+          },
         ]}
       />
 
