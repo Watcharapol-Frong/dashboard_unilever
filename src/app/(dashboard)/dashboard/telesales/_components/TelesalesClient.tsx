@@ -33,6 +33,8 @@ type Summary = {
   reached: number
   not_reached: number
   interested: number
+  interested_converted: number
+  interested_not_converted: number
   total_converted: number
   new_converted: number
   repeat_converted: number
@@ -448,10 +450,10 @@ export function TelesalesClient() {
         <div className="text-center">
           <p className="text-xs text-muted-foreground">Interested, Not Converted</p>
           <p className="text-sm font-semibold tabular-nums text-amber-500">
-            {fmt(Math.max(0, interested - summary.total_converted))}
+            {fmt(summary.interested_not_converted)}
           </p>
           <p className="text-xs text-muted-foreground">
-            {interested > 0 ? formatPct(Math.max(0, interested - summary.total_converted) / interested) : '—'} drop-off
+            {interested > 0 ? formatPct(summary.interested_not_converted / interested) : '—'} drop-off
           </p>
         </div>
       </div>

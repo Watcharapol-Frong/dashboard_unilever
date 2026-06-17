@@ -127,7 +127,7 @@ export async function GET(request: Request) {
       queryOne<{ total_leads: string }>(`
         SELECT COUNT(DISTINCT mmid)::text AS total_leads FROM leads
       `),
-      queryOne<{ total_converted: string; new_converted: string; repeat_converted: string }>(`
+      queryOne<{ total_converted: string; new_converted: string; repeat_converted: string; interested_converted: string }>(`
         ${agentConvCTE}
         SELECT
           COUNT(DISTINCT tc.mmid)::text AS total_converted,
@@ -142,7 +142,10 @@ export async function GET(request: Request) {
               SELECT 1 FROM sales_hoc_orders o
               WHERE o.mmid = tc.mmid AND o.customer_type = 'retention'
             )
-          )::text AS repeat_converted
+          )::text AS repeat_converted,
+          COUNT(DISTINCT tc.mmid) FILTER (
+            WHERE ${reachedCond('tc')} AND tc.call_status NOT IN ('ไม่สะดวกคุย', 'ยังไม่ต้องการสินค้า')
+          )::text AS interested_converted
         FROM telesales_calls tc
         JOIN agent_conversions ac ON ac.mmid = tc.mmid
         ${whereTc}
@@ -157,13 +160,14 @@ export async function GET(request: Request) {
       `, params),
     ])
 
-    const totalLeads     = Number(leadsRow?.total_leads ?? 0)
-    const totalConverted = Number(totalConvertedRow?.total_converted ?? 0)
-    const newConverted   = Number(totalConvertedRow?.new_converted   ?? 0)
-    const repeatConverted = Number(totalConvertedRow?.repeat_converted ?? 0)
-    const totalCalls     = Number(summaryRow?.total_calls ?? 0)
-    const reached        = Number(summaryRow?.reached ?? 0)
-    const interested     = Number(summaryRow?.interested ?? 0)
+    const totalLeads          = Number(leadsRow?.total_leads ?? 0)
+    const totalConverted      = Number(totalConvertedRow?.total_converted ?? 0)
+    const newConverted        = Number(totalConvertedRow?.new_converted   ?? 0)
+    const repeatConverted     = Number(totalConvertedRow?.repeat_converted ?? 0)
+    const interestedConverted = Number(totalConvertedRow?.interested_converted ?? 0)
+    const totalCalls          = Number(summaryRow?.total_calls ?? 0)
+    const reached             = Number(summaryRow?.reached ?? 0)
+    const interested          = Number(summaryRow?.interested ?? 0)
 
     const [tierStatusRows, agentRows, trendRows, monthsRaw, cmgOpts, agentOpts, callRows] = await Promise.all([
       // Call status breakdown by tier
@@ -287,6 +291,8 @@ export async function GET(request: Request) {
           reached,
           not_reached: totalCalls - reached,
           interested,
+          interested_converted: interestedConverted,
+          interested_not_converted: interested - interestedConverted,
           total_converted: totalConverted,
           new_converted: newConverted,
           repeat_converted: repeatConverted,
