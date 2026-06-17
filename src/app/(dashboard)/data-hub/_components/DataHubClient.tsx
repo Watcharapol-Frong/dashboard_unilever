@@ -13,6 +13,7 @@ import {
   CheckCircle, XCircle, AlertCircle, Upload, FileText, Clock,
   RefreshCw, Hammer, ShoppingBag, Store, Users, Package, PhoneCall,
   Target, DollarSign, Award, FileSpreadsheet, Database, LayoutDashboard,
+  Loader2,
 } from 'lucide-react'
 import { FILE_TYPE_CONFIGS, validateHeaders } from '@/lib/upload-config'
 import type { UploadFileType } from '@/lib/upload-config'
@@ -1025,20 +1026,29 @@ export function DataHubClient() {
                   buildResult.ok ? 'border-green-200 bg-green-50/55' : 'border-red-200 bg-red-50/55',
                 )}>
                   <div className="flex items-center gap-2">
-                    {buildResult.ok
+                    {buildResult.ok && buildResult.triggered && !buildResult.done
+                      ? <Loader2 className="h-4 w-4 text-green-600 shrink-0 animate-spin" />
+                      : buildResult.ok
                       ? <CheckCircle className="h-4 w-4 text-green-600 shrink-0" />
                       : <XCircle className="h-4 w-4 text-red-500 shrink-0" />}
                     <p className="text-sm font-semibold">
-                      {buildResult.ok && buildResult.triggered
-                        ? `Build triggered — ${buildResult.attribution_days}-day attribution window`
+                      {buildResult.ok && buildResult.triggered && !buildResult.done
+                        ? `Build running — ${buildResult.attribution_days}-day attribution window`
+                        : buildResult.ok && buildResult.triggered && buildResult.done
+                        ? `Build complete — data updated`
                         : buildResult.ok
                         ? `Build complete — ${buildResult.attribution_days}-day window applied`
                         : 'Build failed'}
                     </p>
                   </div>
-                  {buildResult.ok && buildResult.triggered && (
+                  {buildResult.ok && buildResult.triggered && !buildResult.done && (
                     <p className="text-xs text-green-700">
-                      GitHub Actions is now running the build (≈2–5 min). Refresh this page after it completes to see updated mart stats.
+                      GitHub Actions is running the build (≈2–5 min). Dashboard pages will refresh automatically when done.
+                    </p>
+                  )}
+                  {buildResult.ok && buildResult.triggered && buildResult.done && (
+                    <p className="text-xs text-green-700">
+                      All dashboard pages have been refreshed with the latest data.
                     </p>
                   )}
                   {buildResult.ok && buildResult.rows && (
