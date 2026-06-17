@@ -10,7 +10,11 @@ const fetcher = async (url: string) => {
 
 export function useDashboardSWR<T>(url: string, overrides?: SWRConfiguration<T>) {
   const { buildVersion } = useBuild()
-  return useSWR<T>([url, buildVersion], ([u]: [string]) => fetcher(u), {
+  // Append _v to bust both SWR client cache and Vercel CDN cache after a build.
+  const versionedUrl = buildVersion > 0
+    ? `${url}${url.includes('?') ? '&' : '?'}_v=${buildVersion}`
+    : url
+  return useSWR<T>(versionedUrl, fetcher, {
     keepPreviousData: true,
     revalidateOnFocus: false,
     revalidateOnReconnect: false,

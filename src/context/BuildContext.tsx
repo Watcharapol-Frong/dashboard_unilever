@@ -36,7 +36,10 @@ export function BuildProvider({ children }: { children: React.ReactNode }) {
   const [buildLoading, setBuildLoading] = useState(false)
   const [elapsedSeconds, setElapsedSeconds] = useState(0)
   const [buildResult, setBuildResult]   = useState<BuildResult | null>(null)
-  const [buildVersion, setBuildVersion] = useState(0)
+  const [buildVersion, setBuildVersion] = useState<number>(() => {
+    if (typeof window !== 'undefined') return Number(localStorage.getItem('buildVersion') ?? 0)
+    return 0
+  })
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null)
   const pollRef  = useRef<ReturnType<typeof setInterval> | null>(null)
   const pollKillRef = useRef<ReturnType<typeof setTimeout> | null>(null)
@@ -86,7 +89,11 @@ export function BuildProvider({ children }: { children: React.ReactNode }) {
               new Date(b.finished_at).getTime() > triggeredAt
             ) {
               stopPolling()
-              setBuildVersion(v => v + 1)
+              setBuildVersion(v => {
+                const next = v + 1
+                localStorage.setItem('buildVersion', String(next))
+                return next
+              })
               swrMutate((key) => typeof key === 'string' && key.startsWith('/api/data/'))
               setBuildResult({ ok: true, triggered: true, done: true, attribution_days: effectiveDays })
             }
@@ -102,7 +109,11 @@ export function BuildProvider({ children }: { children: React.ReactNode }) {
           attribution_days: effectiveDays,
           rows: { mart_main: data.mart_main ?? 0, performance: data.performance ?? 0 },
         })
-        setBuildVersion(v => v + 1)
+        setBuildVersion(v => {
+          const next = v + 1
+          localStorage.setItem('buildVersion', String(next))
+          return next
+        })
         swrMutate((key) => typeof key === 'string' && key.startsWith('/api/data/'))
       }
     } catch {
