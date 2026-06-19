@@ -59,12 +59,22 @@ The attribution window determines whether a telesales call gets credit for an or
 ```
 order_date >= first_connected_date
 AND
-order_date <= first_connected_date + 14 days
+order_date <= first_connected_date + N days
 ```
 
-Default: **14 days** (configurable at build time).
-
 `first_connected_date` is the date the agent first reached (connected with) the customer.
+
+### Window Length
+
+| Setting | Value |
+|---|---|
+| Default | **14 days** |
+| Configurable? | Yes — set via `ATTRIBUTION_DAYS` before running Build Mart |
+| How to change | Update `ATTRIBUTION_DAYS` → run Build Mart → all orders are re-attributed with the new window |
+
+**The 14-day figure is a default, not a fixed rule.** If asked "what is the current attribution window?", the correct answer is: the window in effect is whatever value was used during the last Build Mart run. The most recent build settings determine the live data. To confirm the exact value currently in use, check with the admin or review the last Build Mart configuration.
+
+**Business note:** Changing the window affects all historical data retroactively — a longer window will increase Converted counts; a shorter window will reduce them. Any change requires a full mart rebuild before it takes effect on the dashboard.
 
 ### Customer Types
 Every order in the system is tagged with one of four types:
