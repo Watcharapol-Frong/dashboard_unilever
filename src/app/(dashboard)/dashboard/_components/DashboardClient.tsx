@@ -356,6 +356,7 @@ export function DashboardClient() {
             comparison={isSingleMonth ? mom(aggSales.hoc_sales, sPrev?.hoc_sales) : undefined}
             comparisonLabel="vs previous month"
             subtitle={`${t('common.target', lang)} ${fmtBaht(aggSales.target)}`}
+            tooltip={t('tooltip.hocSales', lang)}
           />
           <KpiCard
             title={t('kpi.achievement', lang)}
@@ -363,6 +364,7 @@ export function DashboardClient() {
             icon={Target}
             valueClassName={colorAchievement(aggSales.achievement * 100)}
             subtitle={`of ${fmtBaht(aggSales.target)} target`}
+            tooltip={t('tooltip.achievement', lang)}
           />
           <KpiCard
             title="Buyers"
@@ -371,13 +373,14 @@ export function DashboardClient() {
             comparison={isSingleMonth ? mom(aggSales.buyers, sPrev?.buyers) : undefined}
             comparisonLabel="vs previous month"
             subtitle={`${fmt(aggSales.new_customers)} new · ${fmt(aggSales.retention)} repeat`}
+            tooltip={t('tooltip.buyers', lang)}
           />
           <KpiCard
             title="ROI"
             value={aggSales.roi > 0 ? `${aggSales.roi.toFixed(1)}×` : '—'}
             icon={TrendingUp}
             valueClassName={colorRoi(aggSales.roi)}
-            tooltip="Programme-level ROI — costs are not split by CMG, so this figure covers all CMGs regardless of the CMG filter."
+            tooltip={t('tooltip.roi', lang)}
           />
         </KpiGrid>
 
@@ -407,6 +410,7 @@ export function DashboardClient() {
                 comparison={isSingleMonth ? mom(aggTele.total_calls, tPrev?.total_calls) : undefined}
                 comparisonLabel="vs previous month"
                 subtitle="customers contacted"
+                tooltip={t('tooltip.totalCalls', lang)}
               />
               <KpiCard
                 title={t('telesales.reached', lang)}
@@ -414,6 +418,7 @@ export function DashboardClient() {
                 icon={PhoneForwarded}
                 valueClassName={colorRate(aggTele.reach_rate, [0.6, 0.4])}
                 subtitle={`${formatPct(aggTele.reach_rate)} ${t('telesales.reachRate', lang).toLowerCase()}`}
+                tooltip={t('tooltip.reached', lang)}
               />
               <KpiCard
                 title="Converted"
@@ -422,6 +427,7 @@ export function DashboardClient() {
                 comparison={isSingleMonth ? mom(aggTele.converted, tPrev?.converted) : undefined}
                 comparisonLabel="vs previous month"
                 subtitle="became customers"
+                tooltip={t('tooltip.converted', lang)}
               />
               <KpiCard
                 title={t('telesales.convRate', lang)}
@@ -431,6 +437,7 @@ export function DashboardClient() {
                 comparison={isSingleMonth ? mom(aggTele.conversion_rate, tPrev?.conversion_rate) : undefined}
                 comparisonLabel="vs previous month"
                 subtitle="of reached customers"
+                tooltip={t('tooltip.convRate', lang)}
               />
             </KpiGrid>
             <TelesalesTrendMiniChart effectiveStart={effectiveStart} effectiveEnd={effectiveEnd} />

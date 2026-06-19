@@ -319,6 +319,7 @@ export function TelesalesClient() {
           value={fmt(summary.total_calls)}
           icon={Phone}
           subtitle={`${fmt(summary.total_leads)} leads total`}
+          tooltip={t('tooltip.totalCalls', lang)}
         />
         <KpiCard
           title={t('telesales.reachRate', lang)}
@@ -326,6 +327,7 @@ export function TelesalesClient() {
           icon={PhoneForwarded}
           valueClassName={colorRate(reachRate, [0.6, 0.4])}
           subtitle={`${fmt(summary.reached)} reached · ${fmt(summary.not_reached)} not reached`}
+          tooltip={t('tooltip.reachRate', lang)}
         />
         <KpiCard
           title={t('telesales.convRate', lang)}
@@ -333,12 +335,14 @@ export function TelesalesClient() {
           icon={Percent}
           valueClassName={colorRate(convRate, [0.3, 0.15])}
           subtitle={`of ${fmt(summary.reached)} reached customers`}
+          tooltip={t('tooltip.convRate', lang)}
         />
         <KpiCard
           title="Converted"
           value={fmt(summary.total_converted)}
           icon={UserCheck}
           subtitle={`${fmt(summary.new_converted)} new · ${fmt(summary.repeat_converted)} repeat`}
+          tooltip={t('tooltip.converted', lang)}
         />
       </KpiGrid>
 

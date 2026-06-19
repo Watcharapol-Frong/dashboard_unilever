@@ -323,24 +323,28 @@ export function SalesClient() {
           comparison={kpi.cmp_converted_sales ?? undefined}
           comparisonLabel={kpi.comparison_label ?? undefined}
           subtitle={`${fmtBaht(kpi.converted_online)} online · ${fmtBaht(kpi.converted_offline)} offline`}
+          tooltip={t('tooltip.convertedSales', lang)}
         />
         <KpiCard
           title={t('sales.avgOrderValue', lang)}
           value={kpi.avg_order_value > 0 ? fmtBaht(kpi.avg_order_value) : '—'}
           icon={ReceiptText}
           subtitle={`${fmt(kpi.converted_orders)} ${t('common.orders', lang)}`}
+          tooltip={t('tooltip.avgOrderValue', lang)}
         />
         <KpiCard
           title={t('kpi.newCustomers', lang)}
           value={fmt(kpi.new_customers)}
           icon={Users}
           subtitle={totalBuyers > 0 ? `${((kpi.new_customers / totalBuyers) * 100).toFixed(1)}% of buyers` : '—'}
+          tooltip={t('tooltip.newCustomers', lang)}
         />
         <KpiCard
           title={t('kpi.repeatCustomers', lang)}
           value={fmt(kpi.retention_customers)}
           icon={Repeat2}
           subtitle={totalBuyers > 0 ? `${((kpi.retention_customers / totalBuyers) * 100).toFixed(1)}% of buyers` : '—'}
+          tooltip={t('tooltip.repeatCustomers', lang)}
         />
       </KpiGrid>
 
