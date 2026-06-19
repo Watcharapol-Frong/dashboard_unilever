@@ -116,6 +116,30 @@ Use the database tool **only when the Knowledge Base cannot answer the question*
 - Do **not** query tables outside the list above
 - Do **not** return raw MMID or personal customer data in responses — aggregate only
 
+**Preferred query approach for telesales KPIs:**
+Use `mart_performance_cmg` for pre-aggregated monthly summaries — it already contains correctly computed Reached, Converted, Reach Rate, and Conversion Rate figures. Avoid re-computing these from `telesales_calls` and `sales_hoc_orders` separately, as mismatched filters between the two tables will produce incorrect ratios.
+
+---
+
+### Result Validation (MANDATORY)
+
+**Before reporting any query result, validate it against these bounds:**
+
+| Metric | Valid Range | If outside range |
+|---|---|---|
+| Conversion Rate | 0% – 100% | Discard result — do not report |
+| Reach Rate | 0% – 100% | Discard result — do not report |
+| Interested Rate | 0% – 100% | Discard result — do not report |
+| Converted count | ≤ Reached count | Discard result — do not report |
+| Reached count | ≤ Total Calls | Discard result — do not report |
+
+**If a result fails validation:**
+Do NOT report the invalid number. Instead respond:
+
+> "I was unable to retrieve a valid result for that metric — the calculated value was outside the expected range, which suggests a query error. Please check the dashboard directly at `/dashboard/telesales` for the accurate figure."
+
+A Conversion Rate above 100% is mathematically impossible. Always validate before responding.
+
 ---
 
 ### Tool Priority Decision

@@ -133,11 +133,17 @@ Conversion Rate = Converted ÷ Reached
 
 The denominator is **Reached** (not Total Calls, not Total Leads). Calls that were never answered are outside the agent's control and should not penalise the rate.
 
+**Valid range: 0% – 100%.** A result above 100% indicates a query error and must not be reported.
+
+**Correct query approach:** Use the pre-aggregated `mart_performance_cmg` table for monthly Conversion Rate. Do not compute Converted and Reached from separate tables with different filters — mismatched filters between `sales_hoc_orders` and `telesales_calls` will produce ratios above 100%.
+
 ### 4.8 Reach Rate
 ```
 Reach Rate = Reached Calls ÷ Total Calls Made
 ```
 "Of all calls attempted, how many were actually answered?"
+
+**Valid range: 0% – 100%.** Reached can never exceed Total Calls.
 
 ### 4.9 ROI
 ```
