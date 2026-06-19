@@ -187,15 +187,17 @@ Customer who reordered HOC products within the attribution window.
 
 ### 4.7 Conversion Rate
 ```
-Converted Customers ÷ Total Leads Called
+Converted ÷ Reached
 ```
+"Of everyone who answered the call, how many became customers?"
+Denominator is Reached (not Total Calls or Total Leads) — calls that were never answered are outside the agent's control and should not penalise the rate.
 
-### 4.7 Reach Rate
+### 4.8 Reach Rate
 ```
 Reached Calls ÷ Total Calls Made
 ```
 
-### 4.8 ROI
+### 4.9 ROI
 ```
 HOC Sales (incentive-eligible) ÷ Total Program Expense
 ```
