@@ -1,11 +1,13 @@
 # Dashboard Unilever — System Design Specification
 
+> **Legacy design reference** — This document reflects the original architecture and page designs. Current API routes and environment variables are authoritative in `CLAUDE.md`. Last updated: 2026-06-19.
+
 ## Tech Stack
 
 | Layer | Technology |
 |-------|-----------|
-| Framework | Next.js 14 (App Router, TypeScript) |
-| Database | PostgreSQL (via `pg` pool, `DATABASE_URL` env) |
+| Framework | Next.js 15 (App Router, TypeScript) |
+| Database | CockroachDB Serverless (via `pg` pool, `DATABASE_URL` env) |
 | Auth | Clerk — `withAdmin()` / `withAuth()` wrappers in `src/lib/auth.ts` |
 | Data fetching | SWR (client) — stale-while-revalidate pattern |
 | UI components | shadcn/ui + Tailwind CSS |
@@ -38,10 +40,15 @@
 
 ### Materialized / Mart
 
-| Table | Contents | Rebuilt by |
-|-------|---------|-----------|
-| `mart_telesales_orders` | Attributed order fact — one row per order with `customer_type`, `attribution_days` | Build Mart |
-| `mart_performance` | Aggregated KPIs per `(month, lead_customers, dynamic_cmg)` | Build Mart |
+| Table | Grain | Description | Rebuilt by |
+|-------|-------|-------------|-----------|
+| `mmid_cmg_map` | `mmid` | mmid → primary_cmg + first_connected_date (3-col lookup) | Build Mart |
+| `sales_hoc_orders` | `(mmid, order_number, prod_num)` | HOC-attributed order fact with `customer_type` | Build Mart |
+| `mart_performance_cmg` | `(month, dynamic_cmg)` | Pre-aggregated KPIs at month × CMG grain | Build Mart |
+| `mart_performance_month` | `month` | Month-level costs, incentive, ROI | Build Mart |
+| `mart_builds` | `id` | Build audit log — status, duration_ms, row_counts | Build Mart |
+
+> `mart_telesales_orders` and `mart_performance` no longer exist. See `plan.md` and `CLAUDE.md` for current mart schema.
 
 ### Attribution Logic (`customer_type`)
 
@@ -60,60 +67,9 @@ Default `attribution_days = 14`. Only `new_customer` and `retention` rows count 
 
 ---
 
-## mart_performance — Field Reference
-
-| Field | Type | Calculation |
-|-------|------|-------------|
-| `month` | DATE | `DATE_TRUNC('month', order_date)` |
-| `lead_customers` | TEXT | from `telesales_calls.lead_customers` |
-| `dynamic_cmg` | TEXT | from `sales_hoc_orders.dynamic_cmg` |
-| `total_calls` | INT | `COUNT(*)` from `telesales_calls` for month × lead tier |
-| `reached` | INT | calls with non-rejected `call_status` |
-| `ordered` | INT | `COUNT(DISTINCT mmid)` where `customer_type IN ('new_customer','retention')` |
-| `new_customers` | INT | `COUNT(DISTINCT mmid)` where `customer_type = 'new_customer'` |
-| `retention` | INT | `COUNT(DISTINCT mmid)` where `customer_type = 'retention'` |
-| `hoc_orders` | INT | `COUNT(DISTINCT order_number)` for HOC attributed orders |
-| `hoc_sales` | NUMERIC | `SUM(sales_in_vat)` — telesales-attributed HOC orders only |
-| `actual_sales` | NUMERIC | `SUM(sales_in_vat)` from `sales_hoc_all` — ALL HOC sales for CMG/month |
-| `sales_target` | NUMERIC | from `targets` per `(month, dynamic_cmg)` |
-| `achievement_ratio` | NUMERIC | `actual_sales / sales_target` — e.g. `0.85` = 85% |
-| `incentive_per_head` | NUMERIC | from `incentives` via `LATERAL JOIN WHERE tier <= achievement_ratio` |
-| `total_incentive` | NUMERIC | `ordered × incentive_per_head` |
-| `cost_per_agent` | NUMERIC | from `costs` per month |
-| `cost_per_supervisor` | NUMERIC | from `costs` per month |
-| `supervisor_count` | INT | from `agent_headcount` per month |
-| `agent_count` | INT | from `agent_headcount` per month |
-| `total_agent_cost` | NUMERIC | `(supervisor_count × cost_per_supervisor) + (agent_count × cost_per_agent)` |
-| `total_expense` | NUMERIC | `total_incentive + total_agent_cost` |
-| `roi` | NUMERIC | `ROUND(actual_sales / NULLIF(total_expense, 0), 2)` |
-
-### Cross-Join De-duplication Rules
-
-`mart_performance` cross-joins `dynamic_cmg × lead_customers` per month. When summing over multiple rows, de-duplicate before aggregating:
-
-| Fields | Granularity in DB | Correct aggregation |
-|--------|-------------------|---------------------|
-| `hoc_sales`, `new_customers`, `retention`, `ordered`, `hoc_orders`, `total_incentive` | Unique per `(month, dynamic_cmg, lead_customers)` | `SUM` directly |
-| `actual_sales`, `sales_target`, `achievement_ratio` | Per `(month, dynamic_cmg)` — repeated per lead tier | De-dup by `(month, dynamic_cmg)` then `SUM` |
-| `total_calls`, `reached` | Per `(month, lead_customers)` — repeated per CMG | De-dup by `(month, lead_customers)` then `SUM` |
-| `total_agent_cost`, headcount fields | Per `month` — repeated every row | De-dup by `month` then `SUM` |
-
-`ROI` and `achievement %` must always be **recomputed** from de-duplicated sums, never averaged from row values.
-
----
-
 ## API Endpoints
 
-### GET `/api/data/overview`
-
-| Item | Value |
-|------|-------|
-| Auth | `withAuth` |
-| DB tables | `mart_performance` |
-| Query params | none |
-| Cache | `s-maxage=300, stale-while-revalidate=600` |
-
-Returns one row per `(month, lead_customers, dynamic_cmg)` with all `mart_performance` fields plus `month_label` (`TO_CHAR(month, 'FMMonth')`). Client aggregates and filters entirely in-memory.
+> The endpoints below (`/api/data/overview`, `/api/data/leads`, etc.) reflect the original design. Current API routes live under `/api/data/dashboard/*` and `/api/data/hub/*` — see `CLAUDE.md` for the authoritative route list.
 
 ---
 

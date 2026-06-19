@@ -73,7 +73,7 @@ Incremental GAS sync:
 | **Middleware** | `clerkMiddleware` — single `auth()` call; 401/403 JSON for API, redirect for browsers |
 | **Route handler** | `withAuth()` / `withAdmin()` in `src/lib/auth.ts` — checks `publicMetadata.role === 'admin'` |
 
-Admin-only surfaces: `/leads`, `/data-hub`, `/exports` and all `/api/data/upload/*`, `/api/data/dashboard*`, `/api/data/refresh-mart/*`, `/api/data/export/*`.
+Admin-only surfaces: `/leads`, `/data-hub`, `/raw-data` and all `/api/data/hub/*`, `/api/data/pivot` (POST), `/api/data/raw/*`, `/api/data/leads/*`, `/api/data/template/*`.
 
 **Dev Mode (local only):** `DEV_MODE=true` in `.env.local` bypasses all Clerk auth and treats every request as admin. Double-locked — only activates when `NODE_ENV=development`.
 
@@ -94,9 +94,9 @@ Admin-only surfaces: `/leads`, `/data-hub`, `/exports` and all `/api/data/upload
 ### Upload (browser → R2 → CockroachDB)
 
 ```
-POST /api/data/upload/multipart/init      → R2 creates multipart session
-PUT  (direct to R2, chunked + parallel)   → file uploaded in parts
-POST /api/data/upload/multipart/complete  → R2 assembles → ETL:
+POST /api/data/hub/upload/multipart/init      → R2 creates multipart session
+PUT  (direct to R2, chunked + parallel)       → file uploaded in parts
+POST /api/data/hub/upload/multipart/complete  → R2 assembles → ETL:
     SHA-256 hash check (duplicate rejected with 422)
     CSV header validation
     Transform rows → UPSERT into source table
@@ -316,40 +316,36 @@ npm run build-mart   # run mart build directly (no Vercel, no timeout)
 
 ## API Reference
 
-All endpoints under `/api/data/`. Authenticated routes require a valid Clerk session cookie.
+Authenticated routes require a valid Clerk session cookie. GAS ingest routes use a Bearer token (`INGEST_API_SECRET`).
 
-| Method | Endpoint | Auth | Description |
-|--------|----------|------|-------------|
-| `GET` | `/api/data/overview` | User | mart_performance_cmg rows for Overview |
-| `GET` | `/api/data/overview/calls` | User | Total calls + connected (?startDate, endDate, cmg) |
-| `GET` | `/api/data/overview/agents` | User | Agent leaderboard |
-| `GET` | `/api/data/cohorts` | User | Cohort trend (?interval, cmg, channel, dates) |
-| `GET` | `/api/data/sales` | User | Sales KPI + trend + recent orders |
-| `GET` | `/api/data/telesales` | User | Call-centre KPIs, agent leaderboard, funnel |
-| `GET` | `/api/data/telesales/funnel` | User | Engaged vs not-engaged Sankey data |
-| `GET` | `/api/data/leads` | Admin | Paginated, server-side filtered lead list |
-| `GET` | `/api/data/leads/summary` | Admin | Global lead KPIs + filter options |
-| `GET` | `/api/data/products` | User | SKU / brand revenue |
-| `GET` | `/api/data/products/options` | User | Filter options (cached 1 h) |
-| `GET` | `/api/data/incentives` | User | Incentive payout + ROI |
-| `GET` | `/api/data/pivot` | Admin | Filter options for export |
-| `POST` | `/api/data/pivot` | Admin | Raw data export |
-| `GET` | `/api/data/dashboard` | Admin | Data Hub source status + upload history |
-| `GET` | `/api/data/mart-status` | Admin | Mart row counts + last 5 builds |
-| `GET` | `/api/data/mart-freshness` | User | Last refresh date + last build status |
-| `GET` | `/api/data/build-status` | Admin | Build-lock state |
-| `POST` | `/api/data/refresh-mart` | Admin | Full mart rebuild (manual trigger) |
-| `GET` | `/api/data/template/[file]` | Admin | Download Excel upload template |
-| `POST` | `/api/data/upload/multipart/init` | Admin | Start multipart R2 upload |
-| `POST` | `/api/data/upload/multipart/complete` | Admin | Finalise upload + ETL |
-| `POST` | `/api/data/upload/multipart/abort` | Admin | Cancel upload |
-| `POST` | `/api/data/upload/replay` | Admin | Re-process R2 backups into DB |
-| `POST` | `/api/data/ingest/telesales-activity` | Bearer | GAS: upsert call records |
-| `GET` | `/api/data/ingest/threshold` | Bearer | GAS: latest `first_connected_date` |
-| `POST` | `/api/chat` | User | Dify AI streaming chat proxy |
-| `POST` | `/api/auth/register` | Public* | Invite-code-gated registration |
+```
+/api/auth/register/            POST — public, invite-code-gated
+/api/chat/                     POST — Dify AI streaming proxy
+/api/webhooks/clerk/           POST — svix-verified
 
-*Rate-limited: 5 req / IP / 60 s.
+/api/data/dashboard/           GET  — source stats (admin)
+/api/data/dashboard/agents     GET  — agent leaderboard
+/api/data/dashboard/sales      GET  — sales KPI + trend
+/api/data/dashboard/sales-trend GET — monthly/weekly trend
+/api/data/dashboard/summary    GET  — top-level KPIs
+/api/data/dashboard/telesales  GET  — funnel + agent perf
+/api/data/dashboard/telesales-trend GET — telesales trend
+/api/data/hub/                 GET  — upload history + stats (admin)
+/api/data/hub/build            POST — trigger mart build via GitHub Actions (admin)
+/api/data/hub/freshness        GET  — last refresh + build status
+/api/data/hub/upload/multipart/init     POST (admin)
+/api/data/hub/upload/multipart/complete POST (admin)
+/api/data/hub/upload/multipart/abort    POST (admin)
+/api/data/hub/upload/replay    POST (admin)
+/api/data/ingest/telesales-activity POST — GAS Bearer token
+/api/data/ingest/threshold     GET  — GAS Bearer token
+/api/data/leads/               GET  — paginated (admin)
+/api/data/leads/summary/       GET  — KPIs + options (admin)
+/api/data/pivot/               GET/POST — export (admin)
+/api/data/raw/                 GET  — table viewer (admin)
+/api/data/raw/export/          GET  — CSV export (admin)
+/api/data/template/[file]/     GET  — upload templates (admin)
+```
 
 **Cache presets** (`src/lib/query.ts`):
 
@@ -374,6 +370,7 @@ Go to: **Settings → Secrets and variables → Actions → New repository secre
 | Secret | Value |
 |--------|-------|
 | `DATABASE_URL` | CockroachDB connection string |
+| `GH_WORKFLOW_TOKEN` | GitHub PAT (classic, `workflow` scope) — allows Data Hub UI to trigger workflow dispatch |
 
 ### Manual trigger
 
@@ -400,7 +397,7 @@ One build ≈ 2 min · 30 builds/month ≈ 60 min · GitHub free plan = 2,000 mi
 
 **`DELETE FROM` instead of `TRUNCATE`** — CockroachDB blocks `TRUNCATE` when an async index-drop job is running. `DELETE FROM ... WHERE true` avoids this lock.
 
-**Stale data warning** — `FreshnessBar` in the dashboard layout polls `/api/data/mart-freshness` every 5 minutes. Amber banner appears if `last_refreshed` > 24 hours.
+**Stale data warning** — `FreshnessBar` in the dashboard layout polls `/api/data/hub/freshness` every 5 minutes. Amber banner appears if `last_refreshed` > 24 hours.
 
 **File dedup via SHA-256** — Upload service computes SHA-256 of raw CSV before ingest. Duplicate hashes rejected with HTTP 422.
 

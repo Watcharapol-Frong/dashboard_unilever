@@ -1,6 +1,6 @@
 # Unilever HOC Telesales Dashboard — Technical Roadmap
 
-> Last updated: 2026-06-16
+> Last updated: 2026-06-19
 
 ---
 
@@ -91,6 +91,11 @@ CSV / Google Sheet
 | Channel Breakdown → converted-only (converted_online/offline) | Done |
 | Telesales Converted scoped to post-call orders when date filter active | Done |
 | GAS postToAPI_ chunked to 1,000 records per HTTP request | Done |
+| Auto-refresh pages after GitHub Actions mart build (BuildContext polls freshness, bumps buildVersion) | Done |
+| Vercel CDN cache busting via ?_v={buildVersion} in fetch URLs | Done |
+| InputOTP component (input-otp package, login OTP restyle) | Done |
+| Interested Not Converted fixed — server computes interested_not_converted (always ≥ 0) | Done |
+| GH_WORKFLOW_TOKEN support — Build Mart triggers GitHub Actions workflow dispatch | Done |
 
 ### UI & Component System
 
