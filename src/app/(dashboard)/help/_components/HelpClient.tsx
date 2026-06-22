@@ -148,12 +148,19 @@ export function HelpClient() {
       if (image) fd.append('image', image)
 
       const res = await fetch('/api/feedback', { method: 'POST', body: fd })
-      if (!res.ok) throw new Error('Failed')
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}))
+        throw new Error(body?.error ?? `HTTP ${res.status}`)
+      }
       setSent(true)
       setTitle(''); setDescription(''); setImage(null); setPreview(null)
       if (fileRef.current) fileRef.current.value = ''
-    } catch {
-      setError(isTh ? 'ส่งไม่สำเร็จ กรุณาลองใหม่' : 'Failed to send. Please try again.')
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : ''
+      setError(msg === 'Email service not configured'
+        ? (isTh ? 'ระบบ email ยังไม่ได้ตั้งค่า กรุณาติดต่อ admin' : 'Email service not configured. Please contact admin.')
+        : (isTh ? `ส่งไม่สำเร็จ: ${msg}` : `Failed to send: ${msg}`)
+      )
     } finally {
       setSending(false)
     }

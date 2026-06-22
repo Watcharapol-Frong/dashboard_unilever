@@ -49,9 +49,14 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
         </p>`
     }
 
+    if (!process.env.RESEND_API_KEY) {
+      console.error('[feedback] RESEND_API_KEY is not set')
+      return NextResponse.json({ error: 'Email service not configured' }, { status: 503 })
+    }
+
     const resend = new Resend(process.env.RESEND_API_KEY)
 
-    await resend.emails.send({
+    const { error: resendError } = await resend.emails.send({
       from:    process.env.RESEND_FROM_EMAIL ?? 'onboarding@resend.dev',
       to:      'wcharoens@cpaxtra.co.th',
       subject: `[Dashboard] ${TYPE_LABELS[type] ?? type}: ${title}`,
@@ -70,6 +75,11 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
           <p style="color:#888;font-size:12px">Sent from Makro × Unilever HOC Telesales Dashboard</p>
         </div>`,
     })
+
+    if (resendError) {
+      console.error('[feedback] Resend error:', resendError)
+      return NextResponse.json({ error: resendError.message }, { status: 502 })
+    }
 
     return NextResponse.json({ ok: true })
   })
