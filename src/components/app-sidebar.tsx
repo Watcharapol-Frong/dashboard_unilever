@@ -115,11 +115,15 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
       <SidebarFooter>
         <SidebarMenu>
           <SidebarMenuItem>
-            <SidebarMenuButton tooltip="Get Help" asChild>
-              <a href="#" onClick={e => e.preventDefault()}>
+            <SidebarMenuButton
+              asChild
+              tooltip="Get Help"
+              isActive={pathname.startsWith('/help')}
+            >
+              <Link href="/help">
                 <HelpCircle />
-                <span>Get Help</span>
-              </a>
+                <span>{t('nav.getHelp', lang)}</span>
+              </Link>
             </SidebarMenuButton>
           </SidebarMenuItem>
         </SidebarMenu>
