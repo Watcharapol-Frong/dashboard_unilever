@@ -41,14 +41,14 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
           const url = await getSignedUrl(
             r2,
             new GetObjectCommand({ Bucket: R2_BUCKET, Key: key }),
-            { expiresIn: 60 * 60 * 24 * 30 },
+            { expiresIn: 60 * 60 * 24 * 7 }, // 7 days (S3/R2 SigV4 max)
           )
 
           imageHtml = `
             <p style="margin-top:16px">
               <strong>Screenshot:</strong><br/>
               <a href="${url}" style="color:#003DA6">View screenshot</a>
-              <span style="color:#888;font-size:12px"> (link valid for 30 days)</span>
+              <span style="color:#888;font-size:12px"> (link valid for 7 days)</span>
             </p>
             <p style="margin-top:8px">
               <img src="${url}" alt="screenshot" style="max-width:600px;border-radius:6px;border:1px solid #e5e7eb"/>
