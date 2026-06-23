@@ -17,12 +17,14 @@ import {
 import { NavUser } from "@/components/nav-user"
 import { useLanguage } from "@/context/LanguageContext"
 import { t } from "@/lib/i18n"
+import { useHelp } from "@/context/HelpContext"
 
 export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
   const pathname = usePathname()
   const { user } = useUser()
   const isAdmin = user?.publicMetadata?.role === 'admin'
   const { lang } = useLanguage()
+  const { isOpen, setOpen } = useHelp()
 
   const dashboardNav = [
     { title: t('topbar.overview', lang), url: "/dashboard",           icon: LayoutDashboard, exact: true  },
@@ -115,11 +117,13 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
       <SidebarFooter>
         <SidebarMenu>
           <SidebarMenuItem>
-            <SidebarMenuButton tooltip="Get Help" asChild>
-              <a href="#" onClick={e => e.preventDefault()}>
-                <HelpCircle />
-                <span>Get Help</span>
-              </a>
+            <SidebarMenuButton
+              tooltip="Get Help"
+              isActive={isOpen}
+              onClick={() => setOpen(true)}
+            >
+              <HelpCircle />
+              <span>{t('nav.getHelp', lang)}</span>
             </SidebarMenuButton>
           </SidebarMenuItem>
         </SidebarMenu>
