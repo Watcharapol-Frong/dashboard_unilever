@@ -3,7 +3,7 @@
 import * as React from "react"
 import Link from "next/link"
 import { usePathname } from "next/navigation"
-import { useUser } from "@clerk/nextjs"
+import { useUser } from "@/lib/clerk-client"
 import {
   LayoutDashboard, ShoppingCart, Phone, Users,
   Database, Table2, HelpCircle,

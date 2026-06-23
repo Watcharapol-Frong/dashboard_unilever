@@ -2,21 +2,20 @@
 
 import { useState, useRef } from 'react'
 import { Drawer as DrawerPrimitive } from 'vaul'
-import { useUser } from '@clerk/nextjs'
+import { useUser } from '@/lib/clerk-client'
 import {
   Accordion, AccordionContent, AccordionItem, AccordionTrigger,
 } from '@/components/ui/accordion'
-import {
-  ResizablePanelGroup, ResizablePanel, ResizableHandle,
-} from '@/components/ui/resizable'
 import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import {
+  Field, FieldDescription, FieldError, FieldGroup, FieldLabel, FieldLegend, FieldSet,
+} from '@/components/ui/field'
+import {
   LayoutDashboard, ShoppingCart, Phone, Users, Database,
-  BookOpen, Settings, HelpCircle, MessageSquarePlus,
-  Search, ImagePlus, X, CheckCircle2, Loader2,
+  Search, ImagePlus, X, CheckCircle2, Loader2, LifeBuoy, ChevronLeft,
 } from 'lucide-react'
 import { useLanguage } from '@/context/LanguageContext'
 import { t } from '@/lib/i18n'
@@ -94,12 +93,12 @@ const TYPE_OPTIONS = [
 
 type Section = 'pages' | 'metrics' | 'admin' | 'faq' | 'feedback'
 
-const NAV_ITEMS: { id: Section; icon: React.ElementType; labelEn: string; labelTh: string; adminOnly?: boolean }[] = [
-  { id: 'pages',    icon: BookOpen,          labelEn: 'Dashboard Pages',    labelTh: 'หน้าแดชบอร์ด' },
-  { id: 'metrics',  icon: HelpCircle,        labelEn: 'Metric Definitions', labelTh: 'คำนิยาม Metric' },
-  { id: 'admin',    icon: Settings,          labelEn: 'Admin Guide',        labelTh: 'คู่มือ Admin', adminOnly: true },
-  { id: 'faq',      icon: Search,            labelEn: 'FAQ',                labelTh: 'FAQ' },
-  { id: 'feedback', icon: MessageSquarePlus, labelEn: 'Report Issue',       labelTh: 'แจ้งปัญหา' },
+// Top segmented-control tabs. 'feedback' is reached via the footer "Contact Support" button.
+const TABS: { id: Section; shortEn: string; shortTh: string; adminOnly?: boolean }[] = [
+  { id: 'pages',   shortEn: 'Pages',   shortTh: 'หน้า'    },
+  { id: 'metrics', shortEn: 'Metrics', shortTh: 'Metric'  },
+  { id: 'admin',   shortEn: 'Admin',   shortTh: 'Admin', adminOnly: true },
+  { id: 'faq',     shortEn: 'FAQ',     shortTh: 'FAQ'     },
 ]
 
 // ── Main component ─────────────────────────────────────────────────────────────
@@ -183,7 +182,8 @@ export function HelpDrawer() {
     }
   }
 
-  const visibleNavItems = NAV_ITEMS.filter(item => !item.adminOnly || isAdmin)
+  const visibleTabs = TABS.filter(item => !item.adminOnly || isAdmin)
+  const showSearch  = activeSection === 'pages' || activeSection === 'metrics' || activeSection === 'faq'
 
   return (
     <DrawerPrimitive.Root
@@ -195,104 +195,90 @@ export function HelpDrawer() {
       <DrawerPrimitive.Portal>
         <DrawerPrimitive.Overlay className="fixed inset-0 z-50 bg-black/40" />
         <DrawerPrimitive.Content
-          className="fixed top-0 left-0 h-full z-50 flex bg-background border-r shadow-xl outline-none"
-          style={{ width: 'min(75vw, 920px)' }}
+          className="fixed top-0 left-0 h-full z-50 flex flex-col bg-background border-r shadow-xl outline-none"
+          style={{ width: 'min(96vw, max(360px, 50vw))' }}
         >
-          <ResizablePanelGroup orientation="horizontal" className="h-full">
+          {/* ── Header ── */}
+          <div className="flex items-start justify-between px-5 py-4 border-b shrink-0">
+            <div>
+              <DrawerPrimitive.Title className="font-semibold text-base leading-tight">{t('help.title', lang)}</DrawerPrimitive.Title>
+              <DrawerPrimitive.Description className="text-xs text-muted-foreground mt-0.5 leading-snug">{t('help.subtitle', lang)}</DrawerPrimitive.Description>
+            </div>
+            <DrawerPrimitive.Close className="rounded-sm p-0.5 opacity-70 hover:opacity-100 transition-opacity ml-2 mt-0.5 shrink-0">
+              <X className="h-4 w-4" />
+              <span className="sr-only">Close</span>
+            </DrawerPrimitive.Close>
+          </div>
 
-            {/* ── Left: section nav ── */}
-            <ResizablePanel defaultSize={26} minSize={16} maxSize={42} className="flex flex-col border-r">
-              {/* Drawer header */}
-              <div className="flex items-start justify-between px-4 py-4 border-b shrink-0">
-                <div>
-                  <p className="font-semibold text-sm leading-tight">{t('help.title', lang)}</p>
-                  <p className="text-xs text-muted-foreground mt-0.5 leading-snug">{t('help.subtitle', lang)}</p>
-                </div>
-                <DrawerPrimitive.Close className="rounded-sm p-0.5 opacity-70 hover:opacity-100 transition-opacity ml-2 mt-0.5 shrink-0">
-                  <X className="h-4 w-4" />
-                  <span className="sr-only">Close</span>
-                </DrawerPrimitive.Close>
+          {/* ── Segmented tabs ── */}
+          <div className="px-5 pt-4 shrink-0">
+            <div className="flex gap-1 rounded-lg bg-muted p-1">
+              {visibleTabs.map(tab => (
+                <button
+                  key={tab.id}
+                  onClick={() => setActiveSection(tab.id)}
+                  className={cn(
+                    'flex-1 rounded-md px-3 py-1.5 text-sm font-medium transition-colors',
+                    activeSection === tab.id
+                      ? 'bg-background text-foreground shadow-sm'
+                      : 'text-muted-foreground hover:text-foreground'
+                  )}
+                >
+                  {isTh ? tab.shortTh : tab.shortEn}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* ── Search ── */}
+          {showSearch && (
+            <div className="px-5 pt-3 shrink-0">
+              <div className="relative">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                <Input
+                  placeholder={isTh ? 'ค้นหา...' : 'Search...'}
+                  value={search}
+                  onChange={e => setSearch(e.target.value)}
+                  className="pl-9 h-9 text-sm"
+                />
               </div>
+            </div>
+          )}
 
-              {/* Nav */}
-              <nav className="flex-1 p-2 space-y-0.5 overflow-y-auto">
-                {visibleNavItems.map(item => (
-                  <button
-                    key={item.id}
-                    onClick={() => setActiveSection(item.id)}
-                    className={cn(
-                      'w-full flex items-center gap-2.5 px-3 py-2.5 rounded-md text-sm transition-colors text-left',
-                      activeSection === item.id
-                        ? 'bg-[#003DA6] text-white'
-                        : 'text-muted-foreground hover:bg-accent hover:text-foreground'
-                    )}
-                  >
-                    <item.icon className="h-4 w-4 shrink-0" />
-                    <span className="truncate">{isTh ? item.labelTh : item.labelEn}</span>
-                  </button>
-                ))}
-              </nav>
-            </ResizablePanel>
-
-            <ResizableHandle withHandle />
-
-            {/* ── Right: content ── */}
-            <ResizablePanel defaultSize={74} className="overflow-hidden flex flex-col">
-              {/* Search bar */}
-              <div className="px-5 pt-4 pb-3 border-b shrink-0">
-                <div className="relative">
-                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                  <Input
-                    placeholder={isTh ? 'ค้นหา...' : 'Search...'}
-                    value={search}
-                    onChange={e => setSearch(e.target.value)}
-                    className="pl-9 h-8 text-sm"
-                  />
-                </div>
-              </div>
-
-              {/* Scrollable content */}
-              <div className="flex-1 overflow-y-auto px-5 py-5 space-y-4">
+          {/* ── Scrollable content ── */}
+          <div className="flex-1 overflow-y-auto px-5 py-5 space-y-4">
 
                 {/* ── Pages ── */}
                 {activeSection === 'pages' && (
-                  <>
-                    <h3 className="font-semibold text-sm text-[#003DA6]">
-                      {isTh ? 'หน้าต่าง ๆ ในแดชบอร์ด' : 'Dashboard Pages'}
-                    </h3>
-                    <Accordion type="multiple" className="space-y-1.5">
-                      {filteredPages.map((p, i) => {
-                        const info = isTh ? p.th : p.en
-                        return (
-                          <AccordionItem key={i} value={`page-${i}`} className="border rounded-md px-3">
-                            <AccordionTrigger className="hover:no-underline py-2.5 text-sm">
-                              <div className="flex items-center gap-2">
-                                <p.icon className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
-                                <span className="font-medium">{info.title}</span>
-                                <Badge variant="outline" className="text-[10px] font-normal ml-1 hidden sm:inline-flex">{info.audience}</Badge>
-                              </div>
-                            </AccordionTrigger>
-                            <AccordionContent className="text-sm text-muted-foreground space-y-1.5 pb-3">
-                              <Badge variant="outline" className="text-[10px] font-normal sm:hidden mb-1">{info.audience}</Badge>
-                              <p>{info.desc}</p>
-                              <p className="text-xs"><span className="font-medium text-foreground">{isTh ? 'Filter:' : 'Filters:'}</span> {info.filters}</p>
-                            </AccordionContent>
-                          </AccordionItem>
-                        )
-                      })}
-                      {filteredPages.length === 0 && (
-                        <p className="text-sm text-muted-foreground py-2">{isTh ? 'ไม่พบผลการค้นหา' : 'No results'}</p>
-                      )}
-                    </Accordion>
-                  </>
+                  <Accordion type="multiple" className="-mt-1">
+                    {filteredPages.map((p, i) => {
+                      const info = isTh ? p.th : p.en
+                      return (
+                        <AccordionItem key={i} value={`page-${i}`} className="border-b">
+                          <AccordionTrigger className="hover:no-underline py-3.5 text-sm font-semibold text-left">
+                            <div className="flex items-center gap-2.5">
+                              <p.icon className="h-4 w-4 text-muted-foreground shrink-0" />
+                              <span>{info.title}</span>
+                              <Badge variant="outline" className="text-[10px] font-normal ml-1 hidden sm:inline-flex">{info.audience}</Badge>
+                            </div>
+                          </AccordionTrigger>
+                          <AccordionContent className="text-sm text-muted-foreground space-y-1.5 pb-4">
+                            <Badge variant="outline" className="text-[10px] font-normal sm:hidden mb-1">{info.audience}</Badge>
+                            <p>{info.desc}</p>
+                            <p className="text-xs"><span className="font-medium text-foreground">{isTh ? 'Filter:' : 'Filters:'}</span> {info.filters}</p>
+                          </AccordionContent>
+                        </AccordionItem>
+                      )
+                    })}
+                    {filteredPages.length === 0 && (
+                      <p className="text-sm text-muted-foreground py-2">{isTh ? 'ไม่พบผลการค้นหา' : 'No results'}</p>
+                    )}
+                  </Accordion>
                 )}
 
                 {/* ── Metrics ── */}
                 {activeSection === 'metrics' && (
                   <>
-                    <h3 className="font-semibold text-sm text-[#003DA6]">
-                      {isTh ? 'คำนิยาม Metric' : 'Metric Definitions'}
-                    </h3>
                     <div className="overflow-x-auto rounded-md border">
                       <table className="w-full text-sm">
                         <thead>
@@ -345,133 +331,163 @@ export function HelpDrawer() {
 
                 {/* ── FAQ ── */}
                 {activeSection === 'faq' && (
-                  <>
-                    <h3 className="font-semibold text-sm text-[#003DA6]">FAQ</h3>
-                    <Accordion type="multiple" className="space-y-1.5">
-                      {filteredFaqs.map((f, i) => {
-                        const info = isTh ? f.th : f.en
-                        return (
-                          <AccordionItem key={i} value={`faq-${i}`} className="border rounded-md px-3">
-                            <AccordionTrigger className="hover:no-underline py-2.5 text-sm text-left">{info.q}</AccordionTrigger>
-                            <AccordionContent className="text-sm text-muted-foreground pb-3">{info.a}</AccordionContent>
-                          </AccordionItem>
-                        )
-                      })}
-                      {filteredFaqs.length === 0 && (
-                        <p className="text-sm text-muted-foreground py-2">{isTh ? 'ไม่พบผลการค้นหา' : 'No results'}</p>
-                      )}
-                    </Accordion>
-                  </>
+                  <Accordion type="multiple" className="-mt-1">
+                    {filteredFaqs.map((f, i) => {
+                      const info = isTh ? f.th : f.en
+                      return (
+                        <AccordionItem key={i} value={`faq-${i}`} className="border-b">
+                          <AccordionTrigger className="hover:no-underline py-3.5 text-sm font-semibold text-left">{info.q}</AccordionTrigger>
+                          <AccordionContent className="text-sm text-muted-foreground pb-4 leading-relaxed">{info.a}</AccordionContent>
+                        </AccordionItem>
+                      )
+                    })}
+                    {filteredFaqs.length === 0 && (
+                      <p className="text-sm text-muted-foreground py-2">{isTh ? 'ไม่พบผลการค้นหา' : 'No results'}</p>
+                    )}
+                  </Accordion>
                 )}
 
                 {/* ── Feedback ── */}
                 {activeSection === 'feedback' && (
-                  <>
-                    <h3 className="font-semibold text-sm text-[#003DA6]">
-                      {isTh ? 'แจ้งปัญหา / ขอ Feature' : 'Report Issue / Feature Request'}
-                    </h3>
-                    {sent ? (
-                      <div className="flex items-center gap-2 text-sm text-green-600 py-4">
-                        <CheckCircle2 className="h-4 w-4 shrink-0" />
-                        {isTh ? 'ส่งเรียบร้อยแล้ว ขอบคุณที่แจ้ง!' : 'Sent successfully. Thank you!'}
-                        <button className="ml-2 underline text-muted-foreground" onClick={() => setSent(false)}>
-                          {isTh ? 'ส่งอีกครั้ง' : 'Send another'}
-                        </button>
-                      </div>
-                    ) : (
-                      <form onSubmit={handleSubmit} className="space-y-4">
+                  sent ? (
+                    <div className="flex items-center gap-2 text-sm text-green-600 py-4">
+                      <CheckCircle2 className="h-4 w-4 shrink-0" />
+                      {isTh ? 'ส่งเรียบร้อยแล้ว ขอบคุณที่แจ้ง!' : 'Sent successfully. Thank you!'}
+                      <button className="ml-2 underline text-muted-foreground" onClick={() => setSent(false)}>
+                        {isTh ? 'ส่งอีกครั้ง' : 'Send another'}
+                      </button>
+                    </div>
+                  ) : (
+                    <form onSubmit={handleSubmit}>
+                      <FieldSet>
+                        <FieldLegend>{isTh ? 'แจ้งปัญหา / ขอ Feature' : 'Report Issue / Feature Request'}</FieldLegend>
+                        <FieldDescription>
+                          {isTh
+                            ? 'บอกเราว่าเกิดอะไรขึ้น ทีมงานจะได้รับอีเมลแจ้งเตือนทันที'
+                            : 'Tell us what happened — the team is notified by email right away.'}
+                        </FieldDescription>
 
-                        {/* Type */}
-                        <div className="flex gap-2 flex-wrap">
-                          {TYPE_OPTIONS.map(opt => (
-                            <button
-                              key={opt.value}
-                              type="button"
-                              onClick={() => setFbType(opt.value)}
-                              className={cn(
-                                'px-3 py-1.5 rounded-md text-xs font-medium border transition-colors',
-                                fbType === opt.value
-                                  ? 'bg-[#003DA6] text-white border-[#003DA6]'
-                                  : 'border-border text-muted-foreground hover:border-[#003DA6]'
-                              )}
+                        <FieldGroup>
+                          {/* Type */}
+                          <Field>
+                            <FieldLabel>{isTh ? 'ประเภท' : 'Type'}</FieldLabel>
+                            <div className="flex gap-2 flex-wrap">
+                              {TYPE_OPTIONS.map(opt => (
+                                <button
+                                  key={opt.value}
+                                  type="button"
+                                  onClick={() => setFbType(opt.value)}
+                                  aria-pressed={fbType === opt.value}
+                                  className={cn(
+                                    'px-3 py-1.5 rounded-md text-xs font-medium border transition-colors',
+                                    fbType === opt.value
+                                      ? 'bg-[#003DA6] text-white border-[#003DA6]'
+                                      : 'border-border text-muted-foreground hover:border-[#003DA6]'
+                                  )}
+                                >
+                                  {isTh ? opt.labelTh : opt.labelEn}
+                                </button>
+                              ))}
+                            </div>
+                          </Field>
+
+                          {/* Page */}
+                          <Field>
+                            <FieldLabel htmlFor="fb-page">{isTh ? 'หน้าที่เกิดปัญหา' : 'Page'}</FieldLabel>
+                            <select
+                              id="fb-page"
+                              value={fbPage}
+                              onChange={e => setFbPage(e.target.value)}
+                              className="w-full h-9 rounded-md border border-input bg-background px-3 py-1 text-sm shadow-sm focus:outline-none focus:ring-1 focus:ring-ring"
                             >
-                              {isTh ? opt.labelTh : opt.labelEn}
-                            </button>
-                          ))}
-                        </div>
+                              {PAGE_OPTIONS.map(p => <option key={p}>{p}</option>)}
+                            </select>
+                            <FieldDescription>{isTh ? 'เลือกหน้าที่เกี่ยวข้องกับปัญหานี้' : 'Pick the page this relates to.'}</FieldDescription>
+                          </Field>
 
-                        {/* Page */}
-                        <div className="space-y-1">
-                          <label className="text-xs font-medium">{isTh ? 'หน้าที่เกิดปัญหา' : 'Page'}</label>
-                          <select
-                            value={fbPage}
-                            onChange={e => setFbPage(e.target.value)}
-                            className="w-full h-9 rounded-md border border-input bg-background px-3 py-1 text-sm shadow-sm focus:outline-none focus:ring-1 focus:ring-ring"
-                          >
-                            {PAGE_OPTIONS.map(p => <option key={p}>{p}</option>)}
-                          </select>
-                        </div>
+                          {/* Title */}
+                          <Field data-invalid={fbError && !fbTitle.trim() ? true : undefined}>
+                            <FieldLabel htmlFor="fb-title">{isTh ? 'หัวข้อ' : 'Title'}</FieldLabel>
+                            <Input
+                              id="fb-title"
+                              value={fbTitle}
+                              onChange={e => setFbTitle(e.target.value)}
+                              aria-invalid={fbError && !fbTitle.trim() ? true : undefined}
+                              placeholder={isTh ? 'สรุปปัญหาสั้นๆ...' : 'Brief summary...'}
+                            />
+                            <FieldDescription>{isTh ? 'สรุปสั้น ๆ ใน 1 บรรทัด' : 'A short one-line summary.'}</FieldDescription>
+                          </Field>
 
-                        {/* Title */}
-                        <div className="space-y-1">
-                          <label className="text-xs font-medium">{isTh ? 'หัวข้อ' : 'Title'}</label>
-                          <Input value={fbTitle} onChange={e => setFbTitle(e.target.value)} placeholder={isTh ? 'สรุปปัญหาสั้นๆ...' : 'Brief summary...'} />
-                        </div>
+                          {/* Description */}
+                          <Field data-invalid={fbError && !fbDescription.trim() ? true : undefined}>
+                            <FieldLabel htmlFor="fb-description">{isTh ? 'รายละเอียด' : 'Description'}</FieldLabel>
+                            <Textarea
+                              id="fb-description"
+                              value={fbDescription}
+                              onChange={e => setFbDescription(e.target.value)}
+                              rows={4}
+                              aria-invalid={fbError && !fbDescription.trim() ? true : undefined}
+                              placeholder={isTh ? 'อธิบายปัญหาหรือ feature ที่ต้องการ...' : 'Describe the issue or the feature you need...'}
+                            />
+                          </Field>
 
-                        {/* Description */}
-                        <div className="space-y-1">
-                          <label className="text-xs font-medium">{isTh ? 'รายละเอียด' : 'Description'}</label>
-                          <Textarea
-                            value={fbDescription}
-                            onChange={e => setFbDescription(e.target.value)}
-                            rows={4}
-                            placeholder={isTh ? 'อธิบายปัญหาหรือ feature ที่ต้องการ...' : 'Describe the issue or the feature you need...'}
-                          />
-                        </div>
-
-                        {/* Image */}
-                        <div className="space-y-2">
-                          <label className="text-xs font-medium">{isTh ? 'แนบรูป (ไม่บังคับ, สูงสุด 5 MB)' : 'Attach screenshot (optional, max 5 MB)'}</label>
-                          {fbPreview ? (
-                            <div className="relative w-fit">
-                              {/* eslint-disable-next-line @next/next/no-img-element */}
-                              <img src={fbPreview} alt="preview" className="max-h-40 rounded-md border object-contain" />
+                          {/* Image */}
+                          <Field>
+                            <FieldLabel>{isTh ? 'แนบรูป' : 'Attach screenshot'}</FieldLabel>
+                            {fbPreview ? (
+                              <div className="relative w-fit">
+                                {/* eslint-disable-next-line @next/next/no-img-element */}
+                                <img src={fbPreview} alt="preview" className="max-h-40 rounded-md border object-contain" />
+                                <button
+                                  type="button"
+                                  onClick={removeImage}
+                                  className="absolute -top-2 -right-2 rounded-full bg-destructive text-white p-0.5"
+                                >
+                                  <X className="h-3 w-3" />
+                                </button>
+                              </div>
+                            ) : (
                               <button
                                 type="button"
-                                onClick={removeImage}
-                                className="absolute -top-2 -right-2 rounded-full bg-destructive text-white p-0.5"
+                                onClick={() => fileRef.current?.click()}
+                                className="flex w-full items-center justify-center gap-2 border border-dashed rounded-md px-4 py-3 text-sm text-muted-foreground hover:border-[#003DA6] hover:text-[#003DA6] transition-colors"
                               >
-                                <X className="h-3 w-3" />
+                                <ImagePlus className="h-4 w-4" />
+                                {isTh ? 'คลิกเพื่อเลือกรูป' : 'Click to select image'}
                               </button>
-                            </div>
-                          ) : (
-                            <button
-                              type="button"
-                              onClick={() => fileRef.current?.click()}
-                              className="flex items-center gap-2 border border-dashed rounded-md px-4 py-3 text-sm text-muted-foreground hover:border-[#003DA6] hover:text-[#003DA6] transition-colors"
-                            >
-                              <ImagePlus className="h-4 w-4" />
-                              {isTh ? 'คลิกเพื่อเลือกรูป' : 'Click to select image'}
-                            </button>
-                          )}
-                          <input ref={fileRef} type="file" accept="image/*" onChange={pickImage} className="hidden" />
-                        </div>
+                            )}
+                            <input ref={fileRef} type="file" accept="image/*" onChange={pickImage} className="hidden" />
+                            <FieldDescription>{isTh ? 'ไม่บังคับ — สูงสุด 5 MB' : 'Optional — up to 5 MB.'}</FieldDescription>
+                          </Field>
 
-                        {fbError && <p className="text-xs text-destructive">{fbError}</p>}
+                          {fbError && <FieldError>{fbError}</FieldError>}
 
-                        <Button type="submit" disabled={sending} className="bg-[#003DA6] hover:bg-[#003DA6]/90">
-                          {sending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                          {isTh ? 'ส่ง' : 'Submit'}
-                        </Button>
-                      </form>
-                    )}
-                  </>
+                          <Button type="submit" disabled={sending} className="w-full bg-[#003DA6] hover:bg-[#003DA6]/90">
+                            {sending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                            {isTh ? 'ส่ง' : 'Submit'}
+                          </Button>
+                        </FieldGroup>
+                      </FieldSet>
+                    </form>
+                  )
                 )}
 
-              </div>
-            </ResizablePanel>
+          </div>
 
-          </ResizablePanelGroup>
+          {/* ── Footer: Contact Support ── */}
+          <div className="border-t px-5 py-4 shrink-0">
+            {activeSection === 'feedback' ? (
+              <Button variant="outline" className="w-full" onClick={() => setActiveSection('faq')}>
+                <ChevronLeft className="mr-1.5 h-4 w-4" />
+                {isTh ? 'กลับไปหน้าช่วยเหลือ' : 'Back to Help'}
+              </Button>
+            ) : (
+              <Button variant="outline" className="w-full" onClick={() => setActiveSection('feedback')}>
+                <LifeBuoy className="mr-1.5 h-4 w-4" />
+                {isTh ? 'ติดต่อทีมงาน' : 'Contact Support'}
+              </Button>
+            )}
+          </div>
         </DrawerPrimitive.Content>
       </DrawerPrimitive.Portal>
     </DrawerPrimitive.Root>

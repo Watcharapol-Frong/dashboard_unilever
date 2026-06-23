@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef, useMemo } from 'react'
 import useSWR from 'swr'
-import { useUser } from '@clerk/nextjs'
+import { useUser } from '@/lib/clerk-client'
 import { ColumnDef } from '@tanstack/react-table'
 import { ChevronLeft, ChevronRight, Download, Phone, ShoppingBag, Store, Package } from 'lucide-react'
 import { DataTable } from '@/components/ui/data-table'
