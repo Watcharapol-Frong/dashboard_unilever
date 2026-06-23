@@ -1,7 +1,5 @@
-import { HelpClient } from './_components/HelpClient'
-
-export const metadata = { title: 'Help Center' }
+import { redirect } from 'next/navigation'
 
 export default function HelpPage() {
-  return <HelpClient />
+  redirect('/dashboard')
 }
