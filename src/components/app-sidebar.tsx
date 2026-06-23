@@ -3,7 +3,7 @@
 import * as React from "react"
 import Link from "next/link"
 import { usePathname } from "next/navigation"
-import { useUser } from "@clerk/nextjs"
+import { useUser } from "@/lib/clerk-client"
 import {
   LayoutDashboard, ShoppingCart, Phone, Users,
   Database, Table2, HelpCircle,
@@ -17,12 +17,14 @@ import {
 import { NavUser } from "@/components/nav-user"
 import { useLanguage } from "@/context/LanguageContext"
 import { t } from "@/lib/i18n"
+import { useHelp } from "@/context/HelpContext"
 
 export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
   const pathname = usePathname()
   const { user } = useUser()
   const isAdmin = user?.publicMetadata?.role === 'admin'
   const { lang } = useLanguage()
+  const { isOpen, setOpen } = useHelp()
 
   const dashboardNav = [
     { title: t('topbar.overview', lang), url: "/dashboard",           icon: LayoutDashboard, exact: true  },
@@ -116,14 +118,12 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
         <SidebarMenu>
           <SidebarMenuItem>
             <SidebarMenuButton
-              asChild
               tooltip="Get Help"
-              isActive={pathname.startsWith('/help')}
+              isActive={isOpen}
+              onClick={() => setOpen(true)}
             >
-              <Link href="/help">
-                <HelpCircle />
-                <span>{t('nav.getHelp', lang)}</span>
-              </Link>
+              <HelpCircle />
+              <span>{t('nav.getHelp', lang)}</span>
             </SidebarMenuButton>
           </SidebarMenuItem>
         </SidebarMenu>

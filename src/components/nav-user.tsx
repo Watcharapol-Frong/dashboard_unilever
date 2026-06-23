@@ -1,6 +1,6 @@
 "use client"
 
-import { useUser, useClerk } from '@clerk/nextjs'
+import { useUser, useSignOut } from '@/lib/clerk-client'
 import { IconLogout, IconDotsVertical, IconShield, IconUser } from "@tabler/icons-react"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import {
@@ -15,7 +15,7 @@ import type { Lang } from '@/context/LanguageContext'
 export function NavUser() {
   const { isMobile }       = useSidebar()
   const { user, isLoaded } = useUser()
-  const { signOut }        = useClerk()
+  const signOut            = useSignOut()
   const { lang, setLang }  = useLanguage()
 
   if (!isLoaded || !user) return null
