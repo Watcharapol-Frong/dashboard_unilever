@@ -26,13 +26,17 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
 
       if (imageFile && imageFile.size > 0) {
         try {
+          console.log('[feedback] image:', imageFile.name, imageFile.size, imageFile.type)
           const buffer   = Buffer.from(await imageFile.arrayBuffer())
+          console.log('[feedback] buffer size:', buffer.length)
+
           const now      = new Date()
           const month    = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`
           const safeName = imageFile.name.replace(/[^a-z0-9._-]/gi, '_')
           const key      = `feedback/${month}/${Date.now()}-${safeName}`
 
           await uploadToR2(key, buffer, imageFile.type || 'image/png')
+          console.log('[feedback] R2 upload ok:', key)
 
           const url = await getSignedUrl(
             r2,
@@ -50,8 +54,12 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
               <img src="${url}" alt="screenshot" style="max-width:600px;border-radius:6px;border:1px solid #e5e7eb"/>
             </p>`
         } catch (imgErr) {
-          console.error('[feedback] image upload failed (continuing without image):', imgErr)
+          const msg = imgErr instanceof Error ? imgErr.message : String(imgErr)
+          console.error('[feedback] image upload failed:', msg)
+          imageHtml = `<p style="color:#dc2626;margin-top:16px">⚠️ Screenshot upload failed: ${msg}</p>`
         }
+      } else {
+        console.log('[feedback] no image (size:', imageFile?.size ?? 'null', ')')
       }
 
       if (!process.env.RESEND_API_KEY) {
