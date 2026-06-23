@@ -14,7 +14,7 @@ npm run build-mart   # run mart build locally (no Vercel, no timeout)
                      # requires DATABASE_URL in env
 ```
 
-**Active branch:** `gemini-antigaravity-uxui`  
+**Active branch:** `main`  
 Always develop on this branch. Never push directly to `main` without explicit permission.
 
 ---
@@ -77,12 +77,18 @@ src/
     app-sidebar.tsx   — Sidebar with Dashboard / Data / Help / NavUser sections
     ui/               — shadcn/ui primitives
   context/
-    BuildContext.tsx      — mart build state (persist across navigation)
+    BuildContext.tsx      — mart build state (persist across navigation); after triggering
+                           a GitHub Actions build, polls /api/data/hub/freshness every 20s;
+                           bumps buildVersion (localStorage-persisted) and invalidates all
+                           SWR keys when build completes; exposes done field on BuildResult
     LanguageContext.tsx   — EN/TH language toggle
     UploadQueueContext.tsx — upload queue state
   hooks/
-    useDashboardSWR.ts   — typed SWR wrapper (5-min dedup, no revalidate on focus)
+    useDashboardSWR.ts   — typed SWR wrapper (5-min dedup, no revalidate on focus);
+                           appends ?_v={buildVersion} to fetch URLs when buildVersion > 0
+                           to bust both SWR client cache and Vercel CDN cache after a build
     useMonthRange.ts     — month chip range selector (default: last month)
+    useLocalState.ts     — drop-in useState with localStorage persistence (SSR-safe)
   lib/
     auth.ts              — withAuth(), withAdmin(), requireAuth(), requireAdmin()
                            DEV_MODE bypass when DEV_MODE=true + NODE_ENV=development
@@ -306,6 +312,7 @@ exportIncrementalToStorage()
 | Secret | Value |
 |---|---|
 | `DATABASE_URL` | CockroachDB connection string |
+| `GH_WORKFLOW_TOKEN` | GitHub PAT (classic, `workflow` scope) — triggers nightly-build.yml from Data Hub UI |
 
 ---
 
@@ -334,6 +341,7 @@ exportIncrementalToStorage()
 | `NEXT_PUBLIC_DIFY_API_URL` | Dify API base URL |
 | `NEXT_PUBLIC_DIFY_TOKEN` | Dify public token (client-side streaming) |
 | `ATTRIBUTION_DAYS` | Attribution window in days (default: 14, GitHub Actions only) |
+| `GH_WORKFLOW_TOKEN` | GitHub PAT (classic, `workflow` scope) — triggers nightly-build.yml from Data Hub UI |
 
 ---
 
@@ -346,3 +354,5 @@ exportIncrementalToStorage()
 - **Recharts SSR:** Must use `dynamic(() => import(...), { ssr: false })` for all chart components.
 - **telesales_calls PK:** `mmid` — one row per customer, GAS upserts on conflict.
 - **ClerkProvider:** Conditionally included in root layout — omitted when `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY` is not set.
+- **GAS ingest:** Vercel 413 limit ~4.5 MB — `postToAPI_` sends records in batches of 1,000 per HTTP request.
+- **R2 CORS:** Must configure CORS policy on R2 bucket to allow PUT from the production domain (AllowedMethods: GET, PUT, HEAD, DELETE; ExposeHeaders: ETag).

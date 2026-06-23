@@ -7,6 +7,7 @@ import Link from 'next/link'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
+import { InputOTP, InputOTPGroup, InputOTPSlot } from '@/components/ui/input-otp'
 import { Loader2 } from 'lucide-react'
 
 type Step = 'email' | 'otp'
@@ -125,20 +126,26 @@ export default function LoginPage() {
 
         {step === 'otp' && (
           <form onSubmit={handleOtp} className="space-y-4">
-            <div className="space-y-1.5">
+            <div className="space-y-3">
               <Label htmlFor="otp">Verification code</Label>
-              <Input
+              <InputOTP
                 id="otp"
-                placeholder="6-digit code"
-                value={otp}
-                onChange={e => setOtp(e.target.value)}
-                required
-                autoFocus
                 maxLength={6}
-                inputMode="numeric"
-              />
+                value={otp}
+                onChange={setOtp}
+                autoFocus
+              >
+                <InputOTPGroup className="w-full justify-center gap-3">
+                  <InputOTPSlot index={0} />
+                  <InputOTPSlot index={1} />
+                  <InputOTPSlot index={2} />
+                  <InputOTPSlot index={3} />
+                  <InputOTPSlot index={4} />
+                  <InputOTPSlot index={5} />
+                </InputOTPGroup>
+              </InputOTP>
             </div>
-            <Button type="submit" className="w-full" disabled={loading}>
+            <Button type="submit" className="w-full" disabled={loading || otp.length < 6}>
               {loading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
               Sign in
             </Button>

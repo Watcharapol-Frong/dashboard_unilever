@@ -9,6 +9,9 @@ import { Calendar } from '@/components/ui/calendar'
 import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from '@/components/ui/table'
+import {
+  BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, LabelList,
+} from 'recharts'
 
 import { useDashboardSWR } from '@/hooks/useDashboardSWR'
 import { KpiCard } from '@/components/dashboard/KpiCard'
@@ -21,6 +24,7 @@ import { PageLoading, PageEmpty, PageError } from '@/components/dashboard/PageSt
 import { fmtBaht, fmt, formatPct, colorRate } from '@/lib/formatters'
 import { useLanguage } from '@/context/LanguageContext'
 import { t } from '@/lib/i18n'
+import { useLocalState } from '@/hooks/useLocalState'
 import dynamic from 'next/dynamic'
 import type { BubbleRecord } from '@/components/charts/SplitBubbleChart'
 
@@ -81,8 +85,8 @@ const monthLastDay = (isoFirst: string): string => {
 export function SalesClient() {
   const { lang } = useLanguage()
   // ── Date range ────────────────────────────────────────────────────────────────
-  const [rangeFrom,   setRangeFrom]   = useState<string | null>(null)
-  const [rangeTo,     setRangeTo]     = useState<string | null>(null)
+  const [rangeFrom,   setRangeFrom]   = useLocalState<string | null>('sales:month:from', null)
+  const [rangeTo,     setRangeTo]     = useLocalState<string | null>('sales:month:to', null)
   const [hoverMonth,  setHoverMonth]  = useState<string | null>(null)
   const [filterMode,  setFilterMode]  = useState<'chips' | 'custom'>('chips')
   const [customRange, setCustomRange] = useState<DateRange>({ from: undefined, to: undefined })
@@ -127,9 +131,9 @@ export function SalesClient() {
   }
 
   // ── Attribute filters ─────────────────────────────────────────────────────────
-  const [channel, setChannel] = useState<string>('all')
-  const [cmg,     setCmg]     = useState<string[]>([])
-  const [agent,   setAgent]   = useState<string[]>([])
+  const [channel, setChannel] = useLocalState<string>('sales:channel', 'all')
+  const [cmg,     setCmg]     = useLocalState<string[]>('sales:cmg', [])
+  const [agent,   setAgent]   = useLocalState<string[]>('sales:agent', [])
 
   const hasFilter = channel !== 'all' || cmg.length > 0 || agent.length > 0
 
@@ -165,23 +169,17 @@ export function SalesClient() {
     `/api/data/dashboard/agents${agentQs ? `?${agentQs}` : ''}`
   )
 
-  // ── Default month chip once months load ───────────────────────────────────────
-  const defaultMonth = useMemo(() => {
-    const d = new Date()
-    d.setMonth(d.getMonth() - 1)
-    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`
-  }, [])
-
   const months = useMemo(
     () => (data?.months ?? []).map(m => m.substring(0, 7)),
     [data?.months]
   )
 
   useEffect(() => {
-    if (months.length && rangeFrom === null) {
-      setRangeFrom(months.includes(defaultMonth) ? defaultMonth : months[months.length - 1])
+    if (months.length > 0 && rangeFrom === null && rangeTo === null) {
+      setRangeFrom(months[0])
+      setRangeTo(months[months.length - 1])
     }
-  }, [months, rangeFrom, defaultMonth])
+  }, [months, rangeFrom, rangeTo])
 
   // ── Render ────────────────────────────────────────────────────────────────────
   if (isLoading && !data) return <PageLoading cols={4} />
@@ -192,12 +190,13 @@ export function SalesClient() {
   const cmgOptions   = options.cmg.map(c => ({ value: c, label: c }))
   const agentOptions = options.agents.map(a => ({ value: a, label: a }))
 
-  const totalBuyers  = kpi.new_customers + kpi.retention_customers
-  const totalSales   = kpi.total_online + kpi.total_offline
-  const onlinePct    = totalSales > 0 ? (kpi.total_online  / totalSales) * 100 : 0
-  const offlinePct   = totalSales > 0 ? (kpi.total_offline / totalSales) * 100 : 0
-  const convPct      = totalSales > 0 ? (kpi.converted_sales     / totalSales) * 100 : 0
-  const notConvPct   = totalSales > 0 ? (kpi.not_converted_sales / totalSales) * 100 : 0
+  const totalBuyers    = kpi.new_customers + kpi.retention_customers
+  const totalSales     = kpi.total_online + kpi.total_offline
+  const convSales      = kpi.converted_online + kpi.converted_offline
+  const onlinePct      = convSales > 0 ? (kpi.converted_online  / convSales) * 100 : 0
+  const offlinePct     = convSales > 0 ? (kpi.converted_offline / convSales) * 100 : 0
+  const convPct        = totalSales > 0 ? (kpi.converted_sales     / totalSales) * 100 : 0
+  const notConvPct     = totalSales > 0 ? (kpi.not_converted_sales / totalSales) * 100 : 0
 
   return (
     <div className="space-y-6">
@@ -324,24 +323,28 @@ export function SalesClient() {
           comparison={kpi.cmp_converted_sales ?? undefined}
           comparisonLabel={kpi.comparison_label ?? undefined}
           subtitle={`${fmtBaht(kpi.converted_online)} online · ${fmtBaht(kpi.converted_offline)} offline`}
+          tooltip={t('tooltip.convertedSales', lang)}
         />
         <KpiCard
           title={t('sales.avgOrderValue', lang)}
           value={kpi.avg_order_value > 0 ? fmtBaht(kpi.avg_order_value) : '—'}
           icon={ReceiptText}
           subtitle={`${fmt(kpi.converted_orders)} ${t('common.orders', lang)}`}
+          tooltip={t('tooltip.avgOrderValue', lang)}
         />
         <KpiCard
           title={t('kpi.newCustomers', lang)}
           value={fmt(kpi.new_customers)}
           icon={Users}
           subtitle={totalBuyers > 0 ? `${((kpi.new_customers / totalBuyers) * 100).toFixed(1)}% of buyers` : '—'}
+          tooltip={t('tooltip.newCustomers', lang)}
         />
         <KpiCard
           title={t('kpi.repeatCustomers', lang)}
           value={fmt(kpi.retention_customers)}
           icon={Repeat2}
           subtitle={totalBuyers > 0 ? `${((kpi.retention_customers / totalBuyers) * 100).toFixed(1)}% of buyers` : '—'}
+          tooltip={t('tooltip.repeatCustomers', lang)}
         />
       </KpiGrid>
 
@@ -355,83 +358,169 @@ export function SalesClient() {
       {/* ── Distribution panels ───────────────────────────────────────────────── */}
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
 
-        {/* Channel Split */}
+        {/* Channel Breakdown — 100% stacked bar */}
         <div className="rounded-lg border bg-card p-4 space-y-3">
-          <div>
-            <h3 className="text-sm font-semibold">{t('sales.channelBreakdown', lang)}</h3>
-            <p className="text-xs text-muted-foreground mt-0.5">Total sales by channel</p>
-          </div>
-          <div className="space-y-3">
-            <div className="space-y-1.5">
-              <div className="flex items-center justify-between text-xs">
-                <span className="flex items-center gap-1.5 text-muted-foreground">
-                  <span className="inline-block h-2 w-2 rounded-sm bg-[#003DA6]" />{t('common.online', lang)}
-                </span>
-                <span className="tabular-nums font-medium">
-                  {fmtBaht(kpi.total_online)}
-                  <span className="ml-1.5 text-muted-foreground">({onlinePct.toFixed(1)}%)</span>
-                </span>
-              </div>
-              <div className="h-2 overflow-hidden rounded-full bg-gray-100">
-                <div className="h-full rounded-full bg-[#003DA6] transition-all" style={{ width: `${onlinePct}%` }} />
-              </div>
+          <div className="flex items-start justify-between gap-2">
+            <div>
+              <h3 className="text-sm font-semibold">{t('sales.channelBreakdown', lang)}</h3>
+              <p className="text-xs text-muted-foreground mt-0.5">Converted sales by channel</p>
             </div>
-            <div className="space-y-1.5">
-              <div className="flex items-center justify-between text-xs">
-                <span className="flex items-center gap-1.5 text-muted-foreground">
-                  <span className="inline-block h-2 w-2 rounded-sm bg-[#60a5fa]" />{t('common.offline', lang)}
-                </span>
-                <span className="tabular-nums font-medium">
-                  {fmtBaht(kpi.total_offline)}
-                  <span className="ml-1.5 text-muted-foreground">({offlinePct.toFixed(1)}%)</span>
-                </span>
-              </div>
-              <div className="h-2 overflow-hidden rounded-full bg-gray-100">
-                <div className="h-full rounded-full bg-[#60a5fa] transition-all" style={{ width: `${offlinePct}%` }} />
-              </div>
+            <div className="flex gap-3 text-xs text-muted-foreground shrink-0">
+              <span className="flex items-center gap-1.5">
+                <span className="inline-block h-2 w-2 rounded-sm bg-[#003DA6]" />{t('common.online', lang)}
+              </span>
+              <span className="flex items-center gap-1.5">
+                <span className="inline-block h-2 w-2 rounded-sm bg-[#60a5fa]" />{t('common.offline', lang)}
+              </span>
             </div>
           </div>
+          <ResponsiveContainer width="100%" height={90}>
+            <BarChart
+              layout="vertical"
+              data={[{
+                name: 'Sales',
+                online:  onlinePct,
+                offline: offlinePct,
+                _online_val:  kpi.converted_online,
+                _offline_val: kpi.converted_offline,
+              }]}
+              margin={{ top: 24, right: 0, left: 0, bottom: 0 }}
+              barSize={32}
+            >
+              <XAxis type="number" domain={[0, 100]} hide />
+              <YAxis type="category" dataKey="name" hide />
+              <Tooltip
+                cursor={false}
+                // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                content={({ active, payload }: any) => {
+                  if (!active || !payload?.length) return null
+                  const d = payload[0]?.payload
+                  return (
+                    <div className="rounded-lg border bg-background px-3 py-2.5 text-xs shadow-md space-y-1.5">
+                      <div className="flex items-center justify-between gap-6">
+                        <span className="flex items-center gap-1.5 text-muted-foreground">
+                          <span className="inline-block h-2 w-2 rounded-sm bg-[#003DA6]" />{t('common.online', lang)}
+                        </span>
+                        <span className="tabular-nums font-medium">{fmtBaht(d._online_val)} ({d.online.toFixed(1)}%)</span>
+                      </div>
+                      <div className="flex items-center justify-between gap-6">
+                        <span className="flex items-center gap-1.5 text-muted-foreground">
+                          <span className="inline-block h-2 w-2 rounded-sm bg-[#60a5fa]" />{t('common.offline', lang)}
+                        </span>
+                        <span className="tabular-nums font-medium">{fmtBaht(d._offline_val)} ({d.offline.toFixed(1)}%)</span>
+                      </div>
+                    </div>
+                  )
+                }}
+              />
+              <Bar dataKey="online"  stackId="s" fill="#003DA6" radius={[4, 0, 0, 4]}>
+                <LabelList
+                  dataKey="online"
+                  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                  content={({ x, y, width, value }: any) => {
+                    const pct = value as number
+                    if (!pct || pct < 8) return null
+                    return <text x={(x as number) + (width as number) / 2} y={(y as number) - 5} textAnchor="middle" fontSize={11} fill="#6b7280">{Math.round(pct)}%</text>
+                  }}
+                />
+              </Bar>
+              <Bar dataKey="offline" stackId="s" fill="#60a5fa" radius={[0, 4, 4, 0]}>
+                <LabelList
+                  dataKey="offline"
+                  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                  content={({ x, y, width, value }: any) => {
+                    const pct = value as number
+                    if (!pct || pct < 8) return null
+                    return <text x={(x as number) + (width as number) / 2} y={(y as number) - 5} textAnchor="middle" fontSize={11} fill="#6b7280">{Math.round(pct)}%</text>
+                  }}
+                />
+              </Bar>
+            </BarChart>
+          </ResponsiveContainer>
           <p className="text-xs text-muted-foreground border-t pt-2">
-            Total {fmtBaht(totalSales)} · {fmt(kpi.total_orders)} orders
+            Total {fmtBaht(kpi.converted_sales)} · {fmt(kpi.converted_orders)} converted orders
           </p>
         </div>
 
-        {/* Conversion Split */}
+        {/* Conversion Split — 100% stacked bar */}
         <div className="rounded-lg border bg-card p-4 space-y-3">
-          <div>
-            <h3 className="text-sm font-semibold">Conversion Split</h3>
-            <p className="text-xs text-muted-foreground mt-0.5">HOC-attributed vs unattributed sales</p>
-          </div>
-          <div className="space-y-3">
-            <div className="space-y-1.5">
-              <div className="flex items-center justify-between text-xs">
-                <span className="flex items-center gap-1.5 text-muted-foreground">
-                  <span className="inline-block h-2 w-2 rounded-sm bg-green-500" />{t('sales.convertedOrders', lang)}
-                </span>
-                <span className="tabular-nums font-medium">
-                  {fmtBaht(kpi.converted_sales)}
-                  <span className="ml-1.5 text-muted-foreground">({convPct.toFixed(1)}%)</span>
-                </span>
-              </div>
-              <div className="h-2 overflow-hidden rounded-full bg-gray-100">
-                <div className="h-full rounded-full bg-green-500 transition-all" style={{ width: `${convPct}%` }} />
-              </div>
+          <div className="flex items-start justify-between gap-2">
+            <div>
+              <h3 className="text-sm font-semibold">Conversion Split</h3>
+              <p className="text-xs text-muted-foreground mt-0.5">HOC-attributed vs unattributed sales</p>
             </div>
-            <div className="space-y-1.5">
-              <div className="flex items-center justify-between text-xs">
-                <span className="flex items-center gap-1.5 text-muted-foreground">
-                  <span className="inline-block h-2 w-2 rounded-sm bg-amber-400" />{t('sales.notConverted', lang)}
-                </span>
-                <span className="tabular-nums font-medium">
-                  {fmtBaht(kpi.not_converted_sales)}
-                  <span className="ml-1.5 text-muted-foreground">({notConvPct.toFixed(1)}%)</span>
-                </span>
-              </div>
-              <div className="h-2 overflow-hidden rounded-full bg-gray-100">
-                <div className="h-full rounded-full bg-amber-400 transition-all" style={{ width: `${notConvPct}%` }} />
-              </div>
+            <div className="flex gap-3 text-xs text-muted-foreground shrink-0">
+              <span className="flex items-center gap-1.5">
+                <span className="inline-block h-2 w-2 rounded-sm bg-green-500" />{t('sales.convertedOrders', lang)}
+              </span>
+              <span className="flex items-center gap-1.5">
+                <span className="inline-block h-2 w-2 rounded-sm bg-amber-400" />{t('sales.notConverted', lang)}
+              </span>
             </div>
           </div>
+          <ResponsiveContainer width="100%" height={90}>
+            <BarChart
+              layout="vertical"
+              data={[{
+                name: 'Orders',
+                converted:     convPct,
+                not_converted: notConvPct,
+                _conv_val:     kpi.converted_sales,
+                _not_conv_val: kpi.not_converted_sales,
+              }]}
+              margin={{ top: 24, right: 0, left: 0, bottom: 0 }}
+              barSize={32}
+            >
+              <XAxis type="number" domain={[0, 100]} hide />
+              <YAxis type="category" dataKey="name" hide />
+              <Tooltip
+                cursor={false}
+                // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                content={({ active, payload }: any) => {
+                  if (!active || !payload?.length) return null
+                  const d = payload[0]?.payload
+                  return (
+                    <div className="rounded-lg border bg-background px-3 py-2.5 text-xs shadow-md space-y-1.5">
+                      <div className="flex items-center justify-between gap-6">
+                        <span className="flex items-center gap-1.5 text-muted-foreground">
+                          <span className="inline-block h-2 w-2 rounded-sm bg-green-500" />{t('sales.convertedOrders', lang)}
+                        </span>
+                        <span className="tabular-nums font-medium">{fmtBaht(d._conv_val)} ({d.converted.toFixed(1)}%)</span>
+                      </div>
+                      <div className="flex items-center justify-between gap-6">
+                        <span className="flex items-center gap-1.5 text-muted-foreground">
+                          <span className="inline-block h-2 w-2 rounded-sm bg-amber-400" />{t('sales.notConverted', lang)}
+                        </span>
+                        <span className="tabular-nums font-medium">{fmtBaht(d._not_conv_val)} ({d.not_converted.toFixed(1)}%)</span>
+                      </div>
+                    </div>
+                  )
+                }}
+              />
+              <Bar dataKey="converted"     stackId="s" fill="#22c55e" radius={[4, 0, 0, 4]}>
+                <LabelList
+                  dataKey="converted"
+                  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                  content={({ x, y, width, value }: any) => {
+                    const pct = value as number
+                    if (!pct || pct < 8) return null
+                    return <text x={(x as number) + (width as number) / 2} y={(y as number) - 5} textAnchor="middle" fontSize={11} fill="#6b7280">{Math.round(pct)}%</text>
+                  }}
+                />
+              </Bar>
+              <Bar dataKey="not_converted" stackId="s" fill="#fbbf24" radius={[0, 4, 4, 0]}>
+                <LabelList
+                  dataKey="not_converted"
+                  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                  content={({ x, y, width, value }: any) => {
+                    const pct = value as number
+                    if (!pct || pct < 8) return null
+                    return <text x={(x as number) + (width as number) / 2} y={(y as number) - 5} textAnchor="middle" fontSize={11} fill="#6b7280">{Math.round(pct)}%</text>
+                  }}
+                />
+              </Bar>
+            </BarChart>
+          </ResponsiveContainer>
           <p className="text-xs text-muted-foreground border-t pt-2">
             {fmt(kpi.new_customers)} new · {fmt(kpi.retention_customers)} repeat buyers
           </p>
@@ -482,6 +571,26 @@ export function SalesClient() {
                   </TableCell>
                 </TableRow>
               ))}
+              {(() => {
+                const sumSales     = agentRows.reduce((s, r) => s + r.sales_total, 0)
+                const sumOrders    = agentRows.reduce((s, r) => s + r.order_total, 0)
+                const sumCalls     = agentRows.reduce((s, r) => s + r.call_total, 0)
+                const sumConverted = agentRows.reduce((s, r) => s + r.converted_customers, 0)
+                const totalConvRate = sumCalls > 0 ? sumConverted / sumCalls : 0
+                return (
+                  <TableRow className="border-t-2 bg-muted/40 font-semibold">
+                    <TableCell className="text-center px-3 text-xs text-muted-foreground">Σ</TableCell>
+                    <TableCell className="text-sm">Total</TableCell>
+                    <TableCell className="text-right tabular-nums text-sm">{fmtBaht(sumSales)}</TableCell>
+                    <TableCell className="text-right tabular-nums text-sm text-muted-foreground">{fmt(sumOrders)}</TableCell>
+                    <TableCell className="text-right tabular-nums text-sm text-muted-foreground">{fmt(sumCalls)}</TableCell>
+                    <TableCell className="text-right tabular-nums text-sm text-muted-foreground">{fmt(sumConverted)}</TableCell>
+                    <TableCell className={`text-right tabular-nums text-sm pr-4 font-semibold ${colorRate(totalConvRate, [0.3, 0.15])}`}>
+                      {sumCalls > 0 ? formatPct(totalConvRate) : '—'}
+                    </TableCell>
+                  </TableRow>
+                )
+              })()}
             </TableBody>
           </Table>
         </div>

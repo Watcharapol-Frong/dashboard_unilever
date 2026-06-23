@@ -1,6 +1,6 @@
 # Business Logic Reference
 > Dashboard Unilever — Single source of truth for all business rules, metric definitions, and data flow.
-> Last derived from codebase: 2026-06-15
+> Last derived from codebase: 2026-06-16
 
 ---
 
@@ -130,49 +130,74 @@ customer_type IN ('first_order_not_converted', 'retention_not_converted')
 Orders that exist but are outside the attribution window.
 
 ### 4.3 Reached (ติดต่อได้)
-A call is "reached" if the customer picked up and a productive interaction occurred.
+A call is "reached" if the customer picked up and a conversation occurred.
+Only truly unreachable outcomes are excluded — statuses where no contact was made at all.
 
-**Excluded statuses (NOT reached):**
+**Excluded (NOT reached — customer did NOT answer):**
 ```
-ไม่รับสาย*              — no answer (all variants)
+ไม่รับสาย*              — no answer (all variants, wildcard match)
 ปิดเครื่อง/ติดต่อไม่ได้  — phone off / unreachable
-ไม่สะดวกคุย             — not convenient to talk
-ยังไม่ต้องการสินค้า      — not interested in products
 ```
 
-SQL fragment:
+**Included as Reached (customer DID answer, conversation occurred):**
+```
+ไม่สะดวกคุย             — not convenient to talk right now
+ยังไม่ต้องการสินค้า      — not ready to buy yet
+(all other statuses)     — normal outcomes
+```
+
+SQL fragment (`src/lib/metrics.ts` → `REACHED`):
 ```sql
 call_status NOT LIKE 'ไม่รับสาย%'
 AND call_status IS DISTINCT FROM 'ปิดเครื่อง/ติดต่อไม่ได้'
-AND call_status IS DISTINCT FROM 'ไม่สะดวกคุย'
-AND call_status IS DISTINCT FROM 'ยังไม่ต้องการสินค้า'
 ```
 
-> ⚠️ Historical bug (fixed 2026-06-12): some routes used only 2 conditions (excluding only `ไม่รับสาย%` and `ปิดเครื่อง/ติดต่อไม่ได้`). All routes now use the 4-condition version above.
+`ไม่สะดวกคุย` and `ยังไม่ต้องการสินค้า` count as Reached because the customer answered — they are distinguished at the **Interested** stage instead.
 
-### 4.4 New Customer
+### 4.4 Interested
+A reached customer who did not explicitly decline to engage.
+
+**Excluded from Interested (Reached but NOT Interested):**
+```
+ไม่สะดวกคุย             — customer answered but was not convenient to talk
+ยังไม่ต้องการสินค้า      — customer answered but is not ready to buy yet
+```
+
+SQL fragment (applied in addition to REACHED):
+```sql
+call_status NOT IN ('ไม่สะดวกคุย', 'ยังไม่ต้องการสินค้า')
+```
+
+This creates the Conversion Funnel boundary:
+```
+Total Calls → [drop: Not Reached] → Reached → [drop: Not Interested] → Interested → [drop: Not Converted] → Converted
+```
+
+### 4.5 New Customer
 ```sql
 customer_type = 'new_customer'
 ```
 Customer whose first-ever HOC order falls within the attribution window.
 
-### 4.5 Retention (Repeat Customer)
+### 4.6 Retention (Repeat Customer)
 ```sql
 customer_type = 'retention'
 ```
 Customer who reordered HOC products within the attribution window.
 
-### 4.6 Conversion Rate
+### 4.7 Conversion Rate
 ```
-Converted Customers ÷ Total Leads Called
+Converted ÷ Reached
 ```
+"Of everyone who answered the call, how many became customers?"
+Denominator is Reached (not Total Calls or Total Leads) — calls that were never answered are outside the agent's control and should not penalise the rate.
 
-### 4.7 Reach Rate
+### 4.8 Reach Rate
 ```
 Reached Calls ÷ Total Calls Made
 ```
 
-### 4.8 ROI
+### 4.9 ROI
 ```
 HOC Sales (incentive-eligible) ÷ Total Program Expense
 ```
@@ -227,7 +252,7 @@ total_expense = total_incentive
 
 ### 7.1 Date Filter (most pages)
 - Filters on `order_date` (sales pages) or `first_connected_date` (telesales pages)
-- Default: last complete month
+- Default: **full available range** — auto-selected on first data load; persisted to `localStorage` across sessions
 - Range: click start month → click end month (chip UI)
 
 ### 7.2 CMG Filter
@@ -238,10 +263,13 @@ total_expense = total_incentive
 ### 7.3 Channel Filter
 - `online` / `offline` / both
 
-### 7.4 Attribution Filter (Telesales page)
-- Order date is intentionally NOT date-filtered on the telesales page
-- `customer_type` already encodes the attribution window
-- A retention order outside the call period still counts (it was credited at attribution time)
+### 7.4 Converted Scoping (Telesales page)
+When a date range filter is active, the Converted count in the Conversion Funnel is scoped:
+only `sales_hoc_orders` rows where `order_date >= telesales_calls.first_connected_date` for
+that customer are counted. This prevents historical conversions (from data periods before the
+selected range) from inflating the count.
+
+When no date filter is active (all-time view): no order_date restriction is applied.
 
 ---
 
@@ -294,6 +322,10 @@ Google Apps Script reads from Google Sheets and POSTs to the API.
 **MMID cleaning:** strips non-digits, rejects if > 14 digits, zero-pads to 14 digits  
 **Mobile cleaning:** strips non-digits, accepts 9 or 10 digits, zero-pads to 10
 
+**Payload chunking:** GAS sends records in batches of 1,000 per HTTP POST to avoid
+Vercel's ~4.5 MB payload limit (413 FUNCTION_PAYLOAD_TOO_LARGE). The API upserts in
+further sub-chunks of 500 rows to CockroachDB.
+
 ---
 
 ## 10. Roles & Permissions
@@ -312,7 +344,11 @@ Google Apps Script reads from Google Sheets and POSTs to the API.
 | Date | Change | Impact |
 |---|---|---|
 | 2026-05-01 | Incentive eligibility: DISTRIBUTOR excluded from May 2026 onward | Incentives page, ROI calculation |
-| 2026-06-12 | Metric Layer created (`src/lib/metrics.ts`) | All routes now use consistent definitions |
-| 2026-06-12 | REACHED bug fix: 2-condition → 4-condition across all routes | Reached/Connected numbers now consistent across all pages |
+| 2026-06-12 | Metric Layer created (`src/lib/metrics.ts`) | All routes now import CONV, NOT_CONV, REACHED, reachedCond() — single source of truth |
+| 2026-06-12 | REACHED defined as 2-condition (excludes only ไม่รับสาย + ปิดเครื่อง); ไม่สะดวกคุย and ยังไม่ต้องการสินค้า count as Reached | Telesales Conversion Funnel: Reached → Interested → Converted stages |
 | 2026-06-15 | `mart_telesales_orders` replaced by `mmid_cmg_map` + `sales_hoc_orders` | Faster build, less storage, single CTE chain |
 | 2026-06-15 | Clerk auth restored — middleware, register, webhook | Users can now log in and register via invite code |
+| 2026-06-16 | Telesales Converted scoped to post-call orders when date filter active | Prevents historical conversions inflating period-filtered Converted count |
+| 2026-06-16 | GAS postToAPI_ chunked to 1,000 records/request | Fixes 413 FUNCTION_PAYLOAD_TOO_LARGE for large datasets |
+| 2026-06-16 | Channel Breakdown on Sales page uses converted_online/offline only | Metric consistency — all Sales page metrics now show converted data |
+| 2026-06-16 | useLocalState hook added — localStorage filter persistence | Filters persist across browser sessions |

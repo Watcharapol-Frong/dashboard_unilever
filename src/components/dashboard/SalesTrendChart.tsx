@@ -110,7 +110,7 @@ interface Props {
 }
 
 export function SalesTrendChart({ cmgFilter, effectiveStart, effectiveEnd }: Props) {
-  const [view, setView] = useState<View>('weekly')
+  const [view, setView] = useState<View>('monthly')
   const { buildVersion } = useBuild()
 
   const cmgQuery = cmgFilter.length > 0
@@ -132,9 +132,18 @@ export function SalesTrendChart({ cmgFilter, effectiveStart, effectiveEnd }: Pro
     })
   }, [monthlyData, effectiveStart, effectiveEnd])
 
-  // ── Weekly data — uses effectiveStart/End directly (null key = disabled) ──────
-  const weeklyKey = view === 'weekly' && effectiveStart && effectiveEnd
-    ? [`/api/data/dashboard/sales-trend?view=weekly&start=${effectiveStart}&end=${effectiveEnd}${cmgQuery}`, buildVersion]
+  // ── Weekly data — fall back to full monthly range when no filter is active ─────
+  const fallbackStart = monthlyData?.[0]?.period?.substring(0, 10) ?? null
+  const fallbackEnd = useMemo(() => {
+    if (!monthlyData?.length) return null
+    const [y, m] = monthlyData[monthlyData.length - 1].period.split('-').map(Number)
+    return new Date(Date.UTC(y, m, 0)).toISOString().split('T')[0]
+  }, [monthlyData])
+  const weeklyStart = effectiveStart ?? fallbackStart
+  const weeklyEnd   = effectiveEnd   ?? fallbackEnd
+
+  const weeklyKey = view === 'weekly' && weeklyStart && weeklyEnd
+    ? [`/api/data/dashboard/sales-trend?view=weekly&start=${weeklyStart}&end=${weeklyEnd}${cmgQuery}`, buildVersion]
     : null
 
   const { data: weeklyData } = useSWR<{ ok: boolean; data: TrendRow[] }>(

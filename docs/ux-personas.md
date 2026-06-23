@@ -1,5 +1,7 @@
 # Dashboard Unilever — UX Personas & Display Logic
 
+> Last updated: 2026-06-19
+
 > Reference for developers and AI: use this file to decide **what to show**, **to whom**, and **in what priority order** for every section of the dashboard.
 
 ---
@@ -8,8 +10,8 @@
 
 | Clerk Role | Access Level | Who holds it |
 |---|---|---|
-| `admin` | Full access — all pages including Leads, Data Hub, Exports | Data Admins, Telesales Admin |
-| `viewer` | Read-only — all pages **except** Leads, Data Hub, Exports | All other business users |
+| `admin` | Full access — all pages including Leads, Data Hub, Raw Data | Data Admins, Telesales Admin |
+| `viewer` | Read-only — all pages **except** Leads, Data Hub, Raw Data | All other business users |
 
 > **Rule:** Access control is enforced at middleware level (route-based), not at component level. Never hide content in the UI as a substitute for route protection.
 
@@ -63,15 +65,15 @@ These are the **real people** who log in. Each maps to a Clerk role and has diff
 - **Clerk role:** viewer
 - **Primary goal:** Validate incentive spend against sales outcomes
 - **Morning routine:** Incentives → total payout → ROI per month → tier configuration review
-- **Secondary pages:** Overview (high-level ROI card), Exports (raw data for finance system)
-- **Note:** Exports requires admin role — Finance users needing raw data exports must be upgraded to admin
+- **Secondary pages:** Overview (high-level ROI card), Raw Data (raw data export for finance system)
+- **Note:** Raw Data requires admin role — Finance users needing raw data exports must be upgraded to admin
 - **Key numbers:** Total Incentives Paid, Programme ROI, ROI per tier, Monthly trend
 
 ### 2.7 Data Admin
 - **Clerk role:** admin
 - **Primary goal:** Keep data fresh — upload CSVs, rebuild mart, fix errors
 - **Routine:** Data Hub → Upload tab → History check → Build Mart
-- **Secondary pages:** Dashboard status cards (mart row counts), Exports (validate data)
+- **Secondary pages:** Dashboard status cards (mart row counts), Raw Data (validate data)
 - **Does NOT need:** Business KPI interpretation — this role operates the pipeline, not the business
 - **Key numbers:** Last upload timestamp, Row counts per source, Build success/failure
 
@@ -88,7 +90,7 @@ These are the **real people** who log in. Each maps to a Clerk role and has diff
 | Products | Secondary | Reference | Rarely | Rarely | ★ Primary | Reference | Rarely |
 | Incentives | Secondary | Reference | Rarely | Rarely | Reference | ★ Primary | Rarely |
 | Data Hub | — | — | — | Secondary | — | — | ★ Primary |
-| Exports | — | — | — | Secondary | — | Secondary | ★ Primary |
+| Raw Data | — | — | — | Rarely | — | Rarely | ★ Primary |
 
 **Legend:** ★ Primary = opens this page first / most frequently · Secondary = drills into here when primary raises questions · Reference = occasional lookup · Rarely = almost never · — = no access or no need
 
@@ -106,7 +108,7 @@ These are the **real people** who log in. Each maps to a Clerk role and has diff
 4. **Filters** (Month range, Tier, CMG) — let users narrow scope without losing the big picture
 
 **Display rules:**
-- Default view = last full month (not current partial month)
+- Default view = full available range (auto-selected from data, persisted to localStorage)
 - All KPI cards always reflect the selected month range + filters
 - Charts react to filters in real time
 - No raw tables — this page is executive summary only
@@ -220,20 +222,17 @@ These are the **real people** who log in. Each maps to a Clerk role and has diff
 
 ---
 
-### 4.8 Exports
-**Audience:** Data Admin, Finance (admin role required)
+### 4.8 Raw Data (`/raw-data`)
+**Audience:** Data Admin (admin role required)
 
 **Information hierarchy:**
-1. **Granularity selector** — Month / Week / Day / Order Line
-2. **Filter panel** — Month range, CMG, Channel, Brand
-3. **Column selector** — choose which fields to include
-4. **Preview** — first 50 rows before download
-5. **Download buttons** — CSV (max 500k rows) or XLSX (max 100k raw / 500k aggregated)
+1. **Table selector** — choose from source tables (online_sales, offline_sales, telesales_calls, leads, products, targets, costs, incentives, agent_headcount)
+2. **Paginated table** — browse raw rows directly
+3. **CSV export** — download the full table as a CSV file
 
 **Display rules:**
-- Row count estimate shown before download so user knows if they'll hit the limit
-- XLSX disabled automatically if row count exceeds 100k (raw) / 500k (aggregated)
-- Format limits shown as tooltips on disabled buttons, not silent failures
+- Non-admin users are redirected by middleware
+- Raw pivot/export is available via `GET/POST /api/data/pivot/` — accessible from this page, not a separate `/exports` route
 
 ---
 
@@ -251,7 +250,7 @@ These are the **real people** who log in. Each maps to a Clerk role and has diff
 - **All filters are URL-synced** (or local state that resets on navigation — both acceptable, but be consistent within a page)
 - **Clear All** button appears in FilterBar when `hasFilter={true}`
 - Filters always affect charts AND tables on the same page **unless explicitly documented otherwise** (Leads KPI cards are the one exception)
-- Date range default = last complete month (not current partial month)
+- Date range default = full available range (auto-selected from data, persisted to localStorage)
 
 ### Colour Semantics
 | Colour | Meaning |
@@ -271,7 +270,7 @@ These are the **real people** who log in. Each maps to a Clerk role and has diff
 |---|---|---|
 | Sidebar: Leads | Shown | Hidden |
 | Sidebar: Data Hub | Shown | Hidden |
-| Sidebar: Exports | Shown | Hidden |
+| Sidebar: Raw Data | Shown | Hidden |
 | All other sidebar items | Shown | Shown |
 | Build Mart button | Visible | N/A (page hidden) |
 | Upload controls | Visible | N/A (page hidden) |

@@ -26,10 +26,7 @@ function ChartTooltip({ active, payload, label }: any) {
   const d: TrendRow = payload[0]?.payload ?? {}
   const online  = d.online_sales  ?? 0
   const offline = d.offline_sales ?? 0
-  const target  = d.target        ?? 0
   const total   = online + offline
-  const ach     = target > 0 ? (total / target) * 100 : null
-  const achColor = ach === null ? '' : ach >= 100 ? 'text-green-600' : ach >= 80 ? 'text-yellow-600' : 'text-red-500'
 
   return (
     <div className="min-w-44 rounded-lg border bg-background px-3 py-2.5 text-xs shadow-md space-y-2">
@@ -48,17 +45,6 @@ function ChartTooltip({ active, payload, label }: any) {
           </span>
           <span className="tabular-nums">{fmtBaht(offline)}</span>
         </div>
-        {target > 0 && (
-          <div className="flex justify-between gap-6 border-t pt-1">
-            <span className="text-muted-foreground">Target</span>
-            <span className="tabular-nums">
-              {fmtBaht(target)}
-              {ach !== null && (
-                <span className={`ml-1.5 ${achColor}`}>({ach.toFixed(1)}%)</span>
-              )}
-            </span>
-          </div>
-        )}
       </div>
     </div>
   )
@@ -71,7 +57,7 @@ interface Props {
 }
 
 export function SalesTrendLineChart({ cmgFilter, effectiveStart, effectiveEnd }: Props) {
-  const [view, setView] = useState<View>('weekly')
+  const [view, setView] = useState<View>('monthly')
 
   const cmgQuery = cmgFilter.length > 0
     ? `&cmg=${cmgFilter.map(encodeURIComponent).join(',')}`
@@ -92,9 +78,18 @@ export function SalesTrendLineChart({ cmgFilter, effectiveStart, effectiveEnd }:
     })
   }, [monthlyData, effectiveStart, effectiveEnd])
 
-  // Weekly — only fetch when tab active + date range set
-  const weeklyKey = view === 'weekly' && effectiveStart && effectiveEnd
-    ? `/api/data/dashboard/sales-trend?view=weekly&start=${effectiveStart}&end=${effectiveEnd}${cmgQuery}`
+  // Weekly — fall back to full monthly range when no filter is active
+  const fallbackStart = monthlyData?.[0]?.period?.substring(0, 10) ?? null
+  const fallbackEnd = useMemo(() => {
+    if (!monthlyData?.length) return null
+    const [y, m] = monthlyData[monthlyData.length - 1].period.split('-').map(Number)
+    return new Date(Date.UTC(y, m, 0)).toISOString().split('T')[0]
+  }, [monthlyData])
+  const weeklyStart = effectiveStart ?? fallbackStart
+  const weeklyEnd   = effectiveEnd   ?? fallbackEnd
+
+  const weeklyKey = view === 'weekly' && weeklyStart && weeklyEnd
+    ? `/api/data/dashboard/sales-trend?view=weekly&start=${weeklyStart}&end=${weeklyEnd}${cmgQuery}`
     : null
 
   const { data: weeklyRes } = useSWR<{ ok: boolean; data: TrendRow[] }>(
@@ -124,9 +119,6 @@ export function SalesTrendLineChart({ cmgFilter, effectiveStart, effectiveEnd }:
             </span>
             <span className="flex items-center gap-1.5">
               <span className="inline-block h-0.5 w-4 rounded-full bg-[#60a5fa]" />Offline
-            </span>
-            <span className="flex items-center gap-1.5">
-              <span className="inline-block h-0.5 w-4 rounded-full bg-[#d1d5db]" style={{ borderTop: '1px dashed #d1d5db' }} />Target
             </span>
           </div>
           <ToggleGroup
@@ -178,17 +170,6 @@ export function SalesTrendLineChart({ cmgFilter, effectiveStart, effectiveEnd }:
               dot={{ r: 3, fill: '#60a5fa', strokeWidth: 0 }}
               activeDot={{ r: 5 }}
             />
-            {view === 'monthly' && (
-              <Line
-                type="monotone"
-                dataKey="target"
-                name="Target"
-                stroke="#d1d5db"
-                strokeWidth={1.5}
-                strokeDasharray="5 4"
-                dot={false}
-              />
-            )}
           </LineChart>
         </ResponsiveContainer>
       </div>

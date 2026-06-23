@@ -71,7 +71,7 @@ function ChartTooltip({ active, payload, label }: any) {
 }
 
 export function TelesalesTrendMiniChart({ effectiveStart, effectiveEnd }: Props) {
-  const [view, setView] = useState<View>('weekly')
+  const [view, setView] = useState<View>('monthly')
   const { buildVersion } = useBuild()
 
   // Monthly — all time, filtered client-side
@@ -87,9 +87,18 @@ export function TelesalesTrendMiniChart({ effectiveStart, effectiveEnd }: Props)
     )
   }, [monthlyData, effectiveStart, effectiveEnd])
 
-  // Weekly — only when a date range is selected
-  const weeklyKey = view === 'weekly' && effectiveStart && effectiveEnd
-    ? [`/api/data/dashboard/telesales-trend?view=weekly&start=${effectiveStart}&end=${effectiveEnd}`, buildVersion]
+  // Weekly — fall back to full monthly range when no filter is active
+  const fallbackStart = monthlyData?.[0]?.period?.substring(0, 10) ?? null
+  const fallbackEnd = useMemo(() => {
+    if (!monthlyData?.length) return null
+    const [y, m] = monthlyData[monthlyData.length - 1].period.split('-').map(Number)
+    return new Date(Date.UTC(y, m, 0)).toISOString().split('T')[0]
+  }, [monthlyData])
+  const weeklyStart = effectiveStart ?? fallbackStart
+  const weeklyEnd   = effectiveEnd   ?? fallbackEnd
+
+  const weeklyKey = view === 'weekly' && weeklyStart && weeklyEnd
+    ? [`/api/data/dashboard/telesales-trend?view=weekly&start=${weeklyStart}&end=${weeklyEnd}`, buildVersion]
     : null
 
   const { data: weeklyData } = useSWR<{ ok: boolean; data: TrendRow[] }>(

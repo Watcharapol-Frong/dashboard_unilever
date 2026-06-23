@@ -142,6 +142,25 @@ const dict: Record<string, Record<Lang, string>> = {
   'incentives.roi':             { en: 'ROI',                          th: 'ROI' },
   'incentives.noData':          { en: 'No incentive data available',  th: 'ไม่มีข้อมูล incentive' },
 
+  // ─── KPI Tooltips ──────────────────────────────────────────────────────────
+  'tooltip.hocSales':        { en: 'HOC sales from converted orders in the selected period.',                                                              th: 'ยอดขาย HOC จากออเดอร์ที่ convert ในช่วงเวลาที่เลือก' },
+  'tooltip.achievement':     { en: 'HOC Sales as a % of the monthly target. Turns green when ≥ 100%.',                                                    th: 'ยอดขาย HOC เป็น % ของเป้าหมายรายเดือน เปลี่ยนเป็นสีเขียวเมื่อถึง 100%' },
+  'tooltip.buyers':          { en: 'Unique customers (new + repeat) with at least one converted HOC order.',                                              th: 'ลูกค้าที่ไม่ซ้ำ (ใหม่ + ประจำ) ที่มีออเดอร์ HOC แบบ converted อย่างน้อย 1 รายการ' },
+  'tooltip.roi':             { en: 'Programme-level ROI = HOC Sales ÷ Total Expense. Not split by CMG — covers all segments regardless of the filter.',   th: 'ROI ระดับโปรแกรม = ยอดขาย HOC ÷ ค่าใช้จ่ายรวม ไม่แยกตาม CMG ครอบคลุมทุกกลุ่มเสมอ' },
+  'tooltip.totalCalls':      { en: 'Total call attempts in the selected period. One customer may appear more than once.',                                  th: 'จำนวนครั้งทั้งหมดที่โทรหาลูกค้าในช่วงที่เลือก ลูกค้า 1 รายอาจถูกโทรหลายครั้ง' },
+  'tooltip.reached':         { en: 'Customers who answered the call. Excludes: no answer (ไม่รับสาย) and unreachable (ปิดเครื่อง).',                     th: 'ลูกค้าที่รับสาย ไม่รวม: ไม่รับสาย และปิดเครื่อง/ติดต่อไม่ได้' },
+  'tooltip.reachRate':       { en: 'Reached ÷ Total Calls. Percentage of call attempts where the customer answered.',                                      th: 'Reached ÷ Total Calls สัดส่วนของการโทรที่ลูกค้ารับสาย' },
+  'tooltip.convRate':        { en: 'Converted ÷ Reached. Only customers who answered are in the denominator — unanswered calls are excluded.',            th: 'Converted ÷ Reached เฉพาะลูกค้าที่รับสายเท่านั้นที่นับเป็นตัวหาร ไม่นับการโทรที่ไม่มีคนรับ' },
+  'tooltip.converted':       { en: 'Unique customers who placed a HOC order within the attribution window after first contact.',                           th: 'ลูกค้าที่สั่งซื้อ HOC ภายใน attribution window หลังจากถูกติดต่อครั้งแรก' },
+  'tooltip.convertedSales':  { en: 'HOC revenue from orders placed within the attribution window (converted orders only).',                                th: 'รายได้ HOC จากออเดอร์ที่สั่งภายใน attribution window (เฉพาะออเดอร์ converted เท่านั้น)' },
+  'tooltip.avgOrderValue':   { en: 'Converted Sales ÷ Number of converted orders.',                                                                        th: 'ยอดขาย Converted ÷ จำนวนออเดอร์ converted' },
+  'tooltip.newCustomers':    { en: 'Customers whose first-ever HOC order was placed within the attribution window.',                                       th: 'ลูกค้าที่สั่งซื้อ HOC เป็นครั้งแรกภายใน attribution window หลังการติดต่อ' },
+  'tooltip.repeatCustomers': { en: 'Customers who previously ordered HOC and reordered within the attribution window.',                                    th: 'ลูกค้าที่เคยสั่งซื้อ HOC มาก่อนและสั่งซื้อซ้ำภายใน attribution window' },
+  'tooltip.totalLeads':      { en: 'All leads assigned to the telesales program. KPI cards always show global totals — table filters do not affect these numbers.', th: 'Lead ทั้งหมดที่ถูก assign ให้โปรแกรม Telesales การ์ด KPI แสดงยอดรวมเสมอ ไม่ถูกกรองโดย filter ของตาราง' },
+  'tooltip.contacted':       { en: 'Leads called at least once — includes both reached (answered) and not-reached (no answer) outcomes.',                  th: 'Lead ที่เคยถูกโทรอย่างน้อย 1 ครั้ง รวมทั้งที่รับสายและไม่รับสาย' },
+  'tooltip.leadsConverted':  { en: 'Leads who placed a converted HOC order (new or repeat) after being contacted.',                                        th: 'Lead ที่สั่งซื้อ HOC แบบ converted (ใหม่หรือซ้ำ) หลังจากถูกติดต่อ' },
+  'tooltip.leadsOrders':     { en: 'Total HOC orders from converted leads. One lead may have multiple orders.',                                            th: 'จำนวนออเดอร์ HOC ทั้งหมดจาก Lead ที่ convert ลูกค้า 1 รายอาจมีหลายออเดอร์' },
+
   // ─── Help Sheet ────────────────────────────────────────────────────────────
   'help.title':                 { en: 'Help & User Guide',            th: 'คู่มือการใช้งาน' },
   'help.subtitle':              { en: 'What each page shows and which date range it uses.', th: 'แต่ละหน้าดูข้อมูลอะไร และช่วงวันที่คำนวณจากอะไร' },

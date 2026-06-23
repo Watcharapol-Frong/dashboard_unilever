@@ -1,9 +1,13 @@
 'use client'
 
 import { useMemo } from 'react'
+import { Info } from 'lucide-react'
 import { fmt } from '@/lib/formatters'
+import {
+  Tooltip, TooltipContent, TooltipProvider, TooltipTrigger,
+} from '@/components/ui/tooltip'
 
-type Stage = { label: string; value: number }
+type Stage = { label: string; value: number; description?: string }
 type Props  = { stages: Stage[]; title?: string }
 
 const SVG_W = 400
@@ -35,6 +39,7 @@ export function SalesFunnelChart({ stages, title = 'Sales Funnel' }: Props) {
   const colW = SVG_W / n
 
   return (
+    <TooltipProvider delayDuration={200}>
     <div className="rounded-lg border bg-card p-4 space-y-3">
       <h3 className="text-sm font-semibold">{title}</h3>
 
@@ -42,7 +47,19 @@ export function SalesFunnelChart({ stages, title = 'Sales Funnel' }: Props) {
       <div className="grid" style={{ gridTemplateColumns: `repeat(${n}, 1fr)` }}>
         {stages.map((s, i) => (
           <div key={i} className={i > 0 ? 'pl-3 border-l border-border/50' : ''}>
-            <p className="text-[11px] text-muted-foreground leading-none mb-1">{s.label}</p>
+            <p className="text-[11px] text-muted-foreground leading-none mb-1 flex items-center gap-1">
+              {s.label}
+              {s.description && (
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Info className="h-3 w-3 shrink-0 cursor-help" />
+                  </TooltipTrigger>
+                  <TooltipContent side="top" className="max-w-64 text-xs leading-relaxed">
+                    {s.description}
+                  </TooltipContent>
+                </Tooltip>
+              )}
+            </p>
             <p className="text-xl font-bold tabular-nums tracking-tight">{fmt(s.value)}</p>
           </div>
         ))}
@@ -81,5 +98,6 @@ export function SalesFunnelChart({ stages, title = 'Sales Funnel' }: Props) {
         ))}
       </svg>
     </div>
+    </TooltipProvider>
   )
 }

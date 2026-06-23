@@ -24,6 +24,7 @@ import { PageLoading, PageEmpty, PageError } from '@/components/dashboard/PageSt
 import { fmt, formatPct, colorRate } from '@/lib/formatters'
 import { useLanguage } from '@/context/LanguageContext'
 import { t } from '@/lib/i18n'
+import { useLocalState } from '@/hooks/useLocalState'
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 type Summary = {
@@ -32,6 +33,8 @@ type Summary = {
   reached: number
   not_reached: number
   interested: number
+  interested_converted: number
+  interested_not_converted: number
   total_converted: number
   new_converted: number
   repeat_converted: number
@@ -104,8 +107,8 @@ const monthLastDay = (isoFirst: string): string => {
 export function TelesalesClient() {
   const { lang } = useLanguage()
   // ── Date range ────────────────────────────────────────────────────────────────
-  const [rangeFrom,   setRangeFrom]   = useState<string | null>(null)
-  const [rangeTo,     setRangeTo]     = useState<string | null>(null)
+  const [rangeFrom,   setRangeFrom]   = useLocalState<string | null>('tele:month:from', null)
+  const [rangeTo,     setRangeTo]     = useLocalState<string | null>('tele:month:to', null)
   const [hoverMonth,  setHoverMonth]  = useState<string | null>(null)
   const [filterMode,  setFilterMode]  = useState<'chips' | 'custom'>('chips')
   const [customRange, setCustomRange] = useState<DateRange>({ from: undefined, to: undefined })
@@ -150,8 +153,8 @@ export function TelesalesClient() {
   }
 
   // ── Attribute filters ─────────────────────────────────────────────────────────
-  const [cmg,   setCmg]   = useState<string[]>([])
-  const [agent, setAgent] = useState<string[]>([])
+  const [cmg,   setCmg]   = useLocalState<string[]>('tele:cmg', [])
+  const [agent, setAgent] = useLocalState<string[]>('tele:agent', [])
 
   const hasFilter = cmg.length > 0 || agent.length > 0
   const clearAll  = () => { setCmg([]); setAgent([]) }
@@ -170,23 +173,17 @@ export function TelesalesClient() {
     `/api/data/dashboard/telesales${qs ? `?${qs}` : ''}`
   )
 
-  // ── Default month chip once months load ───────────────────────────────────────
-  const defaultMonth = useMemo(() => {
-    const d = new Date()
-    d.setMonth(d.getMonth() - 1)
-    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`
-  }, [])
-
   const months = useMemo(
     () => (data?.months ?? []).map(m => m.substring(0, 7)),
     [data?.months]
   )
 
   useEffect(() => {
-    if (months.length && rangeFrom === null) {
-      setRangeFrom(months.includes(defaultMonth) ? defaultMonth : months[months.length - 1])
+    if (months.length > 0 && rangeFrom === null && rangeTo === null) {
+      setRangeFrom(months[0])
+      setRangeTo(months[months.length - 1])
     }
-  }, [months, rangeFrom, defaultMonth])
+  }, [months, rangeFrom, rangeTo])
 
   // ── Render ────────────────────────────────────────────────────────────────────
   if (isLoading && !data) return <PageLoading cols={4} />
@@ -227,7 +224,7 @@ export function TelesalesClient() {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const row: Record<string, any> = { tier, _total: total }
       stackKeys.forEach(k => {
-        row[k]          = total > 0 ? ((counts[k] || 0) / total) * 100 : 0
+        row[k]          = total > 0 ? Math.round(((counts[k] || 0) / total) * 1000) / 10 : 0
         row[`_n_${k}`]  = counts[k] || 0
       })
       return row
@@ -322,6 +319,7 @@ export function TelesalesClient() {
           value={fmt(summary.total_calls)}
           icon={Phone}
           subtitle={`${fmt(summary.total_leads)} leads total`}
+          tooltip={t('tooltip.totalCalls', lang)}
         />
         <KpiCard
           title={t('telesales.reachRate', lang)}
@@ -329,6 +327,7 @@ export function TelesalesClient() {
           icon={PhoneForwarded}
           valueClassName={colorRate(reachRate, [0.6, 0.4])}
           subtitle={`${fmt(summary.reached)} reached · ${fmt(summary.not_reached)} not reached`}
+          tooltip={t('tooltip.reachRate', lang)}
         />
         <KpiCard
           title={t('telesales.convRate', lang)}
@@ -336,12 +335,14 @@ export function TelesalesClient() {
           icon={Percent}
           valueClassName={colorRate(convRate, [0.3, 0.15])}
           subtitle={`of ${fmt(summary.reached)} reached customers`}
+          tooltip={t('tooltip.convRate', lang)}
         />
         <KpiCard
           title="Converted"
           value={fmt(summary.total_converted)}
           icon={UserCheck}
           subtitle={`${fmt(summary.new_converted)} new · ${fmt(summary.repeat_converted)} repeat`}
+          tooltip={t('tooltip.converted', lang)}
         />
       </KpiGrid>
 
@@ -378,7 +379,7 @@ export function TelesalesClient() {
             <XAxis
               type="number"
               domain={[0, 100]}
-              tickFormatter={v => `${v}%`}
+              tickFormatter={v => `${Math.round(v)}%`}
               tick={{ fontSize: 11, fill: '#6b7280' }}
               axisLine={false}
               tickLine={false}
@@ -403,6 +404,62 @@ export function TelesalesClient() {
             ))}
           </BarChart>
         </ResponsiveContainer>
+      </div>
+
+      {/* ── Conversion Funnel ─────────────────────────────────────────────────── */}
+      <SalesFunnelChart
+        title="Conversion Funnel"
+        stages={[
+          {
+            label: 'Total Calls',
+            value: summary.total_calls,
+            description: 'Total unique customers contacted by telesales in the selected period (filtered by first_connected_date).',
+          },
+          {
+            label: 'Reached',
+            value: summary.reached,
+            description: 'Customers who answered and had a conversation. Excludes only truly unreachable outcomes: "ไม่รับสาย" (no answer) and "ปิดเครื่อง/ติดต่อไม่ได้" (phone off). "Not convenient" and "not interested yet" still count as Reached.',
+          },
+          {
+            label: 'Interested',
+            value: interested,
+            description: 'Reached customers who did not explicitly decline. Excludes "ไม่สะดวกคุย" (not convenient) and "ยังไม่ต้องการสินค้า" (not ready to buy) — these customers answered but were not ready to purchase.',
+          },
+          {
+            label: 'Converted',
+            value: summary.total_converted,
+            description: 'Customers with a HOC purchase attributed to telesales (within the attribution window). When a date range is selected, only orders placed on or after the customer\'s recorded call date are counted.',
+          },
+        ]}
+      />
+
+      {/* Drop-off stats */}
+      <div className="grid grid-cols-3 gap-2 rounded-lg border bg-card px-4 py-3">
+        <div className="text-center">
+          <p className="text-xs text-muted-foreground">Not Reached</p>
+          <p className="text-sm font-semibold tabular-nums text-red-500">{fmt(summary.not_reached)}</p>
+          <p className="text-xs text-muted-foreground">
+            {summary.total_calls > 0 ? formatPct(summary.not_reached / summary.total_calls) : '—'} drop-off
+          </p>
+        </div>
+        <div className="text-center">
+          <p className="text-xs text-muted-foreground">Reached, Not Interested</p>
+          <p className="text-sm font-semibold tabular-nums text-amber-500">
+            {fmt(summary.reached - interested)}
+          </p>
+          <p className="text-xs text-muted-foreground">
+            {summary.reached > 0 ? formatPct((summary.reached - interested) / summary.reached) : '—'} drop-off
+          </p>
+        </div>
+        <div className="text-center">
+          <p className="text-xs text-muted-foreground">Interested, Not Converted</p>
+          <p className="text-sm font-semibold tabular-nums text-amber-500">
+            {fmt(summary.interested_not_converted)}
+          </p>
+          <p className="text-xs text-muted-foreground">
+            {interested > 0 ? formatPct(summary.interested_not_converted / interested) : '—'} drop-off
+          </p>
+        </div>
       </div>
 
       {/* ── Agent Leaderboard ─────────────────────────────────────────────────── */}
@@ -449,50 +506,34 @@ export function TelesalesClient() {
                   </TableCell>
                 </TableRow>
               ))}
+              {(() => {
+                const sumCalls      = by_agent.reduce((s, r) => s + r.total_calls, 0)
+                const sumReached    = by_agent.reduce((s, r) => s + r.reached, 0)
+                const sumNotReached = by_agent.reduce((s, r) => s + r.not_reached, 0)
+                const sumConverted  = by_agent.reduce((s, r) => s + r.conversion_rate * r.reached, 0)
+                const totalReachRate = sumCalls > 0 ? sumReached / sumCalls : 0
+                const totalConvRate  = sumReached > 0 ? sumConverted / sumReached : 0
+                return (
+                  <TableRow className="border-t-2 bg-muted/40 font-semibold">
+                    <TableCell className="text-center px-3 text-xs text-muted-foreground">Σ</TableCell>
+                    <TableCell className="text-sm">Total</TableCell>
+                    <TableCell className="text-right tabular-nums text-sm">{fmt(sumCalls)}</TableCell>
+                    <TableCell className="text-right tabular-nums text-sm text-muted-foreground">{fmt(sumReached)}</TableCell>
+                    <TableCell className="text-right tabular-nums text-sm text-muted-foreground">{fmt(sumNotReached)}</TableCell>
+                    <TableCell className={`text-right tabular-nums text-sm font-semibold ${colorRate(totalReachRate, [0.6, 0.4])}`}>
+                      {formatPct(totalReachRate)}
+                    </TableCell>
+                    <TableCell className={`text-right tabular-nums text-sm font-semibold ${colorRate(totalConvRate, [0.3, 0.15])}`}>
+                      {sumReached > 0 ? formatPct(totalConvRate) : '—'}
+                    </TableCell>
+                    <TableCell className="text-right tabular-nums text-sm text-muted-foreground pr-4">—</TableCell>
+                  </TableRow>
+                )
+              })()}
             </TableBody>
           </Table>
         </div>
       )}
-
-      {/* ── Conversion Funnel ─────────────────────────────────────────────────── */}
-      <SalesFunnelChart
-        title="Conversion Funnel"
-        stages={[
-          { label: 'Total Calls', value: summary.total_calls },
-          { label: 'Reached',     value: summary.reached },
-          { label: 'Interested',  value: interested },
-          { label: 'Converted',   value: summary.total_converted },
-        ]}
-      />
-
-      {/* Drop-off stats */}
-      <div className="grid grid-cols-3 gap-2 rounded-lg border bg-card px-4 py-3">
-        <div className="text-center">
-          <p className="text-xs text-muted-foreground">Not Reached</p>
-          <p className="text-sm font-semibold tabular-nums text-red-500">{fmt(summary.not_reached)}</p>
-          <p className="text-xs text-muted-foreground">
-            {summary.total_calls > 0 ? formatPct(summary.not_reached / summary.total_calls) : '—'} drop-off
-          </p>
-        </div>
-        <div className="text-center">
-          <p className="text-xs text-muted-foreground">Reached, Not Interested</p>
-          <p className="text-sm font-semibold tabular-nums text-amber-500">
-            {fmt(summary.reached - interested)}
-          </p>
-          <p className="text-xs text-muted-foreground">
-            {summary.reached > 0 ? formatPct((summary.reached - interested) / summary.reached) : '—'} drop-off
-          </p>
-        </div>
-        <div className="text-center">
-          <p className="text-xs text-muted-foreground">Interested, Not Converted</p>
-          <p className="text-sm font-semibold tabular-nums text-amber-500">
-            {fmt(interested - summary.total_converted)}
-          </p>
-          <p className="text-xs text-muted-foreground">
-            {interested > 0 ? formatPct((interested - summary.total_converted) / interested) : '—'} drop-off
-          </p>
-        </div>
-      </div>
 
     </div>
   )

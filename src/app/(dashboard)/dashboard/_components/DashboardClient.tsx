@@ -24,6 +24,7 @@ import {
 } from '@/lib/formatters'
 import { useLanguage } from '@/context/LanguageContext'
 import { t } from '@/lib/i18n'
+import { useLocalState } from '@/hooks/useLocalState'
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 type SalesRow = {
@@ -60,7 +61,7 @@ const monthOverlaps = (period: string, start: string, end: string) =>
 export function DashboardClient() {
   const { lang } = useLanguage()
   // ── CMG multiselect ─────────────────────────────────────────────────────────
-  const [cmgFilter, setCmgFilter] = useState<string[]>([])
+  const [cmgFilter, setCmgFilter] = useLocalState<string[]>('dash:cmg', [])
   const cmgQuery = cmgFilter.length > 0
     ? `?cmg=${cmgFilter.map(encodeURIComponent).join(',')}`
     : ''
@@ -87,14 +88,8 @@ export function DashboardClient() {
   }
 
   // ── Month chip range (YYYY-MM) ───────────────────────────────────────────────
-  const defaultMonth = useMemo(() => {
-    const d = new Date()
-    d.setMonth(d.getMonth() - 1)
-    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`
-  }, [])
-
-  const [rangeFrom,  setRangeFrom]  = useState<string | null>(null)
-  const [rangeTo,    setRangeTo]    = useState<string | null>(null)
+  const [rangeFrom,  setRangeFrom]  = useLocalState<string | null>('dash:month:from', null)
+  const [rangeTo,    setRangeTo]    = useLocalState<string | null>('dash:month:to', null)
   const [hoverMonth, setHoverMonth] = useState<string | null>(null)
 
   const allMonths = useMemo(() => {
@@ -106,11 +101,13 @@ export function DashboardClient() {
     return [...set].sort()
   }, [data])
 
+  // Auto-select full available range on first load
   useEffect(() => {
-    if (allMonths.length && rangeFrom === null) {
-      setRangeFrom(allMonths.includes(defaultMonth) ? defaultMonth : allMonths[allMonths.length - 1])
+    if (allMonths.length > 0 && rangeFrom === null && rangeTo === null) {
+      setRangeFrom(allMonths[0])
+      setRangeTo(allMonths[allMonths.length - 1])
     }
-  }, [allMonths, rangeFrom, defaultMonth])
+  }, [allMonths, rangeFrom, rangeTo])
 
   const handleChipClick = (m: string) => {
     // Switching to chips clears custom mode
@@ -164,7 +161,7 @@ export function DashboardClient() {
   // ── Aggregate sales ──────────────────────────────────────────────────────────
   const salesInRange = useMemo(() => {
     if (!data) return []
-    if (!effectiveStart || !effectiveEnd) return data.sales.slice(-1)
+    if (!effectiveStart || !effectiveEnd) return data.sales
     return data.sales.filter(s => monthOverlaps(s.month, effectiveStart, effectiveEnd))
   }, [data, effectiveStart, effectiveEnd])
 
@@ -189,7 +186,7 @@ export function DashboardClient() {
   // ── Aggregate telesales ──────────────────────────────────────────────────────
   const teleInRange = useMemo(() => {
     if (!data) return []
-    if (!effectiveStart || !effectiveEnd) return data.telesales.slice(-1)
+    if (!effectiveStart || !effectiveEnd) return data.telesales
     return data.telesales.filter(t => monthOverlaps(t.month, effectiveStart, effectiveEnd))
   }, [data, effectiveStart, effectiveEnd])
 
@@ -304,8 +301,8 @@ export function DashboardClient() {
 
         {/* Row 2: Customer Segment */}
         {cmgOptions.length > 0 && (
-          <div className="flex items-center gap-3">
-            <span className="w-28 shrink-0 text-xs text-muted-foreground">Customer Segment</span>
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="w-12 shrink-0 text-xs text-muted-foreground">Filters</span>
             <Popover>
               <PopoverTrigger asChild>
                 <button className="flex h-8 items-center gap-1.5 rounded-md border border-input bg-background px-3 text-sm text-foreground shadow-sm hover:bg-accent hover:text-accent-foreground">
@@ -359,6 +356,7 @@ export function DashboardClient() {
             comparison={isSingleMonth ? mom(aggSales.hoc_sales, sPrev?.hoc_sales) : undefined}
             comparisonLabel="vs previous month"
             subtitle={`${t('common.target', lang)} ${fmtBaht(aggSales.target)}`}
+            tooltip={t('tooltip.hocSales', lang)}
           />
           <KpiCard
             title={t('kpi.achievement', lang)}
@@ -366,6 +364,7 @@ export function DashboardClient() {
             icon={Target}
             valueClassName={colorAchievement(aggSales.achievement * 100)}
             subtitle={`of ${fmtBaht(aggSales.target)} target`}
+            tooltip={t('tooltip.achievement', lang)}
           />
           <KpiCard
             title="Buyers"
@@ -374,14 +373,14 @@ export function DashboardClient() {
             comparison={isSingleMonth ? mom(aggSales.buyers, sPrev?.buyers) : undefined}
             comparisonLabel="vs previous month"
             subtitle={`${fmt(aggSales.new_customers)} new · ${fmt(aggSales.retention)} repeat`}
+            tooltip={t('tooltip.buyers', lang)}
           />
           <KpiCard
             title="ROI"
             value={aggSales.roi > 0 ? `${aggSales.roi.toFixed(1)}×` : '—'}
             icon={TrendingUp}
             valueClassName={colorRoi(aggSales.roi)}
-            subtitle={`${fmtBaht(aggSales.expense)} expense`}
-            tooltip="Programme-level ROI — costs are not split by CMG, so this figure covers all CMGs regardless of the CMG filter."
+            tooltip={t('tooltip.roi', lang)}
           />
         </KpiGrid>
 
@@ -411,6 +410,7 @@ export function DashboardClient() {
                 comparison={isSingleMonth ? mom(aggTele.total_calls, tPrev?.total_calls) : undefined}
                 comparisonLabel="vs previous month"
                 subtitle="customers contacted"
+                tooltip={t('tooltip.totalCalls', lang)}
               />
               <KpiCard
                 title={t('telesales.reached', lang)}
@@ -418,6 +418,7 @@ export function DashboardClient() {
                 icon={PhoneForwarded}
                 valueClassName={colorRate(aggTele.reach_rate, [0.6, 0.4])}
                 subtitle={`${formatPct(aggTele.reach_rate)} ${t('telesales.reachRate', lang).toLowerCase()}`}
+                tooltip={t('tooltip.reached', lang)}
               />
               <KpiCard
                 title="Converted"
@@ -426,6 +427,7 @@ export function DashboardClient() {
                 comparison={isSingleMonth ? mom(aggTele.converted, tPrev?.converted) : undefined}
                 comparisonLabel="vs previous month"
                 subtitle="became customers"
+                tooltip={t('tooltip.converted', lang)}
               />
               <KpiCard
                 title={t('telesales.convRate', lang)}
@@ -435,6 +437,7 @@ export function DashboardClient() {
                 comparison={isSingleMonth ? mom(aggTele.conversion_rate, tPrev?.conversion_rate) : undefined}
                 comparisonLabel="vs previous month"
                 subtitle="of reached customers"
+                tooltip={t('tooltip.convRate', lang)}
               />
             </KpiGrid>
             <TelesalesTrendMiniChart effectiveStart={effectiveStart} effectiveEnd={effectiveEnd} />

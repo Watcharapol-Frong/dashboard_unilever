@@ -110,12 +110,14 @@ export default function LeadsClient() {
           value={kpi.total.toLocaleString()}
           subtitle="Assigned telesales leads"
           icon={Users}
+          tooltip={t('tooltip.totalLeads', lang)}
         />
         <KpiCard
           title={t('leads.contacted', lang)}
           value={kpi.contacted.toLocaleString()}
           subtitle={fmtPct(kpi.contacted, kpi.total)}
           icon={PhoneCall}
+          tooltip={t('tooltip.contacted', lang)}
         />
         <KpiCard
           title={t('leads.converted', lang)}
@@ -123,6 +125,7 @@ export default function LeadsClient() {
           subtitle={fmtPct(kpi.converted, kpi.total)}
           valueClassName="text-blue-600"
           icon={Award}
+          tooltip={t('tooltip.leadsConverted', lang)}
         />
         <KpiCard
           title={t('nav.orders', lang)}
@@ -130,6 +133,7 @@ export default function LeadsClient() {
           subtitle={kpi.converted > 0 ? `avg ${(kpi.orders / kpi.converted).toFixed(1)}x / person` : undefined}
           valueClassName="text-green-600"
           icon={ShoppingBag}
+          tooltip={t('tooltip.leadsOrders', lang)}
         />
       </KpiGrid>
 

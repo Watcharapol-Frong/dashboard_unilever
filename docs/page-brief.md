@@ -1,5 +1,7 @@
 # Dashboard Unilever — Page Brief
 
+> Last updated: 2026-06-19
+
 ## User Journey
 
 ```
@@ -46,9 +48,9 @@ Admin browses Raw Data → investigates individual records
 | **Filters** | Date range, CMG — affect KPI cards and charts |
 | **Action** | If sales dip → check telesales conversion; if brand mix shifts → check product table |
 
-**KPI Cards (4):** Total Sales, New Customers, Retention, Total Orders
+**KPI Cards (4):** Converted Sales, Avg Order Value, New Customers, Repeat Customers
 
-**Charts:** Sales Trend line chart (online/offline/target, monthly/weekly toggle), Product Analyst bubble map by Senior Buyer
+**Charts:** Sales Trend line chart (online/offline, monthly/weekly toggle — no Target line), Channel Breakdown (converted only), Conversion Split, Agent Leaderboard (with sum row), Product bubble map
 
 ---
 
@@ -65,9 +67,9 @@ Admin browses Raw Data → investigates individual records
 
 **KPI Cards (4):** Total Leads, Connected Rate (colour-coded), Conversion Rate (colour-coded), Orders (New + Repeat)
 
-**Charts:** Daily Calling Trend (AreaChart), Call Status by Tier (Horizontal Stacked Bar), Conversion Funnel (custom waterfall)
+**Charts:** Telesales Trend (bars + conversion rate), Call Status by Tier (Horizontal Stacked Bar), Conversion Funnel (custom SVG area — each stage has Info tooltip with English description; "Interested, Not Converted" value comes from `summary.interested_not_converted` computed server-side and is always ≥ 0)
 
-**Table:** Agent Leaderboard — Total Calls, Reached, Not Reached, Reach Rate, Conversion Rate, Calls/Day
+**Table:** Agent Leaderboard — Total Calls, Reached, Not Reached, Reach Rate, Conversion Rate, Calls/Day + **Total sum row**
 
 ---
 
@@ -105,6 +107,8 @@ Admin browses Raw Data → investigates individual records
 **Supported file types:** Online Sales, Offline Sales, Leads, Products, Telesales, Targets, Costs, Incentives, Agent Headcount
 
 **Tabs:** Overview (status cards), Data Status (8-source summary table), History (upload log), Build Mart (attribution window selector + build trigger)
+
+**Build Mart:** Clicking Build dispatches `nightly-build.yml` via GitHub Actions workflow dispatch (requires `GH_WORKFLOW_TOKEN`). Build takes approximately 2–5 minutes. The UI shows a spinner (Loader2) while the build is running and switches to CheckCircle + "Build complete — data updated" when `BuildContext` detects completion via freshness polling. All dashboard SWR keys are invalidated automatically on completion. Default attribution window: 14 days.
 ---
 
 ## 6. Raw Data `/raw-data`
