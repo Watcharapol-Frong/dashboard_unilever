@@ -2,7 +2,7 @@
 
 import { useMemo, useState, useRef, useCallback, useEffect } from 'react'
 import { hierarchy, pack } from 'd3-hierarchy'
-import { ChevronLeft, Search, X, LayoutGrid, Table2 } from 'lucide-react'
+import { ChevronLeft, Search, X, LayoutGrid, Table2, ArrowUp, ArrowDown, ChevronsUpDown } from 'lucide-react'
 import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from '@/components/ui/table'
@@ -383,7 +383,9 @@ function BubblePanel({ senior, records, colorMap, search, width, height }: Panel
 }
 
 // ── Table view aggregation ────────────────────────────────────────────────────
-type TableTab = 'brand' | 'category'
+type TableTab = 'brand' | 'category' | 'item'
+
+const TABLE_PAGE_SIZE = 10
 
 type AggRow = {
   key:     string
@@ -394,11 +396,27 @@ type AggRow = {
   offline: number
 }
 
+type SortCol = 'label0' | 'label1' | 'qty' | 'revenue' | 'online' | 'offline'
+type SortState = { col: SortCol; dir: 'asc' | 'desc' }
+
+function sortValue(r: AggRow, col: SortCol): string | number {
+  switch (col) {
+    case 'label0': return r.labels[0] ?? ''
+    case 'label1': return r.labels[1] ?? ''
+    case 'qty':     return r.qty
+    case 'revenue': return r.revenue
+    case 'online':  return r.online
+    case 'offline': return r.offline
+  }
+}
+
 function aggregate(records: BubbleRecord[], tab: TableTab): AggRow[] {
   const m = new Map<string, AggRow>()
   for (const r of records) {
-    const key    = tab === 'brand' ? r.brand : `${r.senior_buyer_name}|||${r.buyer_name}`
-    const labels = tab === 'brand' ? [r.brand] : [r.senior_buyer_name, r.buyer_name]
+    let key: string, labels: string[]
+    if (tab === 'brand')      { key = r.brand;    labels = [r.brand] }
+    else if (tab === 'item')  { key = r.prod_num; labels = [r.prod_num] }
+    else                      { key = `${r.senior_buyer_name}|||${r.buyer_name}`; labels = [r.senior_buyer_name, r.buyer_name] }
     const cur = m.get(key) ?? { key, labels, qty: 0, revenue: 0, online: 0, offline: 0 }
     cur.qty     += r.qty
     cur.revenue += r.converted_sales
@@ -413,7 +431,19 @@ function aggregate(records: BubbleRecord[], tab: TableTab): AggRow[] {
 export function SplitBubbleChart({ data, height = 440 }: { data: BubbleRecord[]; height?: number }) {
   const [view,     setView]     = useState<'bubble' | 'table'>('bubble')
   const [tableTab, setTableTab] = useState<TableTab>('brand')
+  const [sort,     setSort]     = useState<SortState>({ col: 'revenue', dir: 'desc' })
   const [search,   setSearch]   = useState('')
+
+  const changeTableTab = (id: TableTab) => {
+    setTableTab(id)
+    setSort({ col: 'revenue', dir: 'desc' })  // reset — label columns differ per dataset
+  }
+
+  const toggleSort = (col: SortCol) => setSort(prev =>
+    prev.col === col
+      ? { col, dir: prev.dir === 'asc' ? 'desc' : 'asc' }
+      : { col, dir: col === 'label0' || col === 'label1' ? 'asc' : 'desc' },  // text asc, numbers desc
+  )
   const containerRef = useRef<HTMLDivElement>(null)
   const [containerWidth, setContainerWidth] = useState(0)
 
@@ -459,16 +489,32 @@ export function SplitBubbleChart({ data, height = 440 }: { data: BubbleRecord[];
     return [...sm.entries()].sort((a, b) => b[1] - a[1]).slice(0, 8).map(([b]) => b)
   }, [data])
 
-  // Table view rows — aggregated by brand or category, filtered by search
+  // Table view rows — aggregated by brand or category, filtered by search, then sorted
   const tableRows = useMemo(() => {
     const rows = aggregate(data, tableTab)
     const q = search.toLowerCase().trim()
-    return q
-      ? rows.filter(r => r.labels.some(l => l.toLowerCase().includes(q)))
-      : rows
-  }, [data, tableTab, search])
+    const filtered = q ? rows.filter(r => r.labels.some(l => l.toLowerCase().includes(q))) : rows
+    return [...filtered].sort((a, b) => {
+      const va = sortValue(a, sort.col)
+      const vb = sortValue(b, sort.col)
+      const c = typeof va === 'number' && typeof vb === 'number'
+        ? va - vb
+        : String(va).localeCompare(String(vb))
+      return sort.dir === 'asc' ? c : -c
+    })
+  }, [data, tableTab, search, sort])
 
-  // Total row across the currently displayed (filtered) rows
+  // Pagination — reset to page 1 whenever the dataset, search, or sort changes
+  const [page, setPage] = useState(1)
+  useEffect(() => { setPage(1) }, [tableTab, search, sort])
+  const totalPages = Math.max(1, Math.ceil(tableRows.length / TABLE_PAGE_SIZE))
+  const safePage   = Math.min(page, totalPages)
+  const pagedRows  = useMemo(
+    () => tableRows.slice((safePage - 1) * TABLE_PAGE_SIZE, safePage * TABLE_PAGE_SIZE),
+    [tableRows, safePage],
+  )
+
+  // Total row across ALL currently displayed (filtered) rows — grand total, not just this page
   const tableTotals = useMemo(() => tableRows.reduce(
     (acc, r) => {
       acc.qty += r.qty; acc.revenue += r.revenue; acc.online += r.online; acc.offline += r.offline
@@ -476,6 +522,22 @@ export function SplitBubbleChart({ data, height = 440 }: { data: BubbleRecord[];
     },
     { qty: 0, revenue: 0, online: 0, offline: 0 },
   ), [tableRows])
+
+  const sortHead = (col: SortCol, label: string, right = false) => (
+    <button
+      type="button"
+      onClick={() => toggleSort(col)}
+      className={cn(
+        'group flex items-center gap-1 hover:text-foreground transition-colors',
+        right && 'w-full justify-end',
+      )}
+    >
+      <span>{label}</span>
+      {sort.col === col
+        ? (sort.dir === 'asc' ? <ArrowUp className="h-3 w-3" /> : <ArrowDown className="h-3 w-3" />)
+        : <ChevronsUpDown className="h-3 w-3 opacity-30 group-hover:opacity-60" />}
+    </button>
+  )
 
   if (data.length === 0) {
     return (
@@ -498,7 +560,7 @@ export function SplitBubbleChart({ data, height = 440 }: { data: BubbleRecord[];
             </p>
           ) : (
             <p className="text-xs text-muted-foreground mt-0.5">
-              Converted (HOC-attributed) revenue, aggregated by {tableTab === 'brand' ? 'brand' : 'category'}
+              Converted (HOC-attributed) revenue, aggregated by {tableTab === 'brand' ? 'brand' : tableTab === 'category' ? 'category' : 'item'}
             </p>
           )}
         </div>
@@ -625,10 +687,10 @@ export function SplitBubbleChart({ data, height = 440 }: { data: BubbleRecord[];
         <div className="space-y-3">
           {/* Dataset switch: Brand / Category */}
           <div className="flex flex-wrap items-center gap-2">
-            {(['brand', 'category'] as const).map(id => (
+            {(['brand', 'category', 'item'] as const).map(id => (
               <button
                 key={id}
-                onClick={() => setTableTab(id)}
+                onClick={() => changeTableTab(id)}
                 className={cn(
                   'px-3.5 py-1.5 rounded-lg border text-xs font-semibold transition-all',
                   tableTab === id
@@ -636,11 +698,11 @@ export function SplitBubbleChart({ data, height = 440 }: { data: BubbleRecord[];
                     : 'border-gray-200 text-muted-foreground hover:border-gray-300 hover:text-foreground bg-background',
                 )}
               >
-                {id === 'brand' ? 'By Brand' : 'By Category'}
+                {id === 'brand' ? 'By Brand' : id === 'category' ? 'By Category' : 'By Item'}
               </button>
             ))}
             <span className="ml-1 text-xs text-muted-foreground">
-              {tableRows.length.toLocaleString()} {tableTab === 'brand' ? 'brands' : 'categories'}
+              {tableRows.length.toLocaleString()} {tableTab === 'brand' ? 'brands' : tableTab === 'category' ? 'categories' : 'items'}
             </span>
           </div>
 
@@ -648,38 +710,38 @@ export function SplitBubbleChart({ data, height = 440 }: { data: BubbleRecord[];
             <Table>
               <TableHeader>
                 <TableRow>
-                  {tableTab === 'brand' ? (
-                    <TableHead>Brand</TableHead>
-                  ) : (
+                  {tableTab === 'category' ? (
                     <>
-                      <TableHead>Senior Buyer</TableHead>
-                      <TableHead>Buyer</TableHead>
+                      <TableHead>{sortHead('label0', 'Senior Buyer')}</TableHead>
+                      <TableHead>{sortHead('label1', 'Buyer')}</TableHead>
                     </>
+                  ) : (
+                    <TableHead>{sortHead('label0', tableTab === 'brand' ? 'Brand' : 'Product ID')}</TableHead>
                   )}
-                  <TableHead className="text-right">Qty Sold</TableHead>
-                  <TableHead className="text-right">Total Revenue</TableHead>
-                  <TableHead className="text-right">Online</TableHead>
-                  <TableHead className="text-right pr-4">Offline</TableHead>
+                  <TableHead className="text-right">{sortHead('qty', 'Qty Sold', true)}</TableHead>
+                  <TableHead className="text-right">{sortHead('revenue', 'Total Revenue', true)}</TableHead>
+                  <TableHead className="text-right">{sortHead('online', 'Online', true)}</TableHead>
+                  <TableHead className="text-right pr-4">{sortHead('offline', 'Offline', true)}</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {tableRows.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={tableTab === 'brand' ? 5 : 6} className="h-20 text-center text-sm text-muted-foreground">
+                    <TableCell colSpan={tableTab === 'category' ? 6 : 5} className="h-20 text-center text-sm text-muted-foreground">
                       No results.
                     </TableCell>
                   </TableRow>
                 ) : (
                   <>
-                    {tableRows.map(r => (
+                    {pagedRows.map(r => (
                       <TableRow key={r.key}>
-                        {tableTab === 'brand' ? (
-                          <TableCell className="font-medium text-sm">{r.labels[0]}</TableCell>
-                        ) : (
+                        {tableTab === 'category' ? (
                           <>
                             <TableCell className="text-sm">{r.labels[0]}</TableCell>
                             <TableCell className="text-sm text-muted-foreground">{r.labels[1]}</TableCell>
                           </>
+                        ) : (
+                          <TableCell className={cn('text-sm', tableTab === 'item' ? 'font-mono' : 'font-medium')}>{r.labels[0]}</TableCell>
                         )}
                         <TableCell className="text-right tabular-nums text-sm text-muted-foreground">{fmt(r.qty)}</TableCell>
                         <TableCell className="text-right tabular-nums text-sm font-medium">{fmtBaht(r.revenue)}</TableCell>
@@ -687,15 +749,15 @@ export function SplitBubbleChart({ data, height = 440 }: { data: BubbleRecord[];
                         <TableCell className="text-right tabular-nums text-sm text-muted-foreground pr-4">{fmtBaht(r.offline)}</TableCell>
                       </TableRow>
                     ))}
-                    {/* Total / sum row */}
+                    {/* Total / sum row — grand total across all pages */}
                     <TableRow className="border-t-2 bg-muted/40 font-semibold">
-                      {tableTab === 'brand' ? (
-                        <TableCell className="text-sm">Total</TableCell>
-                      ) : (
+                      {tableTab === 'category' ? (
                         <>
                           <TableCell className="text-sm">Total</TableCell>
                           <TableCell />
                         </>
+                      ) : (
+                        <TableCell className="text-sm">Total</TableCell>
                       )}
                       <TableCell className="text-right tabular-nums text-sm">{fmt(tableTotals.qty)}</TableCell>
                       <TableCell className="text-right tabular-nums text-sm">{fmtBaht(tableTotals.revenue)}</TableCell>
@@ -707,6 +769,31 @@ export function SplitBubbleChart({ data, height = 440 }: { data: BubbleRecord[];
               </TableBody>
             </Table>
           </div>
+
+          {/* Pagination controls */}
+          {totalPages > 1 && (
+            <div className="flex items-center justify-between gap-3">
+              <span className="text-xs text-muted-foreground">
+                {tableRows.length.toLocaleString()} rows · page {safePage} of {totalPages}
+              </span>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => setPage(p => Math.max(1, p - 1))}
+                  disabled={safePage <= 1}
+                  className="rounded-md border border-gray-200 bg-background px-3 py-1.5 text-xs font-semibold text-muted-foreground hover:text-foreground hover:border-gray-300 transition-all disabled:opacity-40 disabled:cursor-not-allowed"
+                >
+                  Previous
+                </button>
+                <button
+                  onClick={() => setPage(p => Math.min(totalPages, p + 1))}
+                  disabled={safePage >= totalPages}
+                  className="rounded-md border border-gray-200 bg-background px-3 py-1.5 text-xs font-semibold text-muted-foreground hover:text-foreground hover:border-gray-300 transition-all disabled:opacity-40 disabled:cursor-not-allowed"
+                >
+                  Next
+                </button>
+              </div>
+            </div>
+          )}
         </div>
       )}
     </div>
