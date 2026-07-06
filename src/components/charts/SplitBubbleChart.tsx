@@ -2,8 +2,12 @@
 
 import { useMemo, useState, useRef, useCallback, useEffect } from 'react'
 import { hierarchy, pack } from 'd3-hierarchy'
-import { ChevronLeft, Search, X } from 'lucide-react'
+import { ChevronLeft, Search, X, LayoutGrid, Table2 } from 'lucide-react'
+import { ColumnDef } from '@tanstack/react-table'
+import { DataTable } from '@/components/ui/data-table'
+import { DataTableColumnHeader } from '@/components/ui/data-table-column-header'
 import { fmtBaht, fmt } from '@/lib/formatters'
+import { cn } from '@/lib/utils'
 
 // ── Public type (shared with API response) ────────────────────────────────────
 export type BubbleRecord = {
@@ -376,8 +380,48 @@ function BubblePanel({ senior, records, colorMap, search, width, height }: Panel
   )
 }
 
+// ── Table view columns ───────────────────────────────────────────────────────
+const TABLE_COLUMNS: ColumnDef<BubbleRecord>[] = [
+  {
+    accessorKey: 'senior_buyer_name',
+    header: ({ column }) => <DataTableColumnHeader column={column} title="Senior Buyer" />,
+    cell: ({ getValue }) => <span className="text-xs">{String(getValue())}</span>,
+  },
+  {
+    accessorKey: 'buyer_name',
+    header: ({ column }) => <DataTableColumnHeader column={column} title="Buyer" />,
+    cell: ({ getValue }) => <span className="text-xs">{String(getValue())}</span>,
+  },
+  {
+    accessorKey: 'brand',
+    header: ({ column }) => <DataTableColumnHeader column={column} title="Brand" />,
+    cell: ({ getValue }) => <span className="text-xs font-medium">{String(getValue())}</span>,
+  },
+  {
+    accessorKey: 'prod_num',
+    header: ({ column }) => <DataTableColumnHeader column={column} title="Product Code" />,
+    cell: ({ getValue }) => <span className="text-xs font-mono">{String(getValue())}</span>,
+  },
+  {
+    accessorKey: 'product_name',
+    header: ({ column }) => <DataTableColumnHeader column={column} title="Product Name" />,
+    cell: ({ getValue }) => <span className="text-xs">{String(getValue())}</span>,
+  },
+  {
+    accessorKey: 'converted_sales',
+    header: ({ column }) => <DataTableColumnHeader column={column} title="Sales (THB)" />,
+    cell: ({ getValue }) => <span className="text-xs tabular-nums">{fmtBaht(getValue() as number)}</span>,
+  },
+  {
+    accessorKey: 'qty',
+    header: ({ column }) => <DataTableColumnHeader column={column} title="Qty" />,
+    cell: ({ getValue }) => <span className="text-xs tabular-nums">{fmt(getValue() as number)}</span>,
+  },
+]
+
 // ── Main chart component ───────────────────────────────────────────────────────
 export function SplitBubbleChart({ data, height = 440 }: { data: BubbleRecord[]; height?: number }) {
+  const [view,   setView]   = useState<'bubble' | 'table'>('bubble')
   const [search, setSearch] = useState('')
   const containerRef = useRef<HTMLDivElement>(null)
   const [containerWidth, setContainerWidth] = useState(0)
@@ -424,6 +468,19 @@ export function SplitBubbleChart({ data, height = 440 }: { data: BubbleRecord[];
     return [...sm.entries()].sort((a, b) => b[1] - a[1]).slice(0, 8).map(([b]) => b)
   }, [data])
 
+  // Table view rows — sorted by sales desc, filtered by search
+  const tableRows = useMemo(() => {
+    const q = search.toLowerCase().trim()
+    const filtered = q
+      ? data.filter(r =>
+          r.brand.toLowerCase().includes(q) ||
+          r.product_name.toLowerCase().includes(q) ||
+          r.prod_num.toLowerCase().includes(q)
+        )
+      : data
+    return [...filtered].sort((a, b) => b.converted_sales - a.converted_sales)
+  }, [data, search])
+
   if (data.length === 0) {
     return (
       <div className="flex items-center justify-center h-32 rounded-lg border text-sm text-muted-foreground">
@@ -443,30 +500,54 @@ export function SplitBubbleChart({ data, height = 440 }: { data: BubbleRecord[];
             · <strong>Double-click</strong> a brand to drill into products
           </p>
         </div>
-        {/* Search */}
-        <div className="relative flex items-center shrink-0">
-          <Search className="pointer-events-none absolute left-2.5 h-3.5 w-3.5 text-muted-foreground" />
-          <input
-            type="text"
-            value={search}
-            onChange={e => setSearch(e.target.value)}
-            placeholder="Search brands or products…"
-            className="h-8 w-48 rounded-md border border-input bg-background pl-8 pr-7 text-xs focus:outline-none focus:ring-1 focus:ring-ring"
-          />
-          {search && (
+        <div className="flex items-center gap-2 shrink-0">
+          {/* View toggle */}
+          <div className="flex rounded-lg border border-gray-200 p-0.5 bg-muted/30">
             <button
-              onClick={() => setSearch('')}
-              className="absolute right-2 text-muted-foreground hover:text-foreground"
-              aria-label="Clear search"
+              onClick={() => setView('bubble')}
+              className={cn(
+                'flex items-center gap-1.5 rounded-md px-2.5 py-1 text-xs font-semibold transition-all',
+                view === 'bubble' ? 'bg-white text-[#003DA6] shadow-sm' : 'text-muted-foreground hover:text-foreground',
+              )}
             >
-              <X className="h-3.5 w-3.5" />
+              <LayoutGrid className="h-3.5 w-3.5" />Bubble Map
             </button>
-          )}
+            <button
+              onClick={() => setView('table')}
+              className={cn(
+                'flex items-center gap-1.5 rounded-md px-2.5 py-1 text-xs font-semibold transition-all',
+                view === 'table' ? 'bg-white text-[#003DA6] shadow-sm' : 'text-muted-foreground hover:text-foreground',
+              )}
+            >
+              <Table2 className="h-3.5 w-3.5" />Table
+            </button>
+          </div>
+
+          {/* Search */}
+          <div className="relative flex items-center">
+            <Search className="pointer-events-none absolute left-2.5 h-3.5 w-3.5 text-muted-foreground" />
+            <input
+              type="text"
+              value={search}
+              onChange={e => setSearch(e.target.value)}
+              placeholder="Search brands or products…"
+              className="h-8 w-48 rounded-md border border-input bg-background pl-8 pr-7 text-xs focus:outline-none focus:ring-1 focus:ring-ring"
+            />
+            {search && (
+              <button
+                onClick={() => setSearch('')}
+                className="absolute right-2 text-muted-foreground hover:text-foreground"
+                aria-label="Clear search"
+              >
+                <X className="h-3.5 w-3.5" />
+              </button>
+            )}
+          </div>
         </div>
       </div>
 
       {/* Color legend */}
-      {legendBrands.length > 0 && (
+      {view === 'bubble' && legendBrands.length > 0 && (
         <div className="flex flex-wrap gap-x-4 gap-y-1.5 border-t pt-2">
           {legendBrands.map(brand => (
             <span key={brand} className="flex items-center gap-1.5 text-[11px] text-muted-foreground">
@@ -485,55 +566,67 @@ export function SplitBubbleChart({ data, height = 440 }: { data: BubbleRecord[];
       )}
 
       {/* Left / Right split panels — Senior Buyer header inside each frame */}
-      <div ref={containerRef} className="flex" style={{ gap: GAP }}>
-        {seniors.map((senior, idx) => {
-          const totals = seniorTotals.get(senior)
-          const isLeft = idx === 0
-          const badgeStyle = isLeft
-            ? { background: '#eff6ff', borderColor: '#bfdbfe', color: '#1e40af' }
-            : { background: '#fef3c7', borderColor: '#fde68a', color: '#92400e' }
+      {view === 'bubble' && (
+        <div ref={containerRef} className="flex" style={{ gap: GAP }}>
+          {seniors.map((senior, idx) => {
+            const totals = seniorTotals.get(senior)
+            const isLeft = idx === 0
+            const badgeStyle = isLeft
+              ? { background: '#eff6ff', borderColor: '#bfdbfe', color: '#1e40af' }
+              : { background: '#fef3c7', borderColor: '#fde68a', color: '#92400e' }
 
-          return (
-            <div
-              key={senior}
-              className="rounded-lg border border-slate-200 overflow-hidden flex flex-col bg-slate-50/40"
-              style={{ width: panelW || '50%' }}
-            >
-              {/* Header row inside the frame */}
-              <div className="flex items-center justify-between px-3 py-2 bg-white/80 border-b border-slate-100">
-                <span
-                  className="inline-block rounded-full border px-3 py-0.5 text-[11px] font-semibold"
-                  style={badgeStyle}
-                >
-                  {senior}
-                </span>
-                {totals && (
-                  <div className="text-right leading-tight">
-                    <div className="text-[12px] font-semibold tabular-nums text-foreground">
-                      {fmtBaht(totals.sales)}
+            return (
+              <div
+                key={senior}
+                className="rounded-lg border border-slate-200 overflow-hidden flex flex-col bg-slate-50/40"
+                style={{ width: panelW || '50%' }}
+              >
+                {/* Header row inside the frame */}
+                <div className="flex items-center justify-between px-3 py-2 bg-white/80 border-b border-slate-100">
+                  <span
+                    className="inline-block rounded-full border px-3 py-0.5 text-[11px] font-semibold"
+                    style={badgeStyle}
+                  >
+                    {senior}
+                  </span>
+                  {totals && (
+                    <div className="text-right leading-tight">
+                      <div className="text-[12px] font-semibold tabular-nums text-foreground">
+                        {fmtBaht(totals.sales)}
+                      </div>
+                      <div className="text-[11px] text-muted-foreground tabular-nums">
+                        {fmt(totals.qty)} pcs
+                      </div>
                     </div>
-                    <div className="text-[11px] text-muted-foreground tabular-nums">
-                      {fmt(totals.qty)} pcs
-                    </div>
-                  </div>
+                  )}
+                </div>
+
+                {/* Bubble panel */}
+                {panelW > 0 && (
+                  <BubblePanel
+                    senior={senior}
+                    records={data}
+                    colorMap={colorMap}
+                    search={search}
+                    width={panelW}
+                    height={height}
+                  />
                 )}
               </div>
+            )
+          })}
+        </div>
+      )}
 
-              {/* Bubble panel */}
-              {panelW > 0 && (
-                <BubblePanel
-                  senior={senior}
-                  records={data}
-                  colorMap={colorMap}
-                  search={search}
-                  width={panelW}
-                  height={height}
-                />
-              )}
-            </div>
-          )
-        })}
-      </div>
+      {/* Table view */}
+      {view === 'table' && (
+        <div className="space-y-2">
+          <p className="text-xs text-muted-foreground">
+            {tableRows.length.toLocaleString()} products
+          </p>
+          <DataTable columns={TABLE_COLUMNS} data={tableRows} defaultPageSize={10} />
+        </div>
+      )}
     </div>
   )
 }
