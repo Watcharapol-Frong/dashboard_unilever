@@ -444,17 +444,24 @@ export function SplitBubbleChart({ data, height = 440 }: { data: BubbleRecord[];
       ? { col, dir: prev.dir === 'asc' ? 'desc' : 'asc' }
       : { col, dir: col === 'label0' || col === 'label1' ? 'asc' : 'desc' },  // text asc, numbers desc
   )
-  const containerRef = useRef<HTMLDivElement>(null)
+  const roRef = useRef<ResizeObserver | null>(null)
   const [containerWidth, setContainerWidth] = useState(0)
 
-  useEffect(() => {
-    const el = containerRef.current
+  // Callback ref: re-attach the observer + re-measure on every (re)mount.
+  // The bubble container is unmounted in Table view, so a mount-once effect
+  // would leave containerWidth stuck at 0 when toggling back → bubbles vanish.
+  const containerRef = useCallback((el: HTMLDivElement | null) => {
+    roRef.current?.disconnect()
+    roRef.current = null
     if (!el) return
-    const ro = new ResizeObserver(([entry]) => {
-      setContainerWidth(Math.floor(entry.contentRect.width))
-    })
+    const measure = () => {
+      const w = Math.floor(el.getBoundingClientRect().width)
+      if (w > 0) setContainerWidth(w)
+    }
+    measure()
+    const ro = new ResizeObserver(measure)
     ro.observe(el)
-    return () => ro.disconnect()
+    roRef.current = ro
   }, [])
 
   const colorMap = useMemo(() => makeBrandColors(data), [data])
