@@ -3,9 +3,9 @@
 import { useMemo, useState, useRef, useCallback, useEffect } from 'react'
 import { hierarchy, pack } from 'd3-hierarchy'
 import { ChevronLeft, Search, X, LayoutGrid, Table2 } from 'lucide-react'
-import { ColumnDef } from '@tanstack/react-table'
-import { DataTable } from '@/components/ui/data-table'
-import { DataTableColumnHeader } from '@/components/ui/data-table-column-header'
+import {
+  Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
+} from '@/components/ui/table'
 import { fmtBaht, fmt } from '@/lib/formatters'
 import { cn } from '@/lib/utils'
 
@@ -18,6 +18,8 @@ export type BubbleRecord = {
   product_name: string
   converted_sales: number
   qty: number
+  converted_online: number
+  converted_offline: number
 }
 
 // ── Internal hierarchy node type ──────────────────────────────────────────────
@@ -380,49 +382,38 @@ function BubblePanel({ senior, records, colorMap, search, width, height }: Panel
   )
 }
 
-// ── Table view columns ───────────────────────────────────────────────────────
-const TABLE_COLUMNS: ColumnDef<BubbleRecord>[] = [
-  {
-    accessorKey: 'senior_buyer_name',
-    header: ({ column }) => <DataTableColumnHeader column={column} title="Senior Buyer" />,
-    cell: ({ getValue }) => <span className="text-xs">{String(getValue())}</span>,
-  },
-  {
-    accessorKey: 'buyer_name',
-    header: ({ column }) => <DataTableColumnHeader column={column} title="Buyer" />,
-    cell: ({ getValue }) => <span className="text-xs">{String(getValue())}</span>,
-  },
-  {
-    accessorKey: 'brand',
-    header: ({ column }) => <DataTableColumnHeader column={column} title="Brand" />,
-    cell: ({ getValue }) => <span className="text-xs font-medium">{String(getValue())}</span>,
-  },
-  {
-    accessorKey: 'prod_num',
-    header: ({ column }) => <DataTableColumnHeader column={column} title="Product Code" />,
-    cell: ({ getValue }) => <span className="text-xs font-mono">{String(getValue())}</span>,
-  },
-  {
-    accessorKey: 'product_name',
-    header: ({ column }) => <DataTableColumnHeader column={column} title="Product Name" />,
-    cell: ({ getValue }) => <span className="text-xs">{String(getValue())}</span>,
-  },
-  {
-    accessorKey: 'converted_sales',
-    header: ({ column }) => <DataTableColumnHeader column={column} title="Sales (THB)" />,
-    cell: ({ getValue }) => <span className="text-xs tabular-nums">{fmtBaht(getValue() as number)}</span>,
-  },
-  {
-    accessorKey: 'qty',
-    header: ({ column }) => <DataTableColumnHeader column={column} title="Qty" />,
-    cell: ({ getValue }) => <span className="text-xs tabular-nums">{fmt(getValue() as number)}</span>,
-  },
-]
+// ── Table view aggregation ────────────────────────────────────────────────────
+type TableTab = 'brand' | 'category'
+
+type AggRow = {
+  key:     string
+  labels:  string[]   // Brand → [brand] · Category → [senior, buyer]
+  qty:     number
+  revenue: number      // converted total revenue (= online + offline)
+  online:  number
+  offline: number
+}
+
+function aggregate(records: BubbleRecord[], tab: TableTab): AggRow[] {
+  const m = new Map<string, AggRow>()
+  for (const r of records) {
+    const key    = tab === 'brand' ? r.brand : `${r.senior_buyer_name}|||${r.buyer_name}`
+    const labels = tab === 'brand' ? [r.brand] : [r.senior_buyer_name, r.buyer_name]
+    const cur = m.get(key) ?? { key, labels, qty: 0, revenue: 0, online: 0, offline: 0 }
+    cur.qty     += r.qty
+    cur.revenue += r.converted_sales
+    cur.online  += r.converted_online
+    cur.offline += r.converted_offline
+    m.set(key, cur)
+  }
+  return [...m.values()].sort((a, b) => b.revenue - a.revenue)
+}
 
 // ── Main chart component ───────────────────────────────────────────────────────
 export function SplitBubbleChart({ data, height = 440 }: { data: BubbleRecord[]; height?: number }) {
-  const [view,   setView]   = useState<'bubble' | 'table'>('bubble')
-  const [search, setSearch] = useState('')
+  const [view,     setView]     = useState<'bubble' | 'table'>('bubble')
+  const [tableTab, setTableTab] = useState<TableTab>('brand')
+  const [search,   setSearch]   = useState('')
   const containerRef = useRef<HTMLDivElement>(null)
   const [containerWidth, setContainerWidth] = useState(0)
 
@@ -468,18 +459,23 @@ export function SplitBubbleChart({ data, height = 440 }: { data: BubbleRecord[];
     return [...sm.entries()].sort((a, b) => b[1] - a[1]).slice(0, 8).map(([b]) => b)
   }, [data])
 
-  // Table view rows — sorted by sales desc, filtered by search
+  // Table view rows — aggregated by brand or category, filtered by search
   const tableRows = useMemo(() => {
+    const rows = aggregate(data, tableTab)
     const q = search.toLowerCase().trim()
-    const filtered = q
-      ? data.filter(r =>
-          r.brand.toLowerCase().includes(q) ||
-          r.product_name.toLowerCase().includes(q) ||
-          r.prod_num.toLowerCase().includes(q)
-        )
-      : data
-    return [...filtered].sort((a, b) => b.converted_sales - a.converted_sales)
-  }, [data, search])
+    return q
+      ? rows.filter(r => r.labels.some(l => l.toLowerCase().includes(q)))
+      : rows
+  }, [data, tableTab, search])
+
+  // Total row across the currently displayed (filtered) rows
+  const tableTotals = useMemo(() => tableRows.reduce(
+    (acc, r) => {
+      acc.qty += r.qty; acc.revenue += r.revenue; acc.online += r.online; acc.offline += r.offline
+      return acc
+    },
+    { qty: 0, revenue: 0, online: 0, offline: 0 },
+  ), [tableRows])
 
   if (data.length === 0) {
     return (
@@ -494,11 +490,17 @@ export function SplitBubbleChart({ data, height = 440 }: { data: BubbleRecord[];
       {/* Header */}
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
-          <h3 className="text-sm font-semibold">Product Sales Bubble Map</h3>
-          <p className="text-xs text-muted-foreground mt-0.5">
-            Split by Senior Buyer · Dashed ring = Buyer boundary · Bubble = Brand
-            · <strong>Double-click</strong> a brand to drill into products
-          </p>
+          <h3 className="text-sm font-semibold">Product Sales</h3>
+          {view === 'bubble' ? (
+            <p className="text-xs text-muted-foreground mt-0.5">
+              Split by Senior Buyer · Dashed ring = Buyer boundary · Bubble = Brand
+              · <strong>Double-click</strong> a brand to drill into products
+            </p>
+          ) : (
+            <p className="text-xs text-muted-foreground mt-0.5">
+              Converted (HOC-attributed) revenue, aggregated by {tableTab === 'brand' ? 'brand' : 'category'}
+            </p>
+          )}
         </div>
         <div className="flex items-center gap-2 shrink-0">
           {/* View toggle */}
@@ -620,11 +622,91 @@ export function SplitBubbleChart({ data, height = 440 }: { data: BubbleRecord[];
 
       {/* Table view */}
       {view === 'table' && (
-        <div className="space-y-2">
-          <p className="text-xs text-muted-foreground">
-            {tableRows.length.toLocaleString()} products
-          </p>
-          <DataTable columns={TABLE_COLUMNS} data={tableRows} defaultPageSize={10} />
+        <div className="space-y-3">
+          {/* Dataset switch: Brand / Category */}
+          <div className="flex flex-wrap items-center gap-2">
+            {(['brand', 'category'] as const).map(id => (
+              <button
+                key={id}
+                onClick={() => setTableTab(id)}
+                className={cn(
+                  'px-3.5 py-1.5 rounded-lg border text-xs font-semibold transition-all',
+                  tableTab === id
+                    ? 'bg-[#003DA6] text-white border-[#003DA6] shadow-sm'
+                    : 'border-gray-200 text-muted-foreground hover:border-gray-300 hover:text-foreground bg-background',
+                )}
+              >
+                {id === 'brand' ? 'By Brand' : 'By Category'}
+              </button>
+            ))}
+            <span className="ml-1 text-xs text-muted-foreground">
+              {tableRows.length.toLocaleString()} {tableTab === 'brand' ? 'brands' : 'categories'}
+            </span>
+          </div>
+
+          <div className="rounded-md border overflow-x-auto">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  {tableTab === 'brand' ? (
+                    <TableHead>Brand</TableHead>
+                  ) : (
+                    <>
+                      <TableHead>Senior Buyer</TableHead>
+                      <TableHead>Buyer</TableHead>
+                    </>
+                  )}
+                  <TableHead className="text-right">Qty Sold</TableHead>
+                  <TableHead className="text-right">Total Revenue</TableHead>
+                  <TableHead className="text-right">Online</TableHead>
+                  <TableHead className="text-right pr-4">Offline</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {tableRows.length === 0 ? (
+                  <TableRow>
+                    <TableCell colSpan={tableTab === 'brand' ? 5 : 6} className="h-20 text-center text-sm text-muted-foreground">
+                      No results.
+                    </TableCell>
+                  </TableRow>
+                ) : (
+                  <>
+                    {tableRows.map(r => (
+                      <TableRow key={r.key}>
+                        {tableTab === 'brand' ? (
+                          <TableCell className="font-medium text-sm">{r.labels[0]}</TableCell>
+                        ) : (
+                          <>
+                            <TableCell className="text-sm">{r.labels[0]}</TableCell>
+                            <TableCell className="text-sm text-muted-foreground">{r.labels[1]}</TableCell>
+                          </>
+                        )}
+                        <TableCell className="text-right tabular-nums text-sm text-muted-foreground">{fmt(r.qty)}</TableCell>
+                        <TableCell className="text-right tabular-nums text-sm font-medium">{fmtBaht(r.revenue)}</TableCell>
+                        <TableCell className="text-right tabular-nums text-sm text-muted-foreground">{fmtBaht(r.online)}</TableCell>
+                        <TableCell className="text-right tabular-nums text-sm text-muted-foreground pr-4">{fmtBaht(r.offline)}</TableCell>
+                      </TableRow>
+                    ))}
+                    {/* Total / sum row */}
+                    <TableRow className="border-t-2 bg-muted/40 font-semibold">
+                      {tableTab === 'brand' ? (
+                        <TableCell className="text-sm">Total</TableCell>
+                      ) : (
+                        <>
+                          <TableCell className="text-sm">Total</TableCell>
+                          <TableCell />
+                        </>
+                      )}
+                      <TableCell className="text-right tabular-nums text-sm">{fmt(tableTotals.qty)}</TableCell>
+                      <TableCell className="text-right tabular-nums text-sm">{fmtBaht(tableTotals.revenue)}</TableCell>
+                      <TableCell className="text-right tabular-nums text-sm">{fmtBaht(tableTotals.online)}</TableCell>
+                      <TableCell className="text-right tabular-nums text-sm pr-4">{fmtBaht(tableTotals.offline)}</TableCell>
+                    </TableRow>
+                  </>
+                )}
+              </TableBody>
+            </Table>
+          </div>
         </div>
       )}
     </div>

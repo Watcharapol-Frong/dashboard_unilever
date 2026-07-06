@@ -310,6 +310,7 @@ export async function GET(request: Request) {
       query<{
         senior_buyer_name: string; buyer_name: string; brand: string
         prod_num: string; product_name: string; converted_sales: string; qty: string
+        converted_online: string; converted_offline: string
       }>(`
         SELECT
           COALESCE(p.senior_buyer_name, '(No Category)') AS senior_buyer_name,
@@ -318,7 +319,9 @@ export async function GET(request: Request) {
           sho.prod_num,
           COALESCE(sho.product_name_en, sho.prod_num)   AS product_name,
           COALESCE(SUM(sho.sales_in_vat) FILTER (WHERE ${CONV}), 0)::text AS converted_sales,
-          COALESCE(SUM(sho.sales_qty)    FILTER (WHERE ${CONV}), 0)::text AS qty
+          COALESCE(SUM(sho.sales_qty)    FILTER (WHERE ${CONV}), 0)::text AS qty,
+          COALESCE(SUM(CASE WHEN sho.channel='online'  THEN sho.sales_in_vat ELSE 0 END) FILTER (WHERE ${CONV}), 0)::text AS converted_online,
+          COALESCE(SUM(CASE WHEN sho.channel='offline' THEN sho.sales_in_vat ELSE 0 END) FILTER (WHERE ${CONV}), 0)::text AS converted_offline
         FROM sales_hoc_orders sho
         LEFT JOIN products p ON p.prod_num = sho.prod_num
         ${trendFilter.where}
@@ -432,6 +435,8 @@ export async function GET(request: Request) {
           product_name:      r.product_name,
           converted_sales:   Number(r.converted_sales),
           qty:               Number(r.qty),
+          converted_online:  Number(r.converted_online),
+          converted_offline: Number(r.converted_offline),
         })),
       },
     })
