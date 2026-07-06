@@ -2,8 +2,12 @@
 
 import { useMemo, useState, useRef, useCallback, useEffect } from 'react'
 import { hierarchy, pack } from 'd3-hierarchy'
-import { ChevronLeft, Search, X } from 'lucide-react'
+import { ChevronLeft, Search, X, LayoutGrid, Table2, ArrowUp, ArrowDown, ChevronsUpDown } from 'lucide-react'
+import {
+  Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
+} from '@/components/ui/table'
 import { fmtBaht, fmt } from '@/lib/formatters'
+import { cn } from '@/lib/utils'
 
 // ── Public type (shared with API response) ────────────────────────────────────
 export type BubbleRecord = {
@@ -14,6 +18,8 @@ export type BubbleRecord = {
   product_name: string
   converted_sales: number
   qty: number
+  converted_online: number
+  converted_offline: number
 }
 
 // ── Internal hierarchy node type ──────────────────────────────────────────────
@@ -376,9 +382,68 @@ function BubblePanel({ senior, records, colorMap, search, width, height }: Panel
   )
 }
 
+// ── Table view aggregation ────────────────────────────────────────────────────
+type TableTab = 'brand' | 'category' | 'item'
+
+const TABLE_PAGE_SIZE = 10
+
+type AggRow = {
+  key:     string
+  labels:  string[]   // Brand → [brand] · Category → [senior, buyer]
+  qty:     number
+  revenue: number      // converted total revenue (= online + offline)
+  online:  number
+  offline: number
+}
+
+type SortCol = 'label0' | 'label1' | 'qty' | 'revenue' | 'online' | 'offline'
+type SortState = { col: SortCol; dir: 'asc' | 'desc' }
+
+function sortValue(r: AggRow, col: SortCol): string | number {
+  switch (col) {
+    case 'label0': return r.labels[0] ?? ''
+    case 'label1': return r.labels[1] ?? ''
+    case 'qty':     return r.qty
+    case 'revenue': return r.revenue
+    case 'online':  return r.online
+    case 'offline': return r.offline
+  }
+}
+
+function aggregate(records: BubbleRecord[], tab: TableTab): AggRow[] {
+  const m = new Map<string, AggRow>()
+  for (const r of records) {
+    let key: string, labels: string[]
+    if (tab === 'brand')      { key = r.brand;    labels = [r.brand] }
+    else if (tab === 'item')  { key = r.prod_num; labels = [r.prod_num] }
+    else                      { key = `${r.senior_buyer_name}|||${r.buyer_name}`; labels = [r.senior_buyer_name, r.buyer_name] }
+    const cur = m.get(key) ?? { key, labels, qty: 0, revenue: 0, online: 0, offline: 0 }
+    cur.qty     += r.qty
+    cur.revenue += r.converted_sales
+    cur.online  += r.converted_online
+    cur.offline += r.converted_offline
+    m.set(key, cur)
+  }
+  return [...m.values()].sort((a, b) => b.revenue - a.revenue)
+}
+
 // ── Main chart component ───────────────────────────────────────────────────────
 export function SplitBubbleChart({ data, height = 440 }: { data: BubbleRecord[]; height?: number }) {
-  const [search, setSearch] = useState('')
+  const [view,     setView]     = useState<'bubble' | 'table'>('bubble')
+  const [tableTab, setTableTab] = useState<TableTab>('brand')
+  const [sort,     setSort]     = useState<SortState>({ col: 'revenue', dir: 'desc' })
+  const [search,   setSearch]   = useState('')
+
+  const changeTableTab = (id: TableTab) => {
+    setTableTab(id)
+    setSort({ col: 'revenue', dir: 'desc' })  // reset — label columns differ per dataset
+  }
+
+  const toggleSort = (col: SortCol) => setSort(prev =>
+    prev.col === col
+      ? { col, dir: prev.dir === 'asc' ? 'desc' : 'asc' }
+      : { col, dir: col === 'label0' || col === 'label1' ? 'asc' : 'desc' },  // text asc, numbers desc
+  )
   const containerRef = useRef<HTMLDivElement>(null)
   const [containerWidth, setContainerWidth] = useState(0)
 
@@ -424,6 +489,56 @@ export function SplitBubbleChart({ data, height = 440 }: { data: BubbleRecord[];
     return [...sm.entries()].sort((a, b) => b[1] - a[1]).slice(0, 8).map(([b]) => b)
   }, [data])
 
+  // Table view rows — aggregated by brand or category, filtered by search, then sorted
+  const tableRows = useMemo(() => {
+    const rows = aggregate(data, tableTab)
+    const q = search.toLowerCase().trim()
+    const filtered = q ? rows.filter(r => r.labels.some(l => l.toLowerCase().includes(q))) : rows
+    return [...filtered].sort((a, b) => {
+      const va = sortValue(a, sort.col)
+      const vb = sortValue(b, sort.col)
+      const c = typeof va === 'number' && typeof vb === 'number'
+        ? va - vb
+        : String(va).localeCompare(String(vb))
+      return sort.dir === 'asc' ? c : -c
+    })
+  }, [data, tableTab, search, sort])
+
+  // Pagination — reset to page 1 whenever the dataset, search, or sort changes
+  const [page, setPage] = useState(1)
+  useEffect(() => { setPage(1) }, [tableTab, search, sort])
+  const totalPages = Math.max(1, Math.ceil(tableRows.length / TABLE_PAGE_SIZE))
+  const safePage   = Math.min(page, totalPages)
+  const pagedRows  = useMemo(
+    () => tableRows.slice((safePage - 1) * TABLE_PAGE_SIZE, safePage * TABLE_PAGE_SIZE),
+    [tableRows, safePage],
+  )
+
+  // Total row across ALL currently displayed (filtered) rows — grand total, not just this page
+  const tableTotals = useMemo(() => tableRows.reduce(
+    (acc, r) => {
+      acc.qty += r.qty; acc.revenue += r.revenue; acc.online += r.online; acc.offline += r.offline
+      return acc
+    },
+    { qty: 0, revenue: 0, online: 0, offline: 0 },
+  ), [tableRows])
+
+  const sortHead = (col: SortCol, label: string, right = false) => (
+    <button
+      type="button"
+      onClick={() => toggleSort(col)}
+      className={cn(
+        'group flex items-center gap-1 hover:text-foreground transition-colors',
+        right && 'w-full justify-end',
+      )}
+    >
+      <span>{label}</span>
+      {sort.col === col
+        ? (sort.dir === 'asc' ? <ArrowUp className="h-3 w-3" /> : <ArrowDown className="h-3 w-3" />)
+        : <ChevronsUpDown className="h-3 w-3 opacity-30 group-hover:opacity-60" />}
+    </button>
+  )
+
   if (data.length === 0) {
     return (
       <div className="flex items-center justify-center h-32 rounded-lg border text-sm text-muted-foreground">
@@ -437,36 +552,66 @@ export function SplitBubbleChart({ data, height = 440 }: { data: BubbleRecord[];
       {/* Header */}
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
-          <h3 className="text-sm font-semibold">Product Sales Bubble Map</h3>
-          <p className="text-xs text-muted-foreground mt-0.5">
-            Split by Senior Buyer · Dashed ring = Buyer boundary · Bubble = Brand
-            · <strong>Double-click</strong> a brand to drill into products
-          </p>
-        </div>
-        {/* Search */}
-        <div className="relative flex items-center shrink-0">
-          <Search className="pointer-events-none absolute left-2.5 h-3.5 w-3.5 text-muted-foreground" />
-          <input
-            type="text"
-            value={search}
-            onChange={e => setSearch(e.target.value)}
-            placeholder="Search brands or products…"
-            className="h-8 w-48 rounded-md border border-input bg-background pl-8 pr-7 text-xs focus:outline-none focus:ring-1 focus:ring-ring"
-          />
-          {search && (
-            <button
-              onClick={() => setSearch('')}
-              className="absolute right-2 text-muted-foreground hover:text-foreground"
-              aria-label="Clear search"
-            >
-              <X className="h-3.5 w-3.5" />
-            </button>
+          <h3 className="text-sm font-semibold">Product Sales</h3>
+          {view === 'bubble' ? (
+            <p className="text-xs text-muted-foreground mt-0.5">
+              Split by Senior Buyer · Dashed ring = Buyer boundary · Bubble = Brand
+              · <strong>Double-click</strong> a brand to drill into products
+            </p>
+          ) : (
+            <p className="text-xs text-muted-foreground mt-0.5">
+              Converted (HOC-attributed) revenue, aggregated by {tableTab === 'brand' ? 'brand' : tableTab === 'category' ? 'category' : 'item'}
+            </p>
           )}
+        </div>
+        <div className="flex items-center gap-2 shrink-0">
+          {/* View toggle */}
+          <div className="flex rounded-lg border border-gray-200 p-0.5 bg-muted/30">
+            <button
+              onClick={() => setView('bubble')}
+              className={cn(
+                'flex items-center gap-1.5 rounded-md px-2.5 py-1 text-xs font-semibold transition-all',
+                view === 'bubble' ? 'bg-white text-[#003DA6] shadow-sm' : 'text-muted-foreground hover:text-foreground',
+              )}
+            >
+              <LayoutGrid className="h-3.5 w-3.5" />Bubble Map
+            </button>
+            <button
+              onClick={() => setView('table')}
+              className={cn(
+                'flex items-center gap-1.5 rounded-md px-2.5 py-1 text-xs font-semibold transition-all',
+                view === 'table' ? 'bg-white text-[#003DA6] shadow-sm' : 'text-muted-foreground hover:text-foreground',
+              )}
+            >
+              <Table2 className="h-3.5 w-3.5" />Table
+            </button>
+          </div>
+
+          {/* Search */}
+          <div className="relative flex items-center">
+            <Search className="pointer-events-none absolute left-2.5 h-3.5 w-3.5 text-muted-foreground" />
+            <input
+              type="text"
+              value={search}
+              onChange={e => setSearch(e.target.value)}
+              placeholder="Search brands or products…"
+              className="h-8 w-48 rounded-md border border-input bg-background pl-8 pr-7 text-xs focus:outline-none focus:ring-1 focus:ring-ring"
+            />
+            {search && (
+              <button
+                onClick={() => setSearch('')}
+                className="absolute right-2 text-muted-foreground hover:text-foreground"
+                aria-label="Clear search"
+              >
+                <X className="h-3.5 w-3.5" />
+              </button>
+            )}
+          </div>
         </div>
       </div>
 
       {/* Color legend */}
-      {legendBrands.length > 0 && (
+      {view === 'bubble' && legendBrands.length > 0 && (
         <div className="flex flex-wrap gap-x-4 gap-y-1.5 border-t pt-2">
           {legendBrands.map(brand => (
             <span key={brand} className="flex items-center gap-1.5 text-[11px] text-muted-foreground">
@@ -485,55 +630,172 @@ export function SplitBubbleChart({ data, height = 440 }: { data: BubbleRecord[];
       )}
 
       {/* Left / Right split panels — Senior Buyer header inside each frame */}
-      <div ref={containerRef} className="flex" style={{ gap: GAP }}>
-        {seniors.map((senior, idx) => {
-          const totals = seniorTotals.get(senior)
-          const isLeft = idx === 0
-          const badgeStyle = isLeft
-            ? { background: '#eff6ff', borderColor: '#bfdbfe', color: '#1e40af' }
-            : { background: '#fef3c7', borderColor: '#fde68a', color: '#92400e' }
+      {view === 'bubble' && (
+        <div ref={containerRef} className="flex" style={{ gap: GAP }}>
+          {seniors.map((senior, idx) => {
+            const totals = seniorTotals.get(senior)
+            const isLeft = idx === 0
+            const badgeStyle = isLeft
+              ? { background: '#eff6ff', borderColor: '#bfdbfe', color: '#1e40af' }
+              : { background: '#fef3c7', borderColor: '#fde68a', color: '#92400e' }
 
-          return (
-            <div
-              key={senior}
-              className="rounded-lg border border-slate-200 overflow-hidden flex flex-col bg-slate-50/40"
-              style={{ width: panelW || '50%' }}
-            >
-              {/* Header row inside the frame */}
-              <div className="flex items-center justify-between px-3 py-2 bg-white/80 border-b border-slate-100">
-                <span
-                  className="inline-block rounded-full border px-3 py-0.5 text-[11px] font-semibold"
-                  style={badgeStyle}
-                >
-                  {senior}
-                </span>
-                {totals && (
-                  <div className="text-right leading-tight">
-                    <div className="text-[12px] font-semibold tabular-nums text-foreground">
-                      {fmtBaht(totals.sales)}
+            return (
+              <div
+                key={senior}
+                className="rounded-lg border border-slate-200 overflow-hidden flex flex-col bg-slate-50/40"
+                style={{ width: panelW || '50%' }}
+              >
+                {/* Header row inside the frame */}
+                <div className="flex items-center justify-between px-3 py-2 bg-white/80 border-b border-slate-100">
+                  <span
+                    className="inline-block rounded-full border px-3 py-0.5 text-[11px] font-semibold"
+                    style={badgeStyle}
+                  >
+                    {senior}
+                  </span>
+                  {totals && (
+                    <div className="text-right leading-tight">
+                      <div className="text-[12px] font-semibold tabular-nums text-foreground">
+                        {fmtBaht(totals.sales)}
+                      </div>
+                      <div className="text-[11px] text-muted-foreground tabular-nums">
+                        {fmt(totals.qty)} pcs
+                      </div>
                     </div>
-                    <div className="text-[11px] text-muted-foreground tabular-nums">
-                      {fmt(totals.qty)} pcs
-                    </div>
-                  </div>
+                  )}
+                </div>
+
+                {/* Bubble panel */}
+                {panelW > 0 && (
+                  <BubblePanel
+                    senior={senior}
+                    records={data}
+                    colorMap={colorMap}
+                    search={search}
+                    width={panelW}
+                    height={height}
+                  />
                 )}
               </div>
+            )
+          })}
+        </div>
+      )}
 
-              {/* Bubble panel */}
-              {panelW > 0 && (
-                <BubblePanel
-                  senior={senior}
-                  records={data}
-                  colorMap={colorMap}
-                  search={search}
-                  width={panelW}
-                  height={height}
-                />
-              )}
+      {/* Table view */}
+      {view === 'table' && (
+        <div className="space-y-3">
+          {/* Dataset switch: Brand / Category */}
+          <div className="flex flex-wrap items-center gap-2">
+            {(['brand', 'category', 'item'] as const).map(id => (
+              <button
+                key={id}
+                onClick={() => changeTableTab(id)}
+                className={cn(
+                  'px-3.5 py-1.5 rounded-lg border text-xs font-semibold transition-all',
+                  tableTab === id
+                    ? 'bg-[#003DA6] text-white border-[#003DA6] shadow-sm'
+                    : 'border-gray-200 text-muted-foreground hover:border-gray-300 hover:text-foreground bg-background',
+                )}
+              >
+                {id === 'brand' ? 'By Brand' : id === 'category' ? 'By Category' : 'By Item'}
+              </button>
+            ))}
+            <span className="ml-1 text-xs text-muted-foreground">
+              {tableRows.length.toLocaleString()} {tableTab === 'brand' ? 'brands' : tableTab === 'category' ? 'categories' : 'items'}
+            </span>
+          </div>
+
+          <div className="rounded-md border overflow-x-auto">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  {tableTab === 'category' ? (
+                    <>
+                      <TableHead>{sortHead('label0', 'Senior Buyer')}</TableHead>
+                      <TableHead>{sortHead('label1', 'Buyer')}</TableHead>
+                    </>
+                  ) : (
+                    <TableHead>{sortHead('label0', tableTab === 'brand' ? 'Brand' : 'Product ID')}</TableHead>
+                  )}
+                  <TableHead className="text-right">{sortHead('qty', 'Qty Sold', true)}</TableHead>
+                  <TableHead className="text-right">{sortHead('revenue', 'Total Revenue', true)}</TableHead>
+                  <TableHead className="text-right">{sortHead('online', 'Online', true)}</TableHead>
+                  <TableHead className="text-right pr-4">{sortHead('offline', 'Offline', true)}</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {tableRows.length === 0 ? (
+                  <TableRow>
+                    <TableCell colSpan={tableTab === 'category' ? 6 : 5} className="h-20 text-center text-sm text-muted-foreground">
+                      No results.
+                    </TableCell>
+                  </TableRow>
+                ) : (
+                  <>
+                    {pagedRows.map(r => (
+                      <TableRow key={r.key}>
+                        {tableTab === 'category' ? (
+                          <>
+                            <TableCell className="text-sm">{r.labels[0]}</TableCell>
+                            <TableCell className="text-sm text-muted-foreground">{r.labels[1]}</TableCell>
+                          </>
+                        ) : (
+                          <TableCell className={cn('text-sm', tableTab === 'item' ? 'font-mono' : 'font-medium')}>{r.labels[0]}</TableCell>
+                        )}
+                        <TableCell className="text-right tabular-nums text-sm text-muted-foreground">{fmt(r.qty)}</TableCell>
+                        <TableCell className="text-right tabular-nums text-sm font-medium">{fmtBaht(r.revenue)}</TableCell>
+                        <TableCell className="text-right tabular-nums text-sm text-muted-foreground">{fmtBaht(r.online)}</TableCell>
+                        <TableCell className="text-right tabular-nums text-sm text-muted-foreground pr-4">{fmtBaht(r.offline)}</TableCell>
+                      </TableRow>
+                    ))}
+                    {/* Total / sum row — grand total across all pages */}
+                    <TableRow className="border-t-2 bg-muted/40 font-semibold">
+                      {tableTab === 'category' ? (
+                        <>
+                          <TableCell className="text-sm">Total</TableCell>
+                          <TableCell />
+                        </>
+                      ) : (
+                        <TableCell className="text-sm">Total</TableCell>
+                      )}
+                      <TableCell className="text-right tabular-nums text-sm">{fmt(tableTotals.qty)}</TableCell>
+                      <TableCell className="text-right tabular-nums text-sm">{fmtBaht(tableTotals.revenue)}</TableCell>
+                      <TableCell className="text-right tabular-nums text-sm">{fmtBaht(tableTotals.online)}</TableCell>
+                      <TableCell className="text-right tabular-nums text-sm pr-4">{fmtBaht(tableTotals.offline)}</TableCell>
+                    </TableRow>
+                  </>
+                )}
+              </TableBody>
+            </Table>
+          </div>
+
+          {/* Pagination controls */}
+          {totalPages > 1 && (
+            <div className="flex items-center justify-between gap-3">
+              <span className="text-xs text-muted-foreground">
+                {tableRows.length.toLocaleString()} rows · page {safePage} of {totalPages}
+              </span>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => setPage(p => Math.max(1, p - 1))}
+                  disabled={safePage <= 1}
+                  className="rounded-md border border-gray-200 bg-background px-3 py-1.5 text-xs font-semibold text-muted-foreground hover:text-foreground hover:border-gray-300 transition-all disabled:opacity-40 disabled:cursor-not-allowed"
+                >
+                  Previous
+                </button>
+                <button
+                  onClick={() => setPage(p => Math.min(totalPages, p + 1))}
+                  disabled={safePage >= totalPages}
+                  className="rounded-md border border-gray-200 bg-background px-3 py-1.5 text-xs font-semibold text-muted-foreground hover:text-foreground hover:border-gray-300 transition-all disabled:opacity-40 disabled:cursor-not-allowed"
+                >
+                  Next
+                </button>
+              </div>
             </div>
-          )
-        })}
-      </div>
+          )}
+        </div>
+      )}
     </div>
   )
 }
