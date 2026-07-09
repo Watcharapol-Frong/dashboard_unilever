@@ -34,6 +34,8 @@ type SalesRow = {
 type TeleRow = {
   month: string; total_calls: number; reached: number; converted: number
   reach_rate: number; conversion_rate: number
+  contact_target: number; buying_target: number
+  contact_achievement: number; buying_achievement: number
 }
 type ApiData = { sales: SalesRow[]; telesales: TeleRow[]; cmg_options: string[] }
 
@@ -192,13 +194,17 @@ export function DashboardClient() {
 
   const aggTele = useMemo(() => {
     if (teleInRange.length === 0) return null
-    const total_calls = teleInRange.reduce((sum, t) => sum + t.total_calls, 0)
-    const reached     = teleInRange.reduce((sum, t) => sum + t.reached, 0)
-    const converted   = teleInRange.reduce((sum, t) => sum + t.converted, 0)
+    const total_calls    = teleInRange.reduce((sum, t) => sum + t.total_calls, 0)
+    const reached        = teleInRange.reduce((sum, t) => sum + t.reached, 0)
+    const converted      = teleInRange.reduce((sum, t) => sum + t.converted, 0)
+    const contact_target = teleInRange.reduce((sum, t) => sum + t.contact_target, 0)
+    const buying_target  = teleInRange.reduce((sum, t) => sum + t.buying_target, 0)
     return {
-      total_calls, reached, converted,
-      reach_rate:      total_calls > 0 ? reached / total_calls : 0,
-      conversion_rate: reached > 0 ? converted / reached : 0,
+      total_calls, reached, converted, contact_target, buying_target,
+      reach_rate:          total_calls    > 0 ? reached / total_calls : 0,
+      conversion_rate:     reached        > 0 ? converted / reached : 0,
+      contact_achievement: contact_target > 0 ? total_calls / contact_target : 0,
+      buying_achievement:  buying_target  > 0 ? converted / buying_target : 0,
     }
   }, [teleInRange])
 
@@ -402,15 +408,23 @@ export function DashboardClient() {
         </div>
         {aggTele ? (
           <>
-            <KpiGrid cols={4}>
+            <KpiGrid cols={6}>
               <KpiCard
                 title={t('kpi.totalCalls', lang)}
                 value={fmt(aggTele.total_calls)}
                 icon={PhoneCall}
                 comparison={isSingleMonth ? mom(aggTele.total_calls, tPrev?.total_calls) : undefined}
                 comparisonLabel="vs previous month"
-                subtitle="customers contacted"
+                subtitle={aggTele.contact_target > 0 ? `${t('common.target', lang)} ${fmt(aggTele.contact_target)}` : 'customers contacted'}
                 tooltip={t('tooltip.totalCalls', lang)}
+              />
+              <KpiCard
+                title="Contact Achievement"
+                value={aggTele.contact_target > 0 ? formatPct(aggTele.contact_achievement) : '—'}
+                icon={Target}
+                valueClassName={colorAchievement(aggTele.contact_achievement * 100)}
+                subtitle={aggTele.contact_target > 0 ? `of ${fmt(aggTele.contact_target)} target` : 'no target set'}
+                tooltip="Total calls achieved against the contract's monthly contact target"
               />
               <KpiCard
                 title={t('telesales.reached', lang)}
@@ -426,8 +440,16 @@ export function DashboardClient() {
                 icon={UserCheck}
                 comparison={isSingleMonth ? mom(aggTele.converted, tPrev?.converted) : undefined}
                 comparisonLabel="vs previous month"
-                subtitle="became customers"
+                subtitle={aggTele.buying_target > 0 ? `${t('common.target', lang)} ${fmt(aggTele.buying_target)}` : 'became customers'}
                 tooltip={t('tooltip.converted', lang)}
+              />
+              <KpiCard
+                title="Conversion Achievement"
+                value={aggTele.buying_target > 0 ? formatPct(aggTele.buying_achievement) : '—'}
+                icon={Target}
+                valueClassName={colorAchievement(aggTele.buying_achievement * 100)}
+                subtitle={aggTele.buying_target > 0 ? `of ${fmt(aggTele.buying_target)} target` : 'no target set'}
+                tooltip="Converted customers achieved against the contract's monthly buying target"
               />
               <KpiCard
                 title={t('telesales.convRate', lang)}

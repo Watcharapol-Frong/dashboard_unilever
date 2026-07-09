@@ -84,11 +84,13 @@ const TEMPLATES: Record<string, TemplateDef> = {
 
   targets: {
     sheetName: 'Targets',
-    description: 'Monthly sales targets per CMG',
+    description: 'Monthly sales, buying, and contact targets per CMG',
     cols: [
-      { header: 'month',        width: 14, examples: ['2026-01-01', '2026-01-01'] },
-      { header: 'dynamic_cmg',  width: 18, examples: ['FOOD RETAILER', 'HORECA'] },
-      { header: 'sales_target', width: 18, numFmt: '#,##0.00', examples: [5000000, 2000000] },
+      { header: 'month',          width: 14, examples: ['2026-01-01', '2026-01-01'] },
+      { header: 'dynamic_cmg',    width: 18, examples: ['FOOD RETAILER', 'HORECA'] },
+      { header: 'sales_target',   width: 18, numFmt: '#,##0.00', examples: [5000000, 2000000] },
+      { header: 'buying_target',  width: 16, numFmt: '#,##0',    examples: [6658, 3200] },
+      { header: 'contact_target', width: 16, numFmt: '#,##0',    examples: [22195, 11000] },
     ],
   },
 

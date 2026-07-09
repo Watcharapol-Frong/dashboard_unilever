@@ -24,7 +24,7 @@ export async function GET(request: Request) {
       cmgWhere = `WHERE dynamic_cmg = ANY($1)`
     }
 
-    const [salesRows, roiRows, teleRows, cmgOpts] = await Promise.all([
+    const [salesRows, roiRows, teleRows, targetRows, cmgOpts] = await Promise.all([
       // Sales by order month (CMG-filterable)
       query<{ month: string; hoc_sales: string; target: string; new_customers: string; retention: string }>(`
         SELECT
@@ -66,13 +66,25 @@ export async function GET(request: Request) {
         ORDER BY 1
       `),
 
+      // Contact/buying targets by month — programme-wide (summed across all CMG),
+      // same scope as the telesales series above (not CMG-filterable).
+      query<{ month: string; contact_target: string; buying_target: string }>(`
+        SELECT
+          month::text                             AS month,
+          COALESCE(SUM(contact_target), 0)::text AS contact_target,
+          COALESCE(SUM(buying_target), 0)::text  AS buying_target
+        FROM targets
+        GROUP BY month
+      `),
+
       query<{ cmg: string }>(`
         SELECT DISTINCT dynamic_cmg AS cmg FROM mart_performance_cmg
         WHERE dynamic_cmg IS NOT NULL ORDER BY 1
       `),
     ])
 
-    const roiByMonth = new Map(roiRows.map(r => [r.month, r]))
+    const roiByMonth    = new Map(roiRows.map(r => [r.month, r]))
+    const targetByMonth = new Map(targetRows.map(r => [r.month, r]))
 
     const sales = salesRows.map(r => {
       const hoc_sales = Number(r.hoc_sales)
@@ -97,6 +109,9 @@ export async function GET(request: Request) {
       const total_calls = Number(r.total_calls)
       const reached     = Number(r.reached)
       const converted   = Number(r.converted)
+      const tg          = targetByMonth.get(r.month)
+      const contact_target = tg ? Number(tg.contact_target) : 0
+      const buying_target  = tg ? Number(tg.buying_target)  : 0
       return {
         month:           r.month,
         total_calls,
@@ -104,6 +119,10 @@ export async function GET(request: Request) {
         converted,
         reach_rate:      total_calls > 0 ? reached / total_calls : 0,
         conversion_rate: reached > 0 ? converted / reached : 0,
+        contact_target,
+        buying_target,
+        contact_achievement: contact_target > 0 ? total_calls / contact_target : 0,
+        buying_achievement:  buying_target  > 0 ? converted   / buying_target  : 0,
       }
     })
 
