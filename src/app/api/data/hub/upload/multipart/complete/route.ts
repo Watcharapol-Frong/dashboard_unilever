@@ -5,12 +5,14 @@ import { r2, R2_BUCKET } from '@/lib/r2'
 import { FILE_TYPE_CONFIGS } from '@/lib/upload-config'
 import type { UploadFileType } from '@/lib/upload-config'
 import { processUploadFromKey } from '@/lib/upload-service'
+import { withAdmin } from '@/lib/auth'
 
 const KEY_RE = /^tmp\/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\.csv$/i
 
 interface CompletedPart { PartNumber: number; ETag: string }
 
 export async function POST(request: Request) {
+  return withAdmin(async () => {
   const { uploadId, key, parts, type, filename } =
     await request.json() as {
       uploadId: string
@@ -69,4 +71,5 @@ export async function POST(request: Request) {
     console.error('[multipart/complete] processUploadFromKey failed:', err)
     return NextResponse.json({ error: (err as Error).message || 'Processing failed' }, { status: 500 })
   }
+  }) // withAdmin
 }

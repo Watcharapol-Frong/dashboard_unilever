@@ -5,11 +5,13 @@ import { r2, R2_BUCKET } from '@/lib/r2'
 import { FILE_TYPE_CONFIGS } from '@/lib/upload-config'
 import type { UploadFileType } from '@/lib/upload-config'
 import { randomUUID } from 'crypto'
+import { withAdmin } from '@/lib/auth'
 
 const PART_SIZE = 10 * 1024 * 1024      // 10MB per part
 const MAX_FILE_SIZE = 10 * 1024 * 1024 * 1024 // 10GB ceiling
 
 export async function POST(request: Request) {
+  return withAdmin(async () => {
   const { type, fileSize } = await request.json() as { type: UploadFileType; fileSize: number }
 
   if (!type || !FILE_TYPE_CONFIGS[type])
@@ -41,4 +43,5 @@ export async function POST(request: Request) {
   )
 
   return NextResponse.json({ uploadId: UploadId, key, presignedUrls, partSize: PART_SIZE })
+  }) // withAdmin
 }
