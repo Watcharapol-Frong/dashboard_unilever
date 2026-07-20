@@ -8,7 +8,8 @@
     "start": "next start",
     "lint": "next lint",
     "indexes": "npx tsx scripts/create-indexes.ts",
-    "build-mart": "npx tsx scripts/build-mart.ts"
+    "build-mart": "npx tsx scripts/build-mart.ts",
+    "cleanup-views": "npx tsx scripts/drop-unused-views.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.104.1",
