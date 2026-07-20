@@ -6,6 +6,12 @@ import { FILE_TYPE_CONFIGS } from '@/lib/upload-config'
 import type { UploadFileType } from '@/lib/upload-config'
 import { processUploadFromKey } from '@/lib/upload-service'
 import { withAdmin } from '@/lib/auth'
+import { queryOne } from '@/lib/db'
+import { triggerMartBuildWorkflow } from '@/lib/build-trigger'
+
+// Types that don't feed the mart build (buildMartMain/buildMartPerformance never
+// read from them) — skip the auto-trigger for these to avoid a wasted rebuild.
+const MART_UNRELATED_TYPES: UploadFileType[] = ['leads']
 
 const KEY_RE = /^tmp\/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\.csv$/i
 
@@ -66,6 +72,21 @@ export async function POST(request: Request) {
         { status: isClientError ? 422 : 500 }
       )
     }
+
+    // Auto-trigger a mart rebuild so sales_hoc_orders / mart_performance_cmg /
+    // mart_telesales_funnel / table_summaries pick up this upload without
+    // waiting for the nightly cron. Non-fatal — the upload already succeeded.
+    if (!MART_UNRELATED_TYPES.includes(type)) {
+      try {
+        const lastBuild = await queryOne<{ attribution_days: number | null }>(
+          `SELECT attribution_days FROM mart_builds ORDER BY id DESC LIMIT 1`
+        )
+        await triggerMartBuildWorkflow(lastBuild?.attribution_days ?? 30)
+      } catch (err) {
+        console.error('[multipart/complete] auto-trigger build failed (non-fatal):', err)
+      }
+    }
+
     return NextResponse.json(result)
   } catch (err) {
     console.error('[multipart/complete] processUploadFromKey failed:', err)

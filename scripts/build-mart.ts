@@ -14,11 +14,12 @@ console.log(`[build-mart] Starting — attribution window: ${attributionDays} da
 const t0 = Date.now()
 
 refreshAllMarts(attributionDays)
-  .then(({ mart_main, performance }) => {
+  .then(({ mart_main, performance, funnel }) => {
     const ms = Date.now() - t0
     console.log(`[build-mart] Done in ${(ms / 1000).toFixed(1)}s`)
-    console.log(`  sales_hoc_orders:    ${mart_main} rows`)
-    console.log(`  mart_performance_cmg: ${performance} rows`)
+    console.log(`  sales_hoc_orders:      ${mart_main} rows`)
+    console.log(`  mart_telesales_funnel: ${funnel} rows`)
+    console.log(`  mart_performance_cmg:  ${performance} rows`)
     process.exit(0)
   })
   .catch(err => {

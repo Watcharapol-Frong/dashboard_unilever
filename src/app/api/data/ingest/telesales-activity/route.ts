@@ -132,21 +132,16 @@ export async function POST(request: NextRequest) {
     })
   }
 
-  // ── 4. Record batch + sync summaries ─────────────────────
-  await Promise.all([
-    query(
-      `INSERT INTO upload_batches (table_name, filename, storage_path, row_count, status)
-       VALUES ('telesales_calls', $1, $2, $3, 'success')`,
-      [`gas_${datePart}_${token}.json`, r2Key, rows.length],
-    ),
-    query(
-      `INSERT INTO table_summaries (table_name, total_rows)
-       SELECT 'telesales_calls', COUNT(*) FROM telesales_calls
-       ON CONFLICT (table_name) DO UPDATE SET
-         total_rows   = EXCLUDED.total_rows,
-         last_updated = NOW()`
-    ),
-  ])
+  // ── 4. Record batch ───────────────────────────────────────
+  // table_summaries for telesales_calls is refreshed by the mart build
+  // (refreshTableSummaries in mart.ts), not here — this endpoint can be
+  // called every few minutes by the GAS incremental sync, so a live
+  // COUNT(*) on every call would be its own full-scan cost driver.
+  await query(
+    `INSERT INTO upload_batches (table_name, filename, storage_path, row_count, status)
+     VALUES ('telesales_calls', $1, $2, $3, 'success')`,
+    [`gas_${datePart}_${token}.json`, r2Key, rows.length],
+  )
 
   return NextResponse.json({ ok: true, inserted: rows.length, skipped, storage_path: r2Key })
 }

@@ -167,35 +167,23 @@ async function processUploadFromText(type: UploadFileType, text: string, filenam
     [upsertRows.length, etlErrors.length, finalStatus, batch.id]
   )
 
-  // 9. Update table_summaries — recount from DB to stay accurate after UPSERT dedup
-  if (!dbError) {
+  // 9. Update table_summaries — only for types NOT covered by the mart build's
+  // refreshTableSummaries() (online_sales/offline_sales/telesales_calls are kept in
+  // sync there instead, since a mart build now auto-triggers right after upload —
+  // see multipart/complete/route.ts). This avoids double-counting the same full
+  // scan in two places.
+  const MART_COVERED: UploadFileType[] = ['online_sales', 'offline_sales', 'telesales']
+  if (!dbError && !MART_COVERED.includes(type)) {
     try {
-      const tableName = type === 'telesales' ? 'telesales_calls' : type
-      if (type === 'online_sales' || type === 'offline_sales') {
-        const [countRes, salesRes] = await Promise.all([
-          queryOne<{ cnt: string }>(`SELECT COUNT(*) AS cnt FROM ${tableName}`),
-          queryOne<{ total: string }>(`SELECT COALESCE(SUM(sales_in_vat), 0) AS total FROM ${tableName}`),
-        ])
-        await query(
-          `INSERT INTO table_summaries (table_name, total_rows, total_sales)
-           VALUES ($1, $2, $3)
-           ON CONFLICT (table_name) DO UPDATE SET
-             total_rows   = EXCLUDED.total_rows,
-             total_sales  = EXCLUDED.total_sales,
-             last_updated = NOW()`,
-          [type, Number(countRes?.cnt ?? 0), Number(salesRes?.total ?? 0)]
-        )
-      } else {
-        const countRes = await queryOne<{ cnt: string }>(`SELECT COUNT(*) AS cnt FROM ${tableName}`)
-        await query(
-          `INSERT INTO table_summaries (table_name, total_rows)
-           VALUES ($1, $2)
-           ON CONFLICT (table_name) DO UPDATE SET
-             total_rows   = EXCLUDED.total_rows,
-             last_updated = NOW()`,
-          [tableName, Number(countRes?.cnt ?? 0)]
-        )
-      }
+      const countRes = await queryOne<{ cnt: string }>(`SELECT COUNT(*) AS cnt FROM ${cfg.table}`)
+      await query(
+        `INSERT INTO table_summaries (table_name, total_rows)
+         VALUES ($1, $2)
+         ON CONFLICT (table_name) DO UPDATE SET
+           total_rows   = EXCLUDED.total_rows,
+           last_updated = NOW()`,
+        [cfg.table, Number(countRes?.cnt ?? 0)]
+      )
     } catch (err) {
       console.error(`[upload-service] Failed to update table_summaries:`, err)
     }

@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useRef, useCallback } from 'react'
+import { useState, useRef, useCallback, useEffect } from 'react'
 import Papa from 'papaparse'
 import useSWR from 'swr'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
@@ -106,7 +106,20 @@ interface PendingFile { id: string; file: File; valid: boolean; error?: string }
 // ── Component ─────────────────────────────────────────────────────────────────
 export function DataHubClient() {
   const { jobs, enqueueJob, dismissJob } = useUploadQueue()
-  const { buildLoading, elapsedSeconds, buildResult, clearBuildResult, startBuild } = useBuild()
+  const { buildLoading, elapsedSeconds, buildResult, clearBuildResult, startBuild, watchExternalBuild } = useBuild()
+
+  // multipart/complete auto-triggers a mart build server-side for most upload
+  // types (see multipart/complete/route.ts) — start watching for it to finish
+  // so caches get invalidated without the admin having to click "Build Mart".
+  const watchedJobIds = useRef<Set<string>>(new Set())
+  useEffect(() => {
+    const justCompleted = jobs.filter(j =>
+      j.status === 'done' && j.result?.ok && j.fileType !== 'leads' && !watchedJobIds.current.has(j.id)
+    )
+    if (justCompleted.length === 0) return
+    justCompleted.forEach(j => watchedJobIds.current.add(j.id))
+    watchExternalBuild()
+  }, [jobs, watchExternalBuild])
 
   // Form state
   const [fileType, setFileType]         = useState<UploadFileType>('online_sales')
