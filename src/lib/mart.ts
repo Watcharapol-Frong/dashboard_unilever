@@ -44,6 +44,11 @@ export async function ensureSchemaExtensions(): Promise<void> {
     query(`ALTER TABLE table_summaries ADD COLUMN IF NOT EXISTS min_date DATE`).catch(() => {}),
     query(`ALTER TABLE table_summaries ADD COLUMN IF NOT EXISTS max_date DATE`).catch(() => {}),
     query(`ALTER TABLE table_summaries ADD COLUMN IF NOT EXISTS extra_metric NUMERIC`).catch(() => {}),
+    // sales_hoc_all / mart_performance_weekly (db/002_views.sql) predate the
+    // sales_hoc_orders mart table and are never queried anywhere in the app —
+    // drop them the next time this runs. IF EXISTS makes this a no-op after that.
+    query(`DROP VIEW IF EXISTS sales_hoc_all`).catch(() => {}),
+    query(`DROP VIEW IF EXISTS mart_performance_weekly`).catch(() => {}),
   ])
 }
 
