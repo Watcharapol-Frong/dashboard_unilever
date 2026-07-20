@@ -2,7 +2,6 @@ import { NextResponse } from 'next/server'
 import { withAuth } from '@/lib/auth'
 import { query, queryOne } from '@/lib/db'
 import { setCacheHeader } from '@/lib/query'
-import { CONV, REACHED } from '@/lib/metrics'
 
 export const dynamic = 'force-dynamic'
 
@@ -12,30 +11,13 @@ export async function GET() {
       queryOne<{
         total: string; contacted: string; converted: string; total_orders: string
       }>(`
-        WITH cs AS (
-          SELECT
-            mmid,
-            BOOL_OR(${REACHED}) AS is_reached
-          FROM telesales_calls
-          WHERE first_connected_date IS NOT NULL
-          GROUP BY mmid
-        ),
-        os AS (
-          SELECT
-            mmid,
-            COUNT(DISTINCT order_number) FILTER (WHERE ${CONV}) AS hoc_orders,
-            BOOL_OR(${CONV})                                    AS is_converted
-          FROM sales_hoc_orders
-          GROUP BY mmid
-        )
         SELECT
-          COUNT(*)                                          AS total,
-          COUNT(*) FILTER (WHERE cs.mmid IS NOT NULL)      AS contacted,
-          COUNT(*) FILTER (WHERE os.is_converted)          AS converted,
-          COALESCE(SUM(COALESCE(os.hoc_orders, 0)), 0)    AS total_orders
+          COUNT(*)                                       AS total,
+          COUNT(*) FILTER (WHERE f.contact_status IS NOT NULL) AS contacted,
+          COUNT(*) FILTER (WHERE f.is_converted)          AS converted,
+          COALESCE(SUM(COALESCE(f.hoc_orders, 0)), 0)     AS total_orders
         FROM leads l
-        LEFT JOIN cs ON cs.mmid = l.mmid
-        LEFT JOIN os ON os.mmid = l.mmid
+        LEFT JOIN mart_telesales_funnel f ON f.mmid = l.mmid
       `),
 
       query<{ lead_customers: string }>(

@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { withAdmin } from '@/lib/auth'
 import { query, queryOne } from '@/lib/db'
+import { setCacheHeader } from '@/lib/query'
 
 export const dynamic = 'force-dynamic'
 
@@ -182,7 +183,7 @@ export async function GET() {
   }
 
   const res = NextResponse.json({ status, history: batches, mart })
-  res.headers.set('Cache-Control', 'no-store')
+  setCacheHeader(res, 'SHORT')
   return res
   } catch (err) {
     console.error('[hub]', err)

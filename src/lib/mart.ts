@@ -1,5 +1,5 @@
 import { query, queryOne, queryRowCount } from '@/lib/db'
-import { reachedCond } from '@/lib/metrics'
+import { reachedCond, CONV, REACHED } from '@/lib/metrics'
 
 // Ensures all schema extensions exist — called at build time and on server startup.
 // Safe to call multiple times (all DDL is IF NOT EXISTS / ADD COLUMN IF NOT EXISTS).
@@ -165,6 +165,68 @@ export async function buildMartMain(attributionDays = 30): Promise<number> {
     query(`CREATE INDEX IF NOT EXISTS idx_sho_agent      ON sales_hoc_orders (agent)`),
     query(`CREATE INDEX IF NOT EXISTS idx_sho_date       ON sales_hoc_orders (order_date)`),
     query(`CREATE INDEX IF NOT EXISTS idx_mcm_pcmg       ON mmid_cmg_map (primary_cmg)`),
+  ])
+
+  return rowCount
+}
+
+// ── mart_telesales_funnel — one row per mmid: contact + conversion status ──
+// Replaces the live `cs`/`os` CTEs that used to run on every /api/data/leads
+// and /api/data/leads/summary request (full scan of telesales_calls + sales_hoc_orders).
+// Must run after buildMartMain() since it reads from sales_hoc_orders.
+export async function buildMartTelesalesFunnel(): Promise<number> {
+  await query(`DROP TABLE IF EXISTS mart_telesales_funnel`)
+  await query(`
+    CREATE TABLE mart_telesales_funnel (
+      mmid            TEXT        NOT NULL PRIMARY KEY,
+      contact_status  TEXT,
+      agent           TEXT,
+      is_converted    BOOLEAN     NOT NULL DEFAULT false,
+      primary_cmg     TEXT,
+      hoc_orders      INTEGER     NOT NULL DEFAULT 0,
+      hoc_sales       NUMERIC     NOT NULL DEFAULT 0,
+      refreshed_at    TIMESTAMPTZ DEFAULT NOW()
+    )
+  `)
+
+  const rowCount = await queryRowCount(`
+    WITH cs AS (
+      SELECT
+        mmid,
+        CASE WHEN COUNT(*) FILTER (WHERE ${REACHED}) > 0 THEN 'reached' ELSE 'called_not_reached' END AS contact_status,
+        MAX(agent) AS agent
+      FROM telesales_calls
+      WHERE first_connected_date IS NOT NULL
+      GROUP BY mmid
+    ),
+    os AS (
+      SELECT
+        mmid,
+        COUNT(DISTINCT order_number) FILTER (WHERE ${CONV})     AS hoc_orders,
+        COALESCE(SUM(sales_in_vat)   FILTER (WHERE ${CONV}), 0) AS hoc_sales,
+        BOOL_OR(${CONV})                                        AS is_converted,
+        MAX(primary_cmg)                                        AS primary_cmg
+      FROM sales_hoc_orders
+      GROUP BY mmid
+    )
+    INSERT INTO mart_telesales_funnel (mmid, contact_status, agent, is_converted, primary_cmg, hoc_orders, hoc_sales)
+    SELECT
+      COALESCE(cs.mmid, os.mmid),
+      cs.contact_status,
+      cs.agent,
+      COALESCE(os.is_converted, false),
+      os.primary_cmg,
+      COALESCE(os.hoc_orders, 0),
+      COALESCE(os.hoc_sales, 0)
+    FROM cs
+    FULL OUTER JOIN os ON os.mmid = cs.mmid
+  `)
+
+  await Promise.all([
+    query(`CREATE INDEX IF NOT EXISTS idx_mtf_contact   ON mart_telesales_funnel (contact_status)`),
+    query(`CREATE INDEX IF NOT EXISTS idx_mtf_converted ON mart_telesales_funnel (is_converted)`),
+    query(`CREATE INDEX IF NOT EXISTS idx_mtf_cmg       ON mart_telesales_funnel (primary_cmg)`),
+    query(`CREATE INDEX IF NOT EXISTS idx_mtf_agent     ON mart_telesales_funnel (agent)`),
   ])
 
   return rowCount
@@ -368,7 +430,7 @@ export async function buildMartPerformance(attributionDays = 30): Promise<number
   return Number(row?.cnt ?? 0)
 }
 
-export async function refreshAllMarts(attributionDays = 30): Promise<{ mart_main: number; performance: number }> {
+export async function refreshAllMarts(attributionDays = 30): Promise<{ mart_main: number; performance: number; funnel: number }> {
   await ensureSchemaExtensions()
 
   const startedAt = Date.now()
@@ -380,19 +442,20 @@ export async function refreshAllMarts(attributionDays = 30): Promise<{ mart_main
 
   try {
     const mart_main   = await buildMartMain(attributionDays)
-    const performance = await buildMartPerformance(attributionDays)
-    const duration    = Date.now() - startedAt
+    const funnel       = await buildMartTelesalesFunnel()
+    const performance  = await buildMartPerformance(attributionDays)
+    const duration     = Date.now() - startedAt
 
     if (buildId) {
       await query(
         `UPDATE mart_builds
          SET finished_at = NOW(), status = 'success', duration_ms = $1, row_counts = $2
          WHERE id = $3`,
-        [duration, JSON.stringify({ sales_hoc_orders: mart_main, mart_performance_cmg: performance }), buildId]
+        [duration, JSON.stringify({ sales_hoc_orders: mart_main, mart_telesales_funnel: funnel, mart_performance_cmg: performance }), buildId]
       ).catch(() => {})
     }
 
-    return { mart_main, performance }
+    return { mart_main, performance, funnel }
   } catch (err) {
     if (buildId) {
       await query(

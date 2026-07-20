@@ -2,7 +2,6 @@ import { NextRequest, NextResponse } from 'next/server'
 import { withAuth } from '@/lib/auth'
 import { query } from '@/lib/db'
 import { setCacheHeader } from '@/lib/query'
-import { CONV, REACHED } from '@/lib/metrics'
 
 export const dynamic = 'force-dynamic'
 
@@ -28,10 +27,10 @@ export async function GET(req: NextRequest) {
     const conditions: string[] = []
 
     if (tier)    { params.push(tier);    conditions.push(`l.lead_customers = $${params.length}`) }
-    if (contact) { params.push(contact); conditions.push(`COALESCE(cs.contact_status,'not_called') = $${params.length}`) }
-    if (conv)    { params.push(conv);    conditions.push(`CASE WHEN os.is_converted THEN 'converted' WHEN os.mmid IS NOT NULL THEN 'not_converted' ELSE 'no_hoc_order' END = $${params.length}`) }
-    if (cmgArr.length > 0)   { params.push(cmgArr);   conditions.push(`os.primary_cmg = ANY($${params.length})`) }
-    if (agentArr.length > 0) { params.push(agentArr); conditions.push(`cs.agent = ANY($${params.length})`) }
+    if (contact) { params.push(contact); conditions.push(`COALESCE(f.contact_status,'not_called') = $${params.length}`) }
+    if (conv)    { params.push(conv);    conditions.push(`CASE WHEN f.is_converted THEN 'converted' WHEN f.mmid IS NOT NULL THEN 'not_converted' ELSE 'no_hoc_order' END = $${params.length}`) }
+    if (cmgArr.length > 0)   { params.push(cmgArr);   conditions.push(`f.primary_cmg = ANY($${params.length})`) }
+    if (agentArr.length > 0) { params.push(agentArr); conditions.push(`f.agent = ANY($${params.length})`) }
     if (search)  { params.push(`%${search}%`); conditions.push(`(l.mmid ILIKE $${params.length} OR COALESCE(l.cust_name,'') ILIKE $${params.length})`) }
 
     const whereClause = conditions.length ? `WHERE ${conditions.join(' AND ')}` : ''
@@ -51,46 +50,23 @@ export async function GET(req: NextRequest) {
       hoc_sales:         string
       total_count:       string
     }>(`
-      WITH cs AS (
-        SELECT
-          mmid,
-          CASE
-            WHEN COUNT(*) FILTER (WHERE ${REACHED}) > 0 THEN 'reached'
-            ELSE 'called_not_reached'
-          END AS contact_status,
-          MAX(agent) AS agent
-        FROM telesales_calls
-        WHERE first_connected_date IS NOT NULL
-        GROUP BY mmid
-      ),
-      os AS (
-        SELECT
-          mmid,
-          COUNT(DISTINCT order_number) FILTER (WHERE ${CONV})     AS hoc_orders,
-          COALESCE(SUM(sales_in_vat)   FILTER (WHERE ${CONV}), 0) AS hoc_sales,
-          BOOL_OR(${CONV})                                        AS is_converted,
-          MAX(primary_cmg)                                        AS primary_cmg
-        FROM sales_hoc_orders
-        GROUP BY mmid
-      ),
-      base AS (
+      WITH base AS (
         SELECT
           l.mmid,
           l.cust_name,
           l.lead_customers,
-          COALESCE(cs.contact_status, 'not_called') AS contact_status,
-          cs.agent,
-          os.primary_cmg,
+          COALESCE(f.contact_status, 'not_called') AS contact_status,
+          f.agent,
+          f.primary_cmg,
           CASE
-            WHEN os.is_converted     THEN 'converted'
-            WHEN os.mmid IS NOT NULL THEN 'not_converted'
-            ELSE                          'no_hoc_order'
+            WHEN f.is_converted     THEN 'converted'
+            WHEN f.mmid IS NOT NULL THEN 'not_converted'
+            ELSE                         'no_hoc_order'
           END AS conversion_status,
-          COALESCE(os.hoc_orders, 0) AS hoc_orders,
-          COALESCE(os.hoc_sales,  0) AS hoc_sales
+          COALESCE(f.hoc_orders, 0) AS hoc_orders,
+          COALESCE(f.hoc_sales,  0) AS hoc_sales
         FROM leads l
-        LEFT JOIN cs ON cs.mmid = l.mmid
-        LEFT JOIN os ON os.mmid = l.mmid
+        LEFT JOIN mart_telesales_funnel f ON f.mmid = l.mmid
         ${whereClause}
       )
       SELECT *, COUNT(*) OVER() AS total_count
