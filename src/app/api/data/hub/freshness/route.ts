@@ -11,10 +11,14 @@ export async function GET() {
       try { return await queryOne<T>(sql, params) } catch { return null }
     }
 
+    // This endpoint is polled every 5 min per open tab (FreshnessBar) and every
+    // 20s during an active build (BuildContext) — read the PK lookup in
+    // table_summaries (kept in sync by refreshTableSummaries() on every mart
+    // build) instead of an aggregate scan of sales_hoc_orders on every call.
     const [freshness, meta, lastBuild] = await Promise.all([
       safeQuery<{ max_date: string | null; last_refreshed: string | null }>(`
-        SELECT MAX(order_date)::text AS max_date, MAX(refreshed_at)::text AS last_refreshed
-        FROM sales_hoc_orders
+        SELECT max_date::text AS max_date, last_updated::text AS last_refreshed
+        FROM table_summaries WHERE table_name = 'sales_hoc_orders'
       `),
       safeQuery<{ attribution_days: string | null }>(`
         SELECT attribution_days::text FROM mart_performance_month LIMIT 1
