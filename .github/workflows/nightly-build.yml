@@ -11,6 +11,13 @@ on:
         required: false
         default: '30'
 
+# Builds now also auto-trigger after every upload (see multipart/complete/route.ts),
+# on top of the nightly cron and the manual "Build Mart" button. Queue instead of
+# running concurrently so two builds never DROP/CREATE the same mart table at once.
+concurrency:
+  group: mart-build
+  cancel-in-progress: false
+
 jobs:
   build-mart:
     name: Rebuild mart tables

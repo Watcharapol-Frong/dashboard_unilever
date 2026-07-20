@@ -8,47 +8,36 @@ export const dynamic = 'force-dynamic'
 export async function GET() {
   return withAdmin(async () => {
   try {
-  const safe = async <T>(sql: string): Promise<T | null> => {
-    try { return await queryOne<T>(sql) } catch { return null }
-  }
-
   const [
     summaries,
     lastUploads,
-    onlineDates,
-    offlineDates,
     productsBrands,
-    telesales,
     teleAgents,
     targets,
     costs,
     incentiveRows,
     batches,
-    martMain,
-    martPerf,
     recentBuilds,
   ] = await Promise.all([
-    query<{ table_name: string; total_rows: string; total_sales: string }>(
-      `SELECT table_name, total_rows, total_sales FROM table_summaries`
+    // Pre-aggregated by refreshTableSummaries() as part of the mart build —
+    // covers online_sales, offline_sales, telesales_calls, sales_hoc_orders,
+    // mart_performance_cmg. Avoids live COUNT(*)/MIN/MAX/AVG scans on every
+    // Data Hub page view.
+    query<{
+      table_name: string; total_rows: string; total_sales: string
+      min_date: string | null; max_date: string | null
+      extra_metric: string | null; last_updated: string
+    }>(
+      `SELECT table_name, total_rows, total_sales, min_date::text AS min_date,
+              max_date::text AS max_date, extra_metric::text AS extra_metric, last_updated::text AS last_updated
+       FROM table_summaries`
     ),
     query<{ table_name: string; uploaded_at: string }>(
       `SELECT DISTINCT ON (table_name) table_name, uploaded_at
        FROM upload_batches WHERE status IN ('success','partial')
        ORDER BY table_name, uploaded_at DESC`
     ),
-    queryOne<{ min_d: string | null; max_d: string | null }>(
-      `SELECT MIN(order_date)::text AS min_d, MAX(order_date)::text AS max_d FROM online_sales`
-    ),
-    queryOne<{ min_d: string | null; max_d: string | null }>(
-      `SELECT MIN(order_date)::text AS min_d, MAX(order_date)::text AS max_d FROM offline_sales`
-    ),
     query<{ brands: string }>(`SELECT DISTINCT brands FROM products WHERE brands IS NOT NULL`),
-    queryOne<{ cnt: string; min_d: string | null; max_d: string | null }>(
-      `SELECT COUNT(*) AS cnt,
-              MIN(first_connected_date)::text AS min_d,
-              MAX(first_connected_date)::text AS max_d
-       FROM telesales_calls`
-    ),
     query<{ agent: string }>(`SELECT DISTINCT agent FROM telesales_calls WHERE agent IS NOT NULL`),
     queryOne<{ cnt: string; min_d: string | null; max_d: string | null; total: string }>(
       `SELECT COUNT(*) AS cnt,
@@ -72,22 +61,6 @@ export async function GET() {
       `SELECT id, table_name, filename, row_count, error_count, status, uploaded_at, uploaded_by
        FROM upload_batches ORDER BY uploaded_at DESC LIMIT 50`
     ),
-    // Mart stats
-    safe<{ cnt: string; min_date: string | null; max_date: string | null; last_refreshed: string | null; avg_days: string | null }>(`
-      SELECT COUNT(*) AS cnt,
-             MIN(order_date)::text  AS min_date,
-             MAX(order_date)::text  AS max_date,
-             MAX(refreshed_at)::text AS last_refreshed,
-             ROUND(AVG(days_to_order), 1)::text AS avg_days
-      FROM sales_hoc_orders
-    `),
-    safe<{ cnt: string; min_month: string | null; max_month: string | null; last_refreshed: string | null }>(`
-      SELECT COUNT(*) AS cnt,
-             MIN(month)::text      AS min_month,
-             MAX(month)::text      AS max_month,
-             MAX(refreshed_at)::text AS last_refreshed
-      FROM mart_performance_cmg
-    `),
     (async () => {
       try {
         return await query<{
@@ -103,11 +76,19 @@ export async function GET() {
     })(),
   ])
 
-  const summaryMap: Record<string, { total_rows: number; total_sales: number }> = {}
+  const summaryMap: Record<string, {
+    total_rows: number; total_sales: number
+    min_date: string | null; max_date: string | null
+    extra_metric: number | null; last_updated: string | null
+  }> = {}
   for (const s of summaries) {
     summaryMap[s.table_name] = {
-      total_rows:  Number(s.total_rows  || 0),
-      total_sales: Number(s.total_sales || 0),
+      total_rows:   Number(s.total_rows  || 0),
+      total_sales:  Number(s.total_sales || 0),
+      min_date:     s.min_date ?? null,
+      max_date:     s.max_date ?? null,
+      extra_metric: s.extra_metric != null ? Number(s.extra_metric) : null,
+      last_updated: s.last_updated ?? null,
     }
   }
 
@@ -118,15 +99,15 @@ export async function GET() {
     online_sales: {
       total_rows:    summaryMap['online_sales']?.total_rows  ?? 0,
       total_sales:   summaryMap['online_sales']?.total_sales ?? 0,
-      earliest_date: onlineDates?.min_d ?? null,
-      latest_date:   onlineDates?.max_d ?? null,
+      earliest_date: summaryMap['online_sales']?.min_date ?? null,
+      latest_date:   summaryMap['online_sales']?.max_date ?? null,
       last_uploaded: lastUpload['online_sales'] ?? null,
     },
     offline_sales: {
       total_rows:    summaryMap['offline_sales']?.total_rows  ?? 0,
       total_sales:   summaryMap['offline_sales']?.total_sales ?? 0,
-      earliest_date: offlineDates?.min_d ?? null,
-      latest_date:   offlineDates?.max_d ?? null,
+      earliest_date: summaryMap['offline_sales']?.min_date ?? null,
+      latest_date:   summaryMap['offline_sales']?.max_date ?? null,
       last_uploaded: lastUpload['offline_sales'] ?? null,
     },
     leads: {
@@ -139,10 +120,10 @@ export async function GET() {
       last_uploaded: lastUpload['products'] ?? null,
     },
     telesales: {
-      total_rows:    Number(telesales?.cnt ?? 0),
+      total_rows:    summaryMap['telesales_calls']?.total_rows ?? 0,
       total_agents:  teleAgents.length,
-      earliest_date: telesales?.min_d ?? null,
-      latest_date:   telesales?.max_d ?? null,
+      earliest_date: summaryMap['telesales_calls']?.min_date ?? null,
+      latest_date:   summaryMap['telesales_calls']?.max_date ?? null,
       last_uploaded: lastUpload['telesales_calls'] ?? null,
     },
     targets: {
@@ -167,17 +148,17 @@ export async function GET() {
 
   const mart = {
     main: {
-      row_count:         Number(martMain?.cnt ?? 0),
-      min_date:          martMain?.min_date ?? null,
-      max_date:          martMain?.max_date ?? null,
-      last_refreshed:    martMain?.last_refreshed ?? null,
-      avg_days_to_order: martMain?.avg_days ? Number(martMain.avg_days) : null,
+      row_count:         summaryMap['sales_hoc_orders']?.total_rows ?? 0,
+      min_date:          summaryMap['sales_hoc_orders']?.min_date ?? null,
+      max_date:          summaryMap['sales_hoc_orders']?.max_date ?? null,
+      last_refreshed:    summaryMap['sales_hoc_orders']?.last_updated ?? null,
+      avg_days_to_order: summaryMap['sales_hoc_orders']?.extra_metric ?? null,
     },
     performance: {
-      row_count:      Number(martPerf?.cnt ?? 0),
-      min_month:      martPerf?.min_month ?? null,
-      max_month:      martPerf?.max_month ?? null,
-      last_refreshed: martPerf?.last_refreshed ?? null,
+      row_count:      summaryMap['mart_performance_cmg']?.total_rows ?? 0,
+      min_month:      summaryMap['mart_performance_cmg']?.min_date ?? null,
+      max_month:      summaryMap['mart_performance_cmg']?.max_date ?? null,
+      last_refreshed: summaryMap['mart_performance_cmg']?.last_updated ?? null,
     },
     recent_builds: recentBuilds,
   }

@@ -18,6 +18,7 @@ interface BuildContextValue {
   buildVersion: number
   clearBuildResult: () => void
   startBuild: (effectiveDays: number) => Promise<void>
+  watchExternalBuild: () => void
 }
 
 const BuildContext = createContext<BuildContextValue>({
@@ -27,6 +28,7 @@ const BuildContext = createContext<BuildContextValue>({
   buildVersion: 0,
   clearBuildResult: () => {},
   startBuild: async () => {},
+  watchExternalBuild: () => {},
 })
 
 const POLL_INTERVAL_MS = 20_000   // check freshness every 20 s
@@ -50,6 +52,46 @@ export function BuildProvider({ children }: { children: React.ReactNode }) {
     if (pollRef.current)     { clearInterval(pollRef.current);   pollRef.current = null }
     if (pollKillRef.current) { clearTimeout(pollKillRef.current); pollKillRef.current = null }
   }, [])
+
+  // Polls /api/data/hub/freshness until a build that started after `triggeredAt`
+  // finishes, then bumps buildVersion and invalidates every /api/data/* SWR key.
+  // Shared by startBuild() (manual) and watchExternalBuild() (auto-triggered
+  // elsewhere, e.g. right after an upload — see multipart/complete/route.ts).
+  const watchBuildCompletion = useCallback((triggeredAt: number) => {
+    stopPolling()
+    pollRef.current = setInterval(async () => {
+      try {
+        const fr = await fetch('/api/data/hub/freshness')
+        const fd = await fr.json() as { last_build?: { status: string; finished_at: string | null } }
+        const b = fd.last_build
+        if (
+          b?.status === 'success' &&
+          b.finished_at &&
+          new Date(b.finished_at).getTime() > triggeredAt
+        ) {
+          stopPolling()
+          setBuildVersion(v => {
+            const next = v + 1
+            localStorage.setItem('buildVersion', String(next))
+            return next
+          })
+          swrMutate((key) => typeof key === 'string' && key.startsWith('/api/data/'))
+          setBuildResult(r => r ? { ...r, done: true } : { ok: true, triggered: true, done: true })
+        }
+      } catch { /* ignore transient errors */ }
+    }, POLL_INTERVAL_MS)
+
+    // Safety: stop polling after timeout
+    pollKillRef.current = setTimeout(stopPolling, POLL_TIMEOUT_MS)
+  }, [stopPolling])
+
+  // Start watching for a build that was triggered outside this hook (e.g. the
+  // server auto-triggers one right after an upload finishes). No-ops if we're
+  // already watching one — only one mart build can be "the latest" at a time.
+  const watchExternalBuild = useCallback(() => {
+    if (buildLoading || pollRef.current) return
+    watchBuildCompletion(Date.now())
+  }, [buildLoading, watchBuildCompletion])
 
   const startBuild = useCallback(async (effectiveDays: number) => {
     if (buildLoading) return
@@ -76,32 +118,7 @@ export function BuildProvider({ children }: { children: React.ReactNode }) {
       if (data.triggered) {
         // GitHub Actions triggered — poll freshness until build finishes
         setBuildResult({ ok: true, triggered: true, attribution_days: effectiveDays })
-        const triggeredAt = Date.now()
-
-        pollRef.current = setInterval(async () => {
-          try {
-            const fr = await fetch('/api/data/hub/freshness')
-            const fd = await fr.json() as { last_build?: { status: string; finished_at: string | null } }
-            const b = fd.last_build
-            if (
-              b?.status === 'success' &&
-              b.finished_at &&
-              new Date(b.finished_at).getTime() > triggeredAt
-            ) {
-              stopPolling()
-              setBuildVersion(v => {
-                const next = v + 1
-                localStorage.setItem('buildVersion', String(next))
-                return next
-              })
-              swrMutate((key) => typeof key === 'string' && key.startsWith('/api/data/'))
-              setBuildResult({ ok: true, triggered: true, done: true, attribution_days: effectiveDays })
-            }
-          } catch { /* ignore transient errors */ }
-        }, POLL_INTERVAL_MS)
-
-        // Safety: stop polling after timeout
-        pollKillRef.current = setTimeout(stopPolling, POLL_TIMEOUT_MS)
+        watchBuildCompletion(Date.now())
       } else {
         // Direct build result (legacy / local)
         setBuildResult({
@@ -122,7 +139,7 @@ export function BuildProvider({ children }: { children: React.ReactNode }) {
       setBuildLoading(false)
       if (timerRef.current) clearInterval(timerRef.current)
     }
-  }, [buildLoading, stopPolling])
+  }, [buildLoading, stopPolling, watchBuildCompletion])
 
   useEffect(() => () => {
     if (timerRef.current) clearInterval(timerRef.current)
@@ -130,7 +147,7 @@ export function BuildProvider({ children }: { children: React.ReactNode }) {
   }, [stopPolling])
 
   return (
-    <BuildContext.Provider value={{ buildLoading, elapsedSeconds, buildResult, buildVersion, clearBuildResult, startBuild }}>
+    <BuildContext.Provider value={{ buildLoading, elapsedSeconds, buildResult, buildVersion, clearBuildResult, startBuild, watchExternalBuild }}>
       {children}
     </BuildContext.Provider>
   )

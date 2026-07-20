@@ -30,6 +30,81 @@ export async function ensureSchemaExtensions(): Promise<void> {
         ON upload_batches (file_hash)
         WHERE file_hash IS NOT NULL
     `).catch(() => {}),
+    query(`
+      CREATE TABLE IF NOT EXISTS table_summaries (
+        table_name   TEXT PRIMARY KEY,
+        total_rows   BIGINT DEFAULT 0,
+        total_sales  NUMERIC DEFAULT 0,
+        min_date     DATE,
+        max_date     DATE,
+        extra_metric NUMERIC,
+        last_updated TIMESTAMPTZ DEFAULT NOW()
+      )
+    `),
+    query(`ALTER TABLE table_summaries ADD COLUMN IF NOT EXISTS min_date DATE`).catch(() => {}),
+    query(`ALTER TABLE table_summaries ADD COLUMN IF NOT EXISTS max_date DATE`).catch(() => {}),
+    query(`ALTER TABLE table_summaries ADD COLUMN IF NOT EXISTS extra_metric NUMERIC`).catch(() => {}),
+  ])
+}
+
+// ── table_summaries — pre-aggregated stats for /api/data/hub ───────────────
+// Consolidates what used to be scattered live COUNT(*)/MIN/MAX/AVG queries
+// (some in upload-service.ts, some inline in hub/route.ts) into one batch
+// step that runs as part of the mart build. Only covers tables whose stats
+// depend on (or are cheapest to keep in sync with) the mart build itself —
+// online_sales/offline_sales (mart build inputs), telesales_calls (mart
+// build input), sales_hoc_orders + mart_performance_cmg (mart build
+// outputs). leads/products/targets/costs/incentives are refreshed
+// separately, immediately after their own upload (see upload-service.ts).
+export async function refreshTableSummaries(): Promise<void> {
+  await Promise.all([
+    query(`
+      INSERT INTO table_summaries (table_name, total_rows, total_sales, min_date, max_date, last_updated)
+      SELECT 'online_sales', COUNT(*), COALESCE(SUM(sales_in_vat), 0), MIN(order_date), MAX(order_date), NOW()
+      FROM online_sales
+      ON CONFLICT (table_name) DO UPDATE SET
+        total_rows = EXCLUDED.total_rows, total_sales = EXCLUDED.total_sales,
+        min_date   = EXCLUDED.min_date,   max_date    = EXCLUDED.max_date,
+        last_updated = NOW()
+    `),
+    query(`
+      INSERT INTO table_summaries (table_name, total_rows, total_sales, min_date, max_date, last_updated)
+      SELECT 'offline_sales', COUNT(*), COALESCE(SUM(sales_in_vat), 0), MIN(order_date), MAX(order_date), NOW()
+      FROM offline_sales
+      ON CONFLICT (table_name) DO UPDATE SET
+        total_rows = EXCLUDED.total_rows, total_sales = EXCLUDED.total_sales,
+        min_date   = EXCLUDED.min_date,   max_date    = EXCLUDED.max_date,
+        last_updated = NOW()
+    `),
+    query(`
+      INSERT INTO table_summaries (table_name, total_rows, min_date, max_date, last_updated)
+      SELECT 'telesales_calls', COUNT(*), MIN(first_connected_date), MAX(first_connected_date), NOW()
+      FROM telesales_calls
+      ON CONFLICT (table_name) DO UPDATE SET
+        total_rows = EXCLUDED.total_rows,
+        min_date   = EXCLUDED.min_date, max_date = EXCLUDED.max_date,
+        last_updated = NOW()
+    `),
+    query(`
+      INSERT INTO table_summaries (table_name, total_rows, total_sales, min_date, max_date, extra_metric, last_updated)
+      SELECT 'sales_hoc_orders', COUNT(*), COALESCE(SUM(sales_in_vat), 0), MIN(order_date), MAX(order_date),
+             ROUND(AVG(days_to_order), 1), NOW()
+      FROM sales_hoc_orders
+      ON CONFLICT (table_name) DO UPDATE SET
+        total_rows = EXCLUDED.total_rows, total_sales = EXCLUDED.total_sales,
+        min_date   = EXCLUDED.min_date,   max_date    = EXCLUDED.max_date,
+        extra_metric = EXCLUDED.extra_metric,
+        last_updated = NOW()
+    `),
+    query(`
+      INSERT INTO table_summaries (table_name, total_rows, min_date, max_date, last_updated)
+      SELECT 'mart_performance_cmg', COUNT(*), MIN(month), MAX(month), NOW()
+      FROM mart_performance_cmg
+      ON CONFLICT (table_name) DO UPDATE SET
+        total_rows = EXCLUDED.total_rows,
+        min_date   = EXCLUDED.min_date, max_date = EXCLUDED.max_date,
+        last_updated = NOW()
+    `),
   ])
 }
 
@@ -444,6 +519,7 @@ export async function refreshAllMarts(attributionDays = 30): Promise<{ mart_main
     const mart_main   = await buildMartMain(attributionDays)
     const funnel       = await buildMartTelesalesFunnel()
     const performance  = await buildMartPerformance(attributionDays)
+    await refreshTableSummaries()
     const duration     = Date.now() - startedAt
 
     if (buildId) {
