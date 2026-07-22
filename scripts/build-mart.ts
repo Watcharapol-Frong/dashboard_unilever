@@ -1,6 +1,7 @@
 /**
  * Standalone mart build script — runs outside Next.js/Vercel, no timeout limit.
- * Used by: GitHub Actions nightly cron, local development, manual on-demand.
+ * Used by: GitHub Actions (manual "Build Mart" button, or auto-triggered after
+ * an upload), local development, manual on-demand.
  *
  * Usage:
  *   DATABASE_URL=... npx tsx scripts/build-mart.ts

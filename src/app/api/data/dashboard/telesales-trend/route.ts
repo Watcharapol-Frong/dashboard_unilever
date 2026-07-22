@@ -49,7 +49,7 @@ export async function GET(request: Request) {
           converted:   Number(r.converted),
         })),
       })
-      setCacheHeader(res, 'MEDIUM')
+      setCacheHeader(res, 'LONG')
       return res
     }
 
@@ -79,7 +79,7 @@ export async function GET(request: Request) {
         converted:   Number(r.converted),
       })),
     })
-    setCacheHeader(res, 'SHORT')
+    setCacheHeader(res, 'LONG')
     return res
   })
 }

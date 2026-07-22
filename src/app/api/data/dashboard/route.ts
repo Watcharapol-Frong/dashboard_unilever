@@ -129,7 +129,7 @@ export async function GET() {
         all_time_calls: Number(callsRow?.total_calls ?? 0),
       },
     })
-    setCacheHeader(res, 'MEDIUM')
+    setCacheHeader(res, 'LONG')
     return res
   })
 }

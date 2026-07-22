@@ -115,7 +115,7 @@ export async function GET(request: Request) {
         cmg_options: cmgOpts.map(o => o.cmg),
       },
     })
-    setCacheHeader(res, 'MEDIUM')
+    setCacheHeader(res, 'LONG')
     return res
   })
 }

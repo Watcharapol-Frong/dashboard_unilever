@@ -1,8 +1,8 @@
-// Dispatches the nightly-build.yml GitHub Actions workflow on demand.
+// Dispatches the mart-build.yml GitHub Actions workflow on demand.
 // Shared by the manual "Build Mart" button (hub/build/route.ts) and the
 // auto-trigger that fires after a successful upload (multipart/complete/route.ts).
 const GH_REPO     = 'Watcharapol-Frong/dashboard_unilever'
-const GH_WORKFLOW = 'nightly-build.yml'
+const GH_WORKFLOW = 'mart-build.yml'
 
 export async function triggerMartBuildWorkflow(
   attributionDays = 30

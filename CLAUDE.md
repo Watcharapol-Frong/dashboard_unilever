@@ -44,7 +44,7 @@ Bypasses all Clerk auth, treats every request as admin. `ClerkProvider` is skipp
 | Charts | Recharts (SSR-disabled via dynamic import) |
 | Tables | TanStack Table v8 |
 | AI | Dify (via `/api/chat` proxy) |
-| Deploy | Vercel free plan (UI + API) + GitHub Actions free (nightly mart build) |
+| Deploy | Vercel free plan (UI + API) + GitHub Actions free (on-demand mart build) |
 
 ---
 
@@ -95,8 +95,9 @@ src/
     db.ts                — query(), queryOne(), queryRowCount()
     metrics.ts           — METRIC LAYER: CONV, NOT_CONV, REACHED, reachedCond()
     query.ts             — setCacheHeader(), CACHE presets, SQL filter helpers
-    mart.ts              — buildMartMain(), buildMartPerformance(), refreshAllMarts(),
-                           ensureSchemaExtensions()
+    mart.ts              — buildMartMain(), buildMartTelesalesFunnel(), buildMartPerformance(),
+                           refreshTableSummaries(), refreshAllMarts(), ensureSchemaExtensions()
+    build-trigger.ts     — triggerMartBuildWorkflow() (dispatches mart-build.yml)
     upload-service.ts    — ETL + SHA-256 hash dedup + R2 + DB upsert
     upload-config.ts     — FILE_TYPE_CONFIGS, validateHeaders()
     build-lock.ts        — in-memory build guard (prevents concurrent builds)
@@ -115,7 +116,7 @@ docs/
   overview-design.md     — overview page design notes
 .github/
   workflows/
-    nightly-build.yml    — GitHub Actions cron: 02:00 AM ICT mart rebuild
+    mart-build.yml       — GitHub Actions mart rebuild (workflow_dispatch only, no cron)
 ```
 
 ---
@@ -186,10 +187,10 @@ Registration: 2-step custom form — invite code validates role → `clerkClient
 
 | Preset | CDN TTL | Stale | Use for |
 |---|---|---|---|
-| SHORT | 1 min | 2 min | mart-status, leads list |
-| MEDIUM | 5 min | 10 min | most data routes (default) |
-| FUNNEL | 10 min | 20 min | expensive aggregations |
-| LONG | 1 hr | 2 hr | static options |
+| SHORT | 1 min | 2 min | admin/status routes needing fresher feedback: `hub`, `hub/freshness`, `leads`, `raw` |
+| MEDIUM | 5 min | 10 min | `leads/summary` |
+| FUNNEL | 10 min | 20 min | expensive aggregations (currently unused — available for new routes) |
+| LONG | 1 hr | 2 hr | static options + most `dashboard/*` routes — safe because `useDashboardSWR`'s `buildVersion` busts the cache immediately on mart build completion, so real freshness never depends on TTL expiry |
 | NONE | — | — | real-time status endpoints |
 
 ---
@@ -246,18 +247,16 @@ export default function MyPageClient() {
 
 ## Mart Build Flow
 
-### Automatic (GitHub Actions — no timeout)
+No nightly cron — builds only run on demand, via GitHub Actions (no timeout):
 ```
-.github/workflows/nightly-build.yml
-  → cron: 02:00 AM ICT (19:00 UTC) every day
+.github/workflows/mart-build.yml   (workflow_dispatch only)
   → scripts/build-mart.ts → refreshAllMarts(attributionDays)
 ```
 
-### Manual
-```
-POST /api/data/hub/build   (Vercel, 10s timeout applies)
-npm run build-mart          (local, no timeout)
-```
+### Triggers
+- **Manual** — "Build Mart" button in Data Hub → `POST /api/data/hub/build` (Vercel, 10s timeout, just dispatches the workflow — doesn't run the build itself) → dispatches the workflow above
+- **Auto-trigger after upload** — `multipart/complete/route.ts` dispatches the same workflow right after a successful upload (skipped for `leads`, which the mart build never reads)
+- **Local** — `npm run build-mart` (no timeout, requires `DATABASE_URL` in env)
 
 ### Build sequence
 ```
@@ -267,10 +266,16 @@ refreshAllMarts(attributionDays)
       DROP + CREATE mmid_cmg_map      (mmid → primary_cmg + first_connected_date)
       DROP + CREATE sales_hoc_orders  (HOC-attributed row fact, customer_type)
       CREATE INDEX ×7 in parallel
+  → buildMartTelesalesFunnel()
+      DROP + CREATE mart_telesales_funnel  (contact_status + conversion_status per mmid)
+      CREATE INDEX ×4 in parallel
   → buildMartPerformance()
       DROP + CREATE mart_performance_cmg    (month × CMG aggregates)
       DROP + CREATE mart_performance_month  (month costs + ROI)
       CREATE INDEX ×3 in parallel
+  → refreshTableSummaries()
+      UPSERT table_summaries for online_sales, offline_sales, telesales_calls,
+      sales_hoc_orders, mart_performance_cmg
   → INSERT INTO mart_builds (status, duration_ms, row_counts)
 ```
 
@@ -312,7 +317,7 @@ exportIncrementalToStorage()
 | Secret | Value |
 |---|---|
 | `DATABASE_URL` | CockroachDB connection string |
-| `GH_WORKFLOW_TOKEN` | GitHub PAT (classic, `workflow` scope) — triggers nightly-build.yml from Data Hub UI |
+| `GH_WORKFLOW_TOKEN` | GitHub PAT (classic, `workflow` scope) — triggers mart-build.yml from Data Hub UI |
 
 ---
 
@@ -341,7 +346,7 @@ exportIncrementalToStorage()
 | `NEXT_PUBLIC_DIFY_API_URL` | Dify API base URL |
 | `NEXT_PUBLIC_DIFY_TOKEN` | Dify public token (client-side streaming) |
 | `ATTRIBUTION_DAYS` | Attribution window in days (default: 14, GitHub Actions only) |
-| `GH_WORKFLOW_TOKEN` | GitHub PAT (classic, `workflow` scope) — triggers nightly-build.yml from Data Hub UI |
+| `GH_WORKFLOW_TOKEN` | GitHub PAT (classic, `workflow` scope) — triggers mart-build.yml from Data Hub UI |
 
 ---
 

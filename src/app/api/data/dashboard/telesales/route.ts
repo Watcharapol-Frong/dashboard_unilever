@@ -314,7 +314,7 @@ export async function GET(request: Request) {
         calls: callRows,
       },
     })
-    setCacheHeader(res, 'MEDIUM')
+    setCacheHeader(res, 'LONG')
     return res
   })
 }

@@ -80,7 +80,7 @@ export async function GET(request: Request) {
     })
 
     const res = NextResponse.json({ ok: true, data })
-    setCacheHeader(res, 'MEDIUM')
+    setCacheHeader(res, 'LONG')
     return res
   })
 }
