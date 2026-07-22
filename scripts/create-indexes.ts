@@ -15,58 +15,18 @@ const indexes = [
     desc: 'Agent filter on telesales routes',
   },
   {
-    name: 'idx_tc_mmid',
-    sql: `CREATE INDEX IF NOT EXISTS idx_tc_mmid    ON telesales_calls (mmid)`,
-    desc: 'JOIN on mmid across routes',
-  },
-  {
     name: 'idx_tc_status',
     sql: `CREATE INDEX IF NOT EXISTS idx_tc_status  ON telesales_calls (call_status)`,
     desc: 'REACHED filter in mart build and route queries',
   },
 
-  // online_sales / offline_sales — JOIN and date filters
-  {
-    name: 'idx_os_mmid',
-    sql: `CREATE INDEX IF NOT EXISTS idx_os_mmid    ON online_sales (mmid)`,
-    desc: 'JOIN on mmid in mart build',
-  },
-  {
-    name: 'idx_os_date',
-    sql: `CREATE INDEX IF NOT EXISTS idx_os_date    ON online_sales (order_date)`,
-    desc: 'Date-range filters in mart build',
-  },
-  {
-    name: 'idx_fs_mmid',
-    sql: `CREATE INDEX IF NOT EXISTS idx_fs_mmid    ON offline_sales (mmid)`,
-    desc: 'JOIN on mmid in mart build',
-  },
-  {
-    name: 'idx_fs_date',
-    sql: `CREATE INDEX IF NOT EXISTS idx_fs_date    ON offline_sales (order_date)`,
-    desc: 'Date-range filters in mart build',
-  },
-
-  // products — JOIN in mart build
-  {
-    name: 'idx_prod_num',
-    sql: `CREATE INDEX IF NOT EXISTS idx_prod_num   ON products (prod_num)`,
-    desc: 'JOIN on prod_num in mart build',
-  },
-
-  // leads — MMID search
-  {
-    name: 'idx_leads_mmid',
-    sql: `CREATE INDEX IF NOT EXISTS idx_leads_mmid ON leads (mmid)`,
-    desc: 'MMID lookup on leads page',
-  },
-
-  // targets — date + CMG JOIN in mart performance build
-  {
-    name: 'idx_tgt_month_cmg',
-    sql: `CREATE INDEX IF NOT EXISTS idx_tgt_month_cmg ON targets (month, dynamic_cmg)`,
-    desc: 'JOIN in mart_performance_cmg build',
-  },
+  // NOTE: indexes previously listed here — idx_tc_mmid, idx_os_mmid, idx_os_date,
+  // idx_fs_mmid, idx_fs_date, idx_prod_num, idx_leads_mmid, idx_tgt_month_cmg —
+  // were removed. Each duplicated either a table's PRIMARY KEY (telesales_calls,
+  // products, leads, targets are all PK'd on the exact column(s) these indexed)
+  // or a composite index that already covers the same leftmost columns
+  // (online_sales/offline_sales (mmid, order_date), see schema.sql). Every extra
+  // index costs write RU on every upload with zero query benefit.
 
   // upload_batches — file dedup
   {

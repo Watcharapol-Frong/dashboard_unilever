@@ -84,7 +84,7 @@ export async function GET(request: Request) {
           target:        Number(r.target),
         })),
       })
-      setCacheHeader(res, 'MEDIUM')
+      setCacheHeader(res, 'LONG')
       return res
     }
 
@@ -132,7 +132,7 @@ export async function GET(request: Request) {
         roi:           roiByMonth.get(r.period)    ?? 0,
       })),
     })
-    setCacheHeader(res, 'MEDIUM')
+    setCacheHeader(res, 'LONG')
     return res
   })
 }

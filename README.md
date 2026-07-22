@@ -53,8 +53,8 @@ Operational analytics platform for the Unilever HOC telesales programme on Makro
 │  · Mart tables (indexed) │   │  · Multipart upload            │
 └──────────────────────────┘   └────────────────────────────────┘
 
-Nightly automation (GitHub Actions cron — free tier):
-  02:00 AM ICT → scripts/build-mart.ts → refreshAllMarts()
+On-demand mart build (GitHub Actions — free tier, no nightly cron):
+  "Build Mart" button, or auto-triggered after an upload → scripts/build-mart.ts → refreshAllMarts()
   → no Vercel timeout; writes directly to CockroachDB
 
 Incremental GAS sync:
@@ -111,24 +111,29 @@ GAS cron → GET /api/data/ingest/threshold   (latest first_connected_date)
          → upserted into telesales_calls ON CONFLICT mmid DO UPDATE
 ```
 
-### Mart Build (nightly, no timeout)
+### Mart Build (on demand, no timeout)
+
+No nightly cron — a build only runs when triggered: the "Build Mart" button in Data
+Hub (admin only), or automatically right after a successful upload.
 
 ```
-GitHub Actions 02:00 AM ICT
+GitHub Actions (workflow_dispatch)
   → scripts/build-mart.ts → refreshAllMarts(attributionDays)
       → ensureSchemaExtensions()          (idempotent DDL migrations)
       → buildMartMain()
           DROP + CREATE mmid_cmg_map      (mmid → primary_cmg lookup, 3 cols)
           DROP + CREATE sales_hoc_orders  (HOC-attributed row fact, 24 cols)
           CREATE INDEX ×7 in parallel
+      → buildMartTelesalesFunnel()
+          DROP + CREATE mart_telesales_funnel  (contact/conversion status per mmid)
+          CREATE INDEX ×4 in parallel
       → buildMartPerformance()
           DROP + CREATE mart_performance_cmg    (month × CMG aggregates)
           DROP + CREATE mart_performance_month  (month-level costs + ROI)
           CREATE INDEX ×3 in parallel
+      → refreshTableSummaries()           (table_summaries for hub/freshness stats)
       → record build in mart_builds (status, duration_ms, row_counts)
 ```
-
-Manual rebuild available via Data Hub → Build Mart (admin only).
 
 ---
 
@@ -145,7 +150,7 @@ Manual rebuild available via Data Hub → Build Mart (admin only).
 | Charts | Recharts (SSR-disabled via dynamic import) |
 | Tables | TanStack Table v8 |
 | AI | Dify (streaming via `/api/chat` proxy) |
-| Deployment | Vercel free plan + GitHub Actions (nightly mart build) |
+| Deployment | Vercel free plan + GitHub Actions (on-demand mart build) |
 
 ---
 
@@ -204,7 +209,7 @@ docs/
   overview-design.md      — overview page design notes
 .github/
   workflows/
-    nightly-build.yml     — GitHub Actions cron: 02:00 AM ICT mart rebuild
+    mart-build.yml        — GitHub Actions mart rebuild (workflow_dispatch only, no cron)
 ```
 
 ---
@@ -227,7 +232,7 @@ docs/
 | `upload_batches` | `id (serial)` | Upload audit log (includes `file_hash` for dedup) |
 | `table_summaries` | `table_name` | Row-count + total_sales cache per source table |
 
-### Mart Tables (rebuilt nightly, indexed)
+### Mart Tables (rebuilt on demand, indexed)
 
 | Table | PK | Description |
 |-------|----|-------------|
@@ -351,17 +356,18 @@ Authenticated routes require a valid Clerk session cookie. GAS ingest routes use
 
 | Preset | CDN TTL | Stale | Used for |
 |--------|---------|-------|----------|
-| SHORT | 1 min | 2 min | mart-status, leads list |
-| MEDIUM | 5 min | 10 min | most data routes (default) |
-| FUNNEL | 10 min | 20 min | expensive aggregations |
-| LONG | 1 hr | 2 hr | static options (products, pivot) |
+| SHORT | 1 min | 2 min | admin/status routes: `hub`, `hub/freshness`, `leads`, `raw` |
+| MEDIUM | 5 min | 10 min | `leads/summary` |
+| FUNNEL | 10 min | 20 min | expensive aggregations (currently unused) |
+| LONG | 1 hr | 2 hr | static options + most `dashboard/*` routes (`buildVersion` busts the cache immediately on build completion, so TTL doesn't gate freshness) |
 | NONE | — | — | real-time status endpoints |
 
 ---
 
 ## GitHub Actions
 
-Nightly mart rebuild runs at **02:00 AM ICT (19:00 UTC)** via GitHub Actions — free tier.
+Mart rebuild runs on demand via GitHub Actions (free tier) — no nightly cron. Triggered by
+the "Build Mart" button in Data Hub, or automatically right after a successful upload.
 
 ### Setup (one-time)
 
@@ -374,7 +380,7 @@ Go to: **Settings → Secrets and variables → Actions → New repository secre
 
 ### Manual trigger
 
-**Actions → Nightly Mart Build → Run workflow** — optionally override `attribution_days`.
+**Actions → Mart Build → Run workflow** — optionally override `attribution_days`.
 
 ### Cost
 

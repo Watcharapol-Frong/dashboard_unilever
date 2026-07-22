@@ -440,7 +440,7 @@ export async function GET(request: Request) {
         })),
       },
     })
-    setCacheHeader(res, 'MEDIUM')
+    setCacheHeader(res, 'LONG')
     return res
   })
 }

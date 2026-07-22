@@ -129,12 +129,14 @@ CREATE TABLE IF NOT EXISTS table_summaries (
 
 -- ── Indexes ─────────────────────────────────────────────────────
 
+-- mmid-only indexes on online_sales/offline_sales are intentionally omitted —
+-- the (mmid, order_date) composite below already covers mmid-only lookups
+-- (leftmost-prefix). Likewise no standalone index on products.prod_num,
+-- leads.mmid, or targets(month, dynamic_cmg) — those are each table's PRIMARY KEY.
 CREATE INDEX IF NOT EXISTS idx_online_sales_date       ON online_sales(order_date);
-CREATE INDEX IF NOT EXISTS idx_online_sales_mmid       ON online_sales(mmid);
 CREATE INDEX IF NOT EXISTS idx_online_sales_mmid_date  ON online_sales(mmid, order_date);
 CREATE INDEX IF NOT EXISTS idx_online_sales_prod_num   ON online_sales(prod_num);
 CREATE INDEX IF NOT EXISTS idx_offline_sales_date      ON offline_sales(order_date);
-CREATE INDEX IF NOT EXISTS idx_offline_sales_mmid      ON offline_sales(mmid);
 CREATE INDEX IF NOT EXISTS idx_offline_sales_mmid_date ON offline_sales(mmid, order_date);
 CREATE INDEX IF NOT EXISTS idx_offline_sales_prod_num  ON offline_sales(prod_num);
 CREATE INDEX IF NOT EXISTS idx_telesales_date          ON telesales_calls(first_connected_date);

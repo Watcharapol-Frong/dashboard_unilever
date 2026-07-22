@@ -75,7 +75,7 @@ export async function POST(request: Request) {
 
     // Auto-trigger a mart rebuild so sales_hoc_orders / mart_performance_cmg /
     // mart_telesales_funnel / table_summaries pick up this upload without
-    // waiting for the nightly cron. Non-fatal — the upload already succeeded.
+    // waiting for someone to click "Build Mart". Non-fatal — the upload already succeeded.
     if (!MART_UNRELATED_TYPES.includes(type)) {
       try {
         const lastBuild = await queryOne<{ attribution_days: number | null }>(

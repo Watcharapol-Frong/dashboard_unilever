@@ -1,9 +1,10 @@
-name: Nightly Mart Build
+name: Mart Build
 
+# Nightly cron schedule removed by request — builds now only run on demand:
+# the "Build Mart" button in Data Hub, or auto-triggered right after a
+# successful upload (see multipart/complete/route.ts). Both go through
+# workflow_dispatch below.
 on:
-  schedule:
-    # 02:00 AM ICT (UTC+7) = 19:00 UTC
-    - cron: '0 19 * * *'
   workflow_dispatch:
     inputs:
       attribution_days:
@@ -11,9 +12,9 @@ on:
         required: false
         default: '30'
 
-# Builds now also auto-trigger after every upload (see multipart/complete/route.ts),
-# on top of the nightly cron and the manual "Build Mart" button. Queue instead of
-# running concurrently so two builds never DROP/CREATE the same mart table at once.
+# Queue instead of running concurrently, since the manual button and the
+# upload auto-trigger can both fire close together — this stops two builds
+# from DROP/CREATE-ing the same mart table at once.
 concurrency:
   group: mart-build
   cancel-in-progress: false

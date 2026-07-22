@@ -4,9 +4,10 @@
  * never queried anywhere in the app.
  *
  * ensureSchemaExtensions() in src/lib/mart.ts already drops these on every
- * mart build (nightly cron / manual build / auto-trigger after upload), so
- * this script is only useful to run it immediately instead of waiting for
- * the next build. Safe to run more than once — DROP VIEW IF EXISTS.
+ * mart build (manual "Build Mart" click or auto-trigger after upload — there
+ * is no nightly cron anymore), so this script is only useful to run it
+ * immediately instead of waiting for the next build. Safe to run more than
+ * once — DROP VIEW IF EXISTS.
  *
  * Usage:
  *   DATABASE_URL=... npx tsx scripts/drop-unused-views.ts
